@@ -1,0 +1,20 @@
+{
+  "name": "exhibit-macros",
+  "version": "2.0.0",
+  "description": "YAML-driven launch + OSC macros for the Leepa-Rattner projection mapping exhibit",
+  "type": "module",
+  "private": true,
+  "license": "CC-BY-4.0",
+  "author": "Ben Czech",
+  "bin": { "exhibit": "bin/exhibit.js" },
+  "scripts": {
+    "check": "node bin/exhibit.js check",
+    "boot": "node bin/exhibit.js run boot",
+    "status": "node bin/exhibit.js status",
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "yaml": "^2.6.0"
+  }
+}

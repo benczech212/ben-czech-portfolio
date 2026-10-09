@@ -1,0 +1,50 @@
+# Google Drive uploader on the NAS (Docker compose project "rclone-uploader").
+# Runs on its own and restarts with the NAS; no SSH session needed.
+#
+# Uploads the client media library to Google Drive in a loop: files already on Drive are skipped; when Google's
+# 750 GB/day upload limit is reached rclone stops and the loop waits an hour; after a finished pass it checks again
+# every 6 hours (picks up clips the DXV conversion replaces). Clips still waiting for conversion are held back by
+# filter.txt, which the dashboard writes (dashboard/client_filter.py -> UPLOAD_FILTER).
+#
+# Reads your existing rclone setup (own Google client ID) in place, so the sign-in isn't copied anywhere. Its log goes
+# to ${DOCKER_DIR}/rclone-uploader (the dashboard reads it as UPLOAD_LOG). Daytime upload is limited so it doesn't slow
+# the home internet; full speed 23:00-08:00 (set BWLIMIT to "off" for full speed all the time).
+#
+# Settings: an env file next to this compose file (create it yourself; never commit it) with
+#   RCLONE_VERSION     image tag: pin to the version you've tested (required, no "latest")
+#   RCLONE_CONFIG_DIR  folder holding rclone.conf, e.g. /home/<user>/.config/rclone (required)
+#   LIBRARY_DIR        the library folder on the NAS (required)
+#   LIBRARY_REMOTE     the Drive destination (default "gdrive:Client Media Library")
+#   DOCKER_DIR         the NAS's docker share (default /volume1/docker)
+#   PUID, PGID         the NAS user/group that owns rclone.conf (default 1000:10); rclone refreshes its sign-in there
+#   TZ                 time zone for the bandwidth schedule (default Etc/UTC)
+services:
+  rclone-uploader:
+    image: rclone/rclone:${RCLONE_VERSION:?pin to the version you've tested}   # pin to the version you've tested
+    container_name: rclone-uploader
+    restart: unless-stopped
+    user: "${PUID:-1000}:${PGID:-10}"
+    environment:
+      - TZ=${TZ:-Etc/UTC}
+      - HOME=/tmp
+      - BWLIMIT=08:00,8M 23:00,off
+      - RCLONE_CONFIG=/home-rclone/rclone.conf
+      - REMOTE=${LIBRARY_REMOTE:-gdrive:Client Media Library}
+    volumes:
+      - ${RCLONE_CONFIG_DIR:?folder holding rclone.conf}:/home-rclone
+      - ${DOCKER_DIR:-/volume1/docker}/rclone-uploader/filter.txt:/filter.txt:ro
+      - ${DOCKER_DIR:-/volume1/docker}/rclone-uploader:/logs
+      - "${LIBRARY_DIR:?the library folder on the NAS}:/data/library:ro"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          rclone copy /data/library "$$REMOTE" \
+            --filter-from /filter.txt \
+            --transfers 4 --checkers 8 --drive-chunk-size 64M --drive-stop-on-upload-limit \
+            --retries 5 --low-level-retries 20 --timeout 5m --bwlimit "$$BWLIMIT" \
+            --stats 5m --stats-one-line --log-level INFO --log-file /logs/upload.log
+          rc=$$?
+          if [ $$rc -eq 0 ]; then echo "PASS COMPLETE $$(date)" >> /logs/upload.log; sleep 21600;
+          else echo "rclone exited $$rc at $$(date); retrying in 1 h" >> /logs/upload.log; sleep 3600; fi
+        done

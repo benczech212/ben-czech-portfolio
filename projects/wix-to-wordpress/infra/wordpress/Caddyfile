@@ -1,0 +1,9 @@
+{$SITE_HOST} {
+	root * /var/www/html
+	encode zstd gzip
+	php_fastcgi wordpress:9000
+	file_server
+	@blocked path /xmlrpc.php /wp-config.php /.env
+	respond @blocked 403
+	header -Server
+}

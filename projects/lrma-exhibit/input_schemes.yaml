@@ -1,0 +1,4673 @@
+version: 1
+generated: 2026-09-17T16:57:08.678Z
+playlist: SPC
+note: "Slots: x y z yaw pitch roll left right. Set auto: false on a scene to hand-tune it; `exhibit schemes generate` keeps such scenes. control = OSC name, sub = x|y for xy pads, action = toggle|momentary for buttons."
+scenes:
+  Raymarched Reflections:
+    bank: raymarchedreflections
+    title: Raymarched Reflections
+    auto: true
+    x:
+      control: lightpos
+      label: light_pos
+      type: xy
+      group: light
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: lightpos
+      label: light_pos
+      type: xy
+      group: light
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: cubesize
+      label: cube_size
+      type: slider
+      group: geometry
+      reason: push/pull = zoom / size
+    pitch:
+      control: fov
+      label: FOV
+      type: knob
+      group: camera
+      reason: tilt fwd/back = camera
+    roll:
+      control: glowamt
+      label: glow_amt
+      type: slider
+      group: color
+      reason: tilt sideways = amount
+    yaw:
+      control: lightz
+      label: light_z
+      type: slider
+      group: light
+      reason: next free slider
+    left:
+      control: moveright
+      label: move_right
+      type: bang
+      group: fast_motion
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: moveup
+      label: move_up
+      type: bang
+      group: fast_motion
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - rotate_right:bang
+      - rotate_up:bang
+      - cube_sphere:slider
+      - pulse_pillars:bang
+      - z_stretch:knob
+      - irregularity:slider
+      - reflectivity:slider
+      - fog_amt:slider
+      - media_reflect:knob
+      - media_color:knob
+      - camera:xy
+      - fisheye:knob
+      - anti_aliasing_fps:toggle
+  GPU_Melter:
+    bank: gpumelter
+    title: GPU_Melter
+    auto: true
+    x:
+      control: pixelation
+      label: pixelation
+      type: slider
+      group: feedback
+      reason: next free slider
+    y:
+      control: feedback
+      label: feedback
+      type: slider
+      group: feedback
+      reason: next free slider
+    left:
+      control: freshblocks
+      label: fresh_blocks
+      type: bang
+      group: background
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: flashing
+      label: flashing
+      type: toggle
+      group: color
+      reason: toggle
+      action: toggle
+    unassigned:
+      - monochrome:toggle
+      - extra_cols:toggle
+      - auto_blocks:toggle
+  Shrouded:
+    bank: shrouded
+    title: Shrouded
+    auto: true
+    x:
+      control: tunnel
+      label: tunnel
+      type: xy
+      group: motion
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: tunnel
+      label: tunnel
+      type: xy
+      group: motion
+      reason: "xy pad: forward/back"
+      sub: y
+    left:
+      control: shimmer
+      label: shimmer
+      type: bang
+      group: surface
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: shock
+      label: shock
+      type: bang
+      group: surface
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - reset_center:bang
+      - bpm_oscillate:toggle
+      - media_color:toggle
+      - pyramid:toggle
+      - mirror:toggle
+  Stained Glass:
+    bank: stainedglass
+    title: Stained Glass
+    auto: true
+    x:
+      control: movexy
+      label: move_xy
+      type: xy
+      group: motion
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: movexy
+      label: move_xy
+      type: xy
+      group: motion
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: zoomspeed
+      label: zoom_speed
+      type: slider
+      group: motion
+      reason: push/pull = speed
+    yaw:
+      control: pattern
+      label: pattern
+      type: slider
+      group: pattern
+      reason: next free slider
+    pitch:
+      control: distortion
+      label: distortion
+      type: slider
+      group: geometry
+      reason: next free slider
+    roll:
+      control: stackedlayers
+      label: stacked_layers
+      type: slider
+      group: geometry
+      reason: next free slider
+    left:
+      control: reverse
+      label: reverse
+      type: toggle
+      group: motion
+      reason: toggle
+      action: toggle
+    unassigned:
+      - spin:slider
+      - pearlescence:slider
+  Hue Review:
+    bank: huereview
+    title: Hue Review
+    auto: true
+    z:
+      control: glitchdownspeed
+      label: glitchdown_speed
+      type: slider
+      group: action
+      reason: push/pull = speed
+    x:
+      control: brighter
+      label: brighter
+      type: slider
+      group: brightness
+      reason: left/right
+    roll:
+      control: darker
+      label: darker
+      type: slider
+      group: brightness
+      reason: tilt sideways = amount (group)
+    y:
+      control: feedback
+      label: feedback
+      type: slider
+      group: main_parameters
+      reason: next free slider
+    yaw:
+      control: rippleamt
+      label: ripple_amt
+      type: slider
+      group: main_parameters
+      reason: next free slider
+    pitch:
+      control: satamt
+      label: sat_amt
+      type: slider
+      group: main_parameters
+      reason: next free slider
+    left:
+      control: glitchdown
+      label: glitchdown
+      type: toggle
+      group: action
+      reason: toggle
+      action: toggle
+    right:
+      control: firepulse
+      label: fire_pulse
+      type: bang
+      group: action
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - zoom:slider
+      - rays:toggle
+      - digital_mode:toggle
+      - color_palette:slider
+  Skaiwalker OG:
+    bank: skaiwalkerog
+    title: Skaiwalker OG
+    auto: true
+    z:
+      control: timerate
+      label: time_rate
+      type: slider
+      group: time
+      reason: push/pull = speed
+    pitch:
+      control: bubblecam
+      label: bubble_cam
+      type: slider
+      group: bubble
+      reason: tilt fwd/back = camera
+    x:
+      control: overlayglyphs
+      label: overlay_glyphs
+      type: slider
+      group: fb
+      reason: next free slider
+    y:
+      control: flip
+      label: flip
+      type: slider
+      group: mirror
+      reason: next free slider
+    yaw:
+      control: perspective
+      label: perspective
+      type: slider
+      group: morph
+      reason: next free slider
+    left:
+      control: autooverlay
+      label: auto_overlay
+      type: toggle
+      group: fb
+      reason: toggle
+      action: toggle
+    right:
+      control: singleroom
+      label: single_room
+      type: toggle
+      group: geo
+      reason: toggle
+      action: toggle
+    unassigned:
+      - color_seed:color
+      - show_media:slider
+      - auto_flip:toggle
+      - auto_bubble:toggle
+      - square_bubble:toggle
+      - auto_morph:toggle
+  Reaction-Confusion:
+    bank: reactionconfusion
+    title: Reaction-Confusion
+    auto: true
+    x:
+      control: planeshift
+      label: Plane_Shift
+      type: xy
+      group: Plane_Shift
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: planeshift
+      label: Plane_Shift
+      type: xy
+      group: Plane_Shift
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: planespeed
+      label: Plane_Speed
+      type: knob
+      group: Plane
+      reason: push/pull = speed
+    yaw:
+      control: rotateplane
+      label: Rotate_Plane
+      type: knob
+      group: Plane
+      reason: twist = rotation
+    pitch:
+      control: camcutsize
+      label: Cam_Cut_Size
+      type: slider
+      group: Camera
+      reason: tilt fwd/back = camera
+    roll:
+      control: palettemix
+      label: Palette_Mix
+      type: slider
+      group: Palette
+      reason: tilt sideways = amount
+    left:
+      control: autotracers
+      label: Auto_Tracers
+      type: toggle
+      group: Plane
+      reason: toggle
+      action: toggle
+    right:
+      control: beatlayers
+      label: Beat_Layers
+      type: toggle
+      group: Plane
+      reason: toggle
+      action: toggle
+    unassigned:
+      - Twist_Plane:knob
+      - Layers:knob
+      - Far_Planes:toggle
+      - Auto_Plane_Shift:toggle
+      - Tilt_Angle:xy
+      - Auto_Tilt:toggle
+      - Auto_Warp:toggle
+      - Equirectangular_Warp:toggle
+      - Warp:slider
+      - Noisey:slider
+      - Reactive_Brightness:toggle
+      - Color:color
+      - Light_Depth:slider
+      - Media_Mix:slider
+      - Auto_Media:toggle
+      - Hue_Shift:toggle
+      - Auto_Color:toggle
+      - Color_Palette:dropdown
+      - Palette_Frequency:slider
+      - Zoom:knob
+      - Auto_Zoom:toggle
+      - Beat_Zoom:toggle
+      - Beat_Zoom_Threshold:knob
+      - Auto_Mirror:toggle
+      - Mirror_Mode:knob
+      - Auto_Mirror_Threshold:knob
+      - Sim_Presets:dropdown
+      - System_Bias:knob
+      - Excitation:knob
+      - Stabilizer:knob
+      - Recovery_Strength:knob
+      - Inhibitor_Decay:knob
+      - Inhibitor_Spread:knob
+      - Reaction_Speed:knob
+      - Time_Smoothing:knob
+      - Reset_Sim:bang
+  Dyspun Sphere:
+    bank: dyspunsphere
+    title: Dyspun Sphere
+    auto: true
+    x:
+      control: shapeshift
+      label: Shape_Shift
+      type: xy
+      group: Shape_Shift
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: shapeshift
+      label: Shape_Shift
+      type: xy
+      group: Shape_Shift
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: spheresize
+      label: Sphere_Size
+      type: slider
+      group: Shape
+      reason: push/pull = zoom / size
+    pitch:
+      control: travelspeed
+      label: Travel_Speed
+      type: knob
+      group: Camera
+      reason: tilt fwd/back = camera (group)
+    roll:
+      control: shapecomplexity
+      label: Shape_Complexity
+      type: slider
+      group: Shape
+      reason: tilt sideways = amount
+    yaw:
+      control: complexitygrowthfactor
+      label: Complexity_Growth_Factor
+      type: slider
+      group: Shape
+      reason: next free slider
+    left:
+      control: rotatespheres
+      label: Rotate_Spheres
+      type: toggle
+      group: Shape
+      reason: toggle
+      action: toggle
+    right:
+      control: invertshapes
+      label: Invert_Shapes
+      type: toggle
+      group: Shape
+      reason: toggle
+      action: toggle
+    unassigned:
+      - Sphere_Thickness:slider
+      - Reactive_Sphere:toggle
+      - Auto_Sphere_Morph:toggle
+      - Sphere_Morph_Amount:slider
+      - Bass_Noise:toggle
+      - Glow_Worm_Distance:knob
+      - Glow_Worm_Repetition_Spacing:knob
+      - FPS_Boost:toggle
+      - Auto_Shape_Shift:toggle
+      - Auto_Shape:toggle
+      - Auto_Sphere_Shape:toggle
+      - Random_Shape:bang
+      - Random_Sphere_Type:bang
+      - Shape_Type:dropdown
+      - Sphere_Type:dropdown
+      - Wiggle_Intensity:slider
+      - Auto_Wiggle_Intensity:toggle
+      - Twist_Space:toggle
+      - Wiggle_Space:toggle
+      - Rotate_Space:toggle
+      - Auto_Warp:toggle
+      - Rotate_Camera:toggle
+      - Warp:knob
+      - Equirectangular_Warp:toggle
+      - Edge_Detect:toggle
+      - Reactive_Brightness:toggle
+      - Media_Highlight_Threshold:knob
+      - Base_Color_Intensity:knob
+      - Camera_Contact_Glow:toggle
+      - Light_Ambient:knob
+      - Light_Specular:knob
+      - Light_Shininess:knob
+      - Light_Intensity:slider
+      - Light_Glow_Intensity:knob
+      - Fog_Color:color
+      - Fog_Density:knob
+      - Black_Fog:bang
+      - Palette_Fog:toggle
+      - Hypno_Fog:toggle
+      - Auto_Feedback_Flow:toggle
+      - Auto_Feedback_Threshold:toggle
+      - Auto_Feedback_Pan:toggle
+      - Auto_Feedback_Fade:toggle
+      - Feedback_Threshold:knob
+      - Feedback_Zoom:knob
+      - Feedback_Pan:xy
+      - Feedback_Fade:knob
+      - Feedback_Flow:knob
+      - Flip_Feedback:toggle
+      - Color_Frequency:knob
+      - Color_Palette:dropdown
+      - Random_Color_Palette:bang
+      - Auto_Color:toggle
+  Alien Cavern:
+    bank: aliencavern
+    title: Alien Cavern
+    auto: true
+    x:
+      control: cameralook
+      label: camera_look
+      type: xy
+      group: camera
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: cameralook
+      label: camera_look
+      type: xy
+      group: camera
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: voxelsize
+      label: voxel_size
+      type: slider
+      group: voxelation
+      reason: push/pull = zoom / size
+    pitch:
+      control: gazeintotheabyss
+      label: gaze_into_the_abyss
+      type: slider
+      group: camera
+      reason: tilt fwd/back = camera (group)
+    yaw:
+      control: voxelate
+      label: voxelate
+      type: slider
+      group: voxelation
+      reason: next free slider
+    roll:
+      control: colormod
+      label: color_mod
+      type: slider
+      group: color
+      reason: next free slider
+    left:
+      control: beattwitching
+      label: beat_twitching
+      type: toggle
+      group: action
+      reason: toggle
+      action: toggle
+    right:
+      control: flashing
+      label: flashing
+      type: toggle
+      group: action
+      reason: toggle
+      action: toggle
+    unassigned:
+      - droppers:toggle
+      - cylinders:toggle
+      - astral_plane:toggle
+      - manual_camera:toggle
+      - palette_select:slider
+  Deeper V2:
+    bank: deeperv2
+    title: Deeper V2
+    auto: true
+    yaw:
+      control: manualrotate
+      label: manual_rotate
+      type: knob
+      group: tunnel
+      reason: twist = rotation
+    pitch:
+      control: fov
+      label: FOV
+      type: slider
+      group: tunnel
+      reason: tilt fwd/back = camera
+    roll:
+      control: glowamount
+      label: glow_amount
+      type: slider
+      group: beams
+      reason: tilt sideways = amount
+    x:
+      control: diameter
+      label: diameter
+      type: slider
+      group: tunnel
+      reason: next free slider
+    y:
+      control: mainlight
+      label: main_light
+      type: slider
+      group: lights
+      reason: next free slider
+    z:
+      control: fogcol
+      label: fog_col
+      type: slider
+      group: lights
+      reason: next free slider
+    left:
+      control: undulateup
+      label: undulate_up
+      type: bang
+      group: pulses
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: undulatedown
+      label: undulate_down
+      type: bang
+      group: pulses
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - beams_on:toggle
+      - dot_field:toggle
+      - auto_groove:toggle
+      - undulating:toggle
+      - rotating:toggle
+      - flatten:toggle
+      - colorful:toggle
+      - light_chaser:toggle
+      - lights_react:toggle
+      - texture_on:knob
+      - spiral_ridges:knob
+      - undulate_left:bang
+      - undulate_right:bang
+      - bass_travel:knob
+      - travel:knob
+      - jump_forward:bang
+  Do the Twist:
+    bank: dothetwist
+    title: Do the Twist
+    auto: true
+    z:
+      control: zoom
+      label: zoom
+      type: knob
+      group: feedback
+      reason: push/pull = zoom / size
+    yaw:
+      control: autotwist1
+      label: AUTOTWIST1
+      type: slider
+      group: reactivity
+      reason: twist = rotation
+    pitch:
+      control: camx
+      label: CAMX
+      type: slider
+      group: camera
+      reason: tilt fwd/back = camera
+    roll:
+      control: feedbackmix
+      label: feedbackmix
+      type: knob
+      group: feedback
+      reason: tilt sideways = amount
+    x:
+      control: camy
+      label: CAMY
+      type: slider
+      group: camera
+      reason: next free slider
+    y:
+      control: camz
+      label: CAMZ
+      type: slider
+      group: camera
+      reason: next free slider
+    left:
+      control: zerofeedback
+      label: zerofeedback
+      type: toggle
+      group: feedback
+      reason: toggle
+      action: toggle
+    unassigned:
+      - BASSCAM:slider
+      - colorreactivity:slider
+      - towerreactivity:slider
+      - OCTATWIST:knob
+      - basstaurustwist:knob
+      - feedback:slider
+      - lights:slider
+      - darks:slider
+      - color_palette:slider
+      - trythis:slider
+      - EdgeGlow:slider
+  Milk, Honey, Smoke, Bile:
+    bank: milkhoneysmokebile
+    title: Milk, Honey, Smoke, Bile
+    auto: true
+    z:
+      control: radius
+      label: radius
+      type: slider
+      group: color
+      reason: push/pull = zoom / size
+    x:
+      control: feed
+      label: feed
+      type: slider
+      group: color
+      reason: next free slider
+    y:
+      control: warp
+      label: warp
+      type: slider
+      group: motion
+      reason: next free slider
+    yaw:
+      control: mirror
+      label: mirror
+      type: slider
+      group: shape
+      reason: next free slider
+    pitch:
+      control: drift
+      label: drift
+      type: slider
+      group: motion
+      reason: next free slider
+    left:
+      control: pinch
+      label: pinch
+      type: toggle
+      group: shape
+      reason: toggle
+      action: toggle
+    right:
+      control: twitch
+      label: twitch
+      type: bang
+      group: motion
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - smoke:toggle
+      - jump:toggle
+      - swap:bang
+      - spectral_color:toggle
+      - bile:toggle
+      - media_mix:slider
+  HexTunnel:
+    bank: hextunnel
+    title: HexTunnel
+    auto: true
+    x:
+      control: camlook
+      label: cam_Look
+      type: xy
+      group: tunnel
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: camlook
+      label: cam_Look
+      type: xy
+      group: tunnel
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: radius
+      label: radius
+      type: slider
+      group: tunnel
+      reason: push/pull = zoom / size
+    yaw:
+      control: ripples
+      label: ripples
+      type: slider
+      group: tunnel
+      reason: next free slider
+    pitch:
+      control: red
+      label: Red
+      type: slider
+      group: color
+      reason: next free slider
+    roll:
+      control: green
+      label: Green
+      type: slider
+      group: color
+      reason: next free slider
+    unassigned:
+      - media_scale:slider
+      - Blue:slider
+  Waterly:
+    bank: waterly
+    title: Waterly
+    auto: true
+    x:
+      control: direction
+      label: direction
+      type: xy
+      group: effect
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: direction
+      label: direction
+      type: xy
+      group: effect
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: rate
+      label: rate
+      type: knob
+      group: effect
+      reason: push/pull = speed
+    roll:
+      control: intensity
+      label: intensity
+      type: slider
+      group: effect
+      reason: tilt sideways = amount
+    yaw:
+      control: scale
+      label: scale
+      type: slider
+      group: effect
+      reason: next free slider
+    unassigned:
+      - position:xy
+      - zoom:slider
+  Dispersion:
+    bank: dispersion
+    title: Dispersion
+    auto: true
+    x:
+      control: xypaint1
+      label: xyPaint1
+      type: xy
+      group: brush1
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: xypaint1
+      label: xyPaint1
+      type: xy
+      group: brush1
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: distortion
+      label: distortion
+      type: slider
+      group: extra_distortion
+      reason: push/pull = zoom / size
+    left:
+      control: clouds
+      label: clouds
+      type: toggle
+      group: regimes
+      reason: toggle
+      action: toggle
+    right:
+      control: snakes
+      label: snakes
+      type: toggle
+      group: regimes
+      reason: toggle
+      action: toggle
+    unassigned:
+      - aberration_amount:slider
+      - switch_direction:toggle
+      - backwards_ripples:toggle
+      - smooth_glass:toggle
+      - reset_sim:bang
+      - drum_flow:toggle
+      - media_hits:toggle
+      - auto_distortion:toggle
+      - paint1_on:toggle
+      - paint2_on:toggle
+      - xyPaint2:xy
+  Vortex Flythrough:
+    bank: vortexflythrough
+    title: Vortex Flythrough
+    auto: true
+    yaw:
+      control: twistdirection
+      label: twistdirection
+      type: slider
+      group: shapes
+      reason: twist = rotation
+    pitch:
+      control: camx
+      label: cam_x
+      type: slider
+      group: camera
+      reason: tilt fwd/back = camera
+    roll:
+      control: twistamount
+      label: twistamount
+      type: slider
+      group: shapes
+      reason: tilt sideways = amount
+    x:
+      control: lookatmex
+      label: lookatme_x
+      type: slider
+      group: camera
+      reason: next free slider
+    y:
+      control: lookatmey
+      label: lookatme_y
+      type: slider
+      group: camera
+      reason: next free slider
+    z:
+      control: camy
+      label: cam_y
+      type: slider
+      group: camera
+      reason: next free slider
+    left:
+      control: fractalmorph
+      label: fractalmorph
+      type: bang
+      group: shapes
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: edgeglow
+      label: EdgeGlow
+      type: toggle
+      group: lighting
+      reason: toggle
+      action: toggle
+    unassigned:
+      - fogmix:toggle
+      - lightbackground:toggle
+      - reactivetime:slider
+      - media_displacement:knob
+  Voronoi Geode:
+    bank: voronoigeode
+    title: Voronoi Geode
+    auto: true
+    z:
+      control: speedmotion
+      label: speed_motion
+      type: slider
+      group: reactivity
+      reason: push/pull = speed
+    yaw:
+      control: rotdistort
+      label: rot_distort
+      type: slider
+      group: geometry
+      reason: twist = rotation
+    y:
+      control: elevation
+      label: elevation
+      type: slider
+      group: camera
+      reason: forward/back
+    left:
+      control: pulse
+      label: pulse
+      type: bang
+      group: reactivity
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: gridgrowth
+      label: grid_growth
+      type: toggle
+      group: reactivity
+      reason: toggle
+      action: toggle
+    unassigned:
+      - highs_shimmer:toggle
+      - spinning:toggle
+      - alternate_crystals:toggle
+      - red_geode:toggle
+      - green_circuits:toggle
+  lattix:
+    bank: lattix
+    title: lattix
+    auto: true
+    left:
+      control: downrot
+      label: down_rot
+      type: bang
+      group: rotate
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: rightrot
+      label: right_rot
+      type: bang
+      group: rotate
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - fly_in_out:slider
+      - forward_on_beat:toggle
+      - twitch:toggle
+      - invert:toggle
+      - aberration:toggle
+  Dripz:
+    bank: dripz
+    title: Dripz
+    auto: true
+    z:
+      control: masterscale
+      label: master_scale
+      type: slider
+      group: noise
+      reason: push/pull = zoom / size
+    roll:
+      control: trailzmix
+      label: trailz_mix
+      type: slider
+      group: trailz
+      reason: tilt sideways = amount
+    x:
+      control: masterfill
+      label: master_fill
+      type: slider
+      group: noise
+      reason: next free slider
+    y:
+      control: masterfeather
+      label: master_feather
+      type: slider
+      group: noise
+      reason: next free slider
+    yaw:
+      control: fracture
+      label: fracture
+      type: knob
+      group: trailz
+      reason: next free slider
+    pitch:
+      control: constspeed
+      label: const_speed
+      type: knob
+      group: speed
+      reason: next free slider
+    left:
+      control: spectrummode
+      label: spectrum_mode
+      type: toggle
+      group: noise
+      reason: toggle
+      action: toggle
+    unassigned:
+      - auto_speed:knob
+  Kaleido:
+    bank: kaleido
+    title: Kaleido
+    auto: true
+    x:
+      control: motion
+      label: motion
+      type: xy
+      group: kaleido_motion
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: motion
+      label: motion
+      type: xy
+      group: kaleido_motion
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: zoomamt
+      label: zoom_amt
+      type: knob
+      group: hyper_zoom
+      reason: push/pull = zoom / size
+    yaw:
+      control: rotation
+      label: rotation
+      type: knob
+      group: kaleido_motion
+      reason: twist = rotation
+    pitch:
+      control: mirrors
+      label: mirrors
+      type: slider
+      group: kaleidoscope
+      reason: next free slider
+    roll:
+      control: feedbackamt
+      label: feedback_amt
+      type: slider
+      group: feedback
+      reason: next free slider
+    left:
+      control: pulseon
+      label: pulse_on
+      type: toggle
+      group: color_fx
+      reason: toggle
+      action: toggle
+    right:
+      control: phasing
+      label: phasing
+      type: toggle
+      group: color_fx
+      reason: toggle
+      action: toggle
+    unassigned:
+      - media_scale:slider
+      - audio_motion:toggle
+      - twitch_motion:toggle
+      - feedback_mod:slider
+      - auto_feedback_mod:toggle
+      - phasing_freq:slider
+      - auto_zoom:toggle
+      - zoom_rotation:knob
+      - zoom_pos:xy
+      - zoom_levels:slider
+  PRIMITIV_logik:
+    bank: primitivlogik
+    title: PRIMITIV_logik
+    auto: true
+    z:
+      control: radius
+      label: radius
+      type: slider
+      group: shape
+      reason: push/pull = zoom / size
+    x:
+      control: extrabrightness
+      label: extra_brightness
+      type: slider
+      group: dispersion
+      reason: left/right
+    roll:
+      control: dispersionamount
+      label: dispersion_amount
+      type: slider
+      group: dispersion
+      reason: tilt sideways = amount
+    y:
+      control: dispersioncontrast
+      label: dispersion_contrast
+      type: slider
+      group: dispersion
+      reason: next free slider
+    yaw:
+      control: basstwitcher
+      label: bass_twitcher
+      type: knob
+      group: shape
+      reason: next free slider
+    pitch:
+      control: strokethickness
+      label: stroke_thickness
+      type: slider
+      group: shape
+      reason: next free slider
+    left:
+      control: toggleonbeat
+      label: TOGGLE_ON_BEAT
+      type: toggle
+      group: BPM_TAP
+      reason: toggle
+      action: toggle
+    right:
+      control: bassrotate
+      label: bass_rotate
+      type: toggle
+      group: dispersion
+      reason: toggle
+      action: toggle
+    unassigned:
+      - extra_noise:toggle
+      - fuzz_shape:slider
+      - fuzz_high_hits:slider
+      - media_on:toggle
+      - mask_shape:slider
+      - shape_affect_media:toggle
+      - media_affect_dispersion:toggle
+  Fractilian Foundation:
+    bank: fractilianfoundation
+    title: Fractilian Foundation
+    auto: true
+    x:
+      control: cameraposition
+      label: camera_position
+      type: xy
+      group: camera
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: cameraposition
+      label: camera_position
+      type: xy
+      group: camera
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: barreldistortion
+      label: barrel_distortion
+      type: slider
+      group: distortion
+      reason: push/pull = zoom / size
+    pitch:
+      control: zoom
+      label: zoom
+      type: slider
+      group: camera
+      reason: tilt fwd/back = camera (group)
+    roll:
+      control: detail
+      label: detail
+      type: slider
+      group: fractal
+      reason: tilt sideways = amount
+    yaw:
+      control: feedback
+      label: feedback
+      type: slider
+      group: distortion
+      reason: next free slider
+    left:
+      control: autorotate
+      label: auto_rotate
+      type: toggle
+      group: rotate
+      reason: toggle
+      action: toggle
+    right:
+      control: colorbeatpulse
+      label: color_beat_pulse
+      type: toggle
+      group: colorize
+      reason: toggle
+      action: toggle
+    unassigned:
+      - fractal_softness:slider
+      - rotate:knob
+      - color_regime:slider
+      - colorModifier:slider
+  Scaffold Fractal:
+    bank: scaffoldfractal
+    title: Scaffold Fractal
+    auto: true
+    x:
+      control: scalexy
+      label: scale_xy
+      type: xy
+      group: fractal
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: scalexy
+      label: scale_xy
+      type: xy
+      group: fractal
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: zdepth
+      label: z_depth
+      type: slider
+      group: camera
+      reason: push/pull = zoom / size
+    yaw:
+      control: roton
+      label: rot_on
+      type: slider
+      group: psych
+      reason: twist = rotation
+    pitch:
+      control: perspective
+      label: perspective
+      type: slider
+      group: camera
+      reason: tilt fwd/back = camera
+    roll:
+      control: iters
+      label: iters
+      type: slider
+      group: fractal
+      reason: next free slider
+    left:
+      control: downrot
+      label: down_rot
+      type: bang
+      group: camera
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: rightrot
+      label: right_rot
+      type: bang
+      group: camera
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - rot_direction:toggle
+      - col1:color
+      - col2:color
+      - col3:color
+      - bar_on:toggle
+  Mana:
+    bank: mana
+    title: Mana
+    auto: true
+    z:
+      control: zoom
+      label: ZOOM
+      type: slider
+      group: field
+      reason: push/pull = zoom / size
+    roll:
+      control: glow
+      label: GLOW
+      type: slider
+      group: lighting
+      reason: tilt sideways = amount
+    x:
+      control: trails
+      label: TRAILS
+      type: slider
+      group: lighting
+      reason: next free slider
+    y:
+      control: inversion
+      label: INVERSION
+      type: slider
+      group: lighting
+      reason: next free slider
+    yaw:
+      control: complexity
+      label: COMPLEXITY
+      type: slider
+      group: field
+      reason: next free slider
+    pitch:
+      control: noise
+      label: NOISE
+      type: slider
+      group: field
+      reason: next free slider
+    left:
+      control: overridetransitions
+      label: override_transitions
+      type: toggle
+      group: geom+color
+      reason: toggle
+      action: toggle
+    right:
+      control: overload
+      label: OVERLOAD
+      type: toggle
+      group: lighting
+      reason: toggle
+      action: toggle
+    unassigned:
+      - color_options:dropdown
+      - color_filters:dropdown
+      - geometry:dropdown
+      - VELOCITY:knob
+  KIFS Flythrough:
+    bank: kifsflythrough
+    title: KIFS Flythrough
+    auto: true
+    x:
+      control: lookxy
+      label: lookXY
+      type: xy
+      group: camera
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: lookxy
+      label: lookXY
+      type: xy
+      group: camera
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: size
+      label: size
+      type: slider
+      group: fractal
+      reason: push/pull = zoom / size
+    pitch:
+      control: ratein
+      label: rate_in
+      type: knob
+      group: camera
+      reason: tilt fwd/back = camera (group)
+    yaw:
+      control: xparam
+      label: x_param
+      type: slider
+      group: fractal
+      reason: next free slider
+    roll:
+      control: yparam
+      label: y_param
+      type: slider
+      group: fractal
+      reason: next free slider
+    left:
+      control: unfolding
+      label: unfolding
+      type: toggle
+      group: fractal
+      reason: toggle
+      action: toggle
+    right:
+      control: reactivetime
+      label: reactive_time
+      type: toggle
+      group: camera
+      reason: toggle
+      action: toggle
+    unassigned:
+      - z_param:slider
+      - standard_lighting:knob
+      - alternate_lighting:knob
+      - scan_alt_light:slider
+      - liquify:slider
+      - far_wall:slider
+  Beats in 4D:
+    bank: beatsin4d
+    title: Beats in 4D
+    auto: true
+    x:
+      control: bassmix
+      label: bass_mix
+      type: xy
+      group: Audio
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: bassmix
+      label: bass_mix
+      type: xy
+      group: Audio
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: zoomfactor
+      label: zoom_factor
+      type: slider
+      group: Visual
+      reason: push/pull = zoom / size
+    yaw:
+      control: basspow
+      label: bass_pow
+      type: slider
+      group: Audio
+      reason: next free slider
+    pitch:
+      control: wcut
+      label: wcut
+      type: slider
+      group: Visual
+      reason: next free slider
+    roll:
+      control: translationspeed
+      label: translation_speed
+      type: slider
+      group: Visual
+      reason: next free slider
+    left:
+      control: orbburst
+      label: orb_burst
+      type: bang
+      group: Visual
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: shockwave
+      label: shockwave
+      type: bang
+      group: Visual
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - speed_control:xy
+      - visual_mix:xy
+      - effect_base0:xy
+      - effect_base1:xy
+      - flash_color:color
+      - rotation_speed:xy
+      - sine_distortion:xy
+      - orbs:toggle
+      - wires:toggle
+  Compound Iris:
+    bank: compoundiris
+    title: Compound Iris
+    auto: true
+    z:
+      control: radiusring
+      label: radius_ring
+      type: slider
+      group: rings
+      reason: push/pull = zoom / size
+    roll:
+      control: bluramount
+      label: blur_amount
+      type: slider
+      group: rings
+      reason: tilt sideways = amount
+    x:
+      control: aberration
+      label: aberration
+      type: slider
+      group: optical
+      reason: next free slider
+    y:
+      control: refraction
+      label: refraction
+      type: slider
+      group: optical
+      reason: next free slider
+    left:
+      control: surfacepulse
+      label: surface_pulse
+      type: bang
+      group: tri_surface
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: surfacefracture
+      label: surface_fracture
+      type: bang
+      group: tri_surface
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - colored:toggle
+      - invert:toggle
+      - motion_style:toggle
+  Filter Blown v2:
+    bank: filterblownv2
+    title: Filter Blown v2
+    auto: true
+    roll:
+      control: contrast
+      label: contrast
+      type: slider
+      group: effects
+      reason: tilt sideways = amount
+    x:
+      control: motionblur
+      label: motion_blur
+      type: slider
+      group: effects
+      reason: next free slider
+    left:
+      control: zap
+      label: zap
+      type: bang
+      group: effects
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: manualanimation
+      label: manual_animation
+      type: bang
+      group: animation
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - palette_mode:dropdown
+      - color_palette:dropdown
+      - invert_regime:toggle
+      - color_oscillator:toggle
+      - animation_style:dropdown
+  Lattice Space ft. CCTV.:
+    bank: latticespaceftcctv
+    title: Lattice Space ft. CCTV.
+    auto: true
+    x:
+      control: lookxy
+      label: LookXY
+      type: xy
+      group: Camera
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: lookxy
+      label: LookXY
+      type: xy
+      group: Camera
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: zoom
+      label: Zoom
+      type: slider
+      group: Camera
+      reason: push/pull = zoom / size
+    yaw:
+      control: camrotation
+      label: cam_rotation
+      type: knob
+      group: Camera
+      reason: twist = rotation
+    roll:
+      control: audioreactivebrightness
+      label: audioreactive_brightness
+      type: slider
+      group: AudioReactive
+      reason: tilt sideways = amount
+    pitch:
+      control: speed
+      label: speed
+      type: slider
+      group: Time
+      reason: next free slider
+    left:
+      control: pixelateonoff
+      label: PixelateOnOff
+      type: toggle
+      group: Effect
+      reason: toggle
+      action: toggle
+    right:
+      control: reverse
+      label: reverse
+      type: toggle
+      group: Time
+      reason: toggle
+      action: toggle
+    unassigned:
+      - color_palette:dropdown
+      - color_theme:dropdown
+      - HueCycle:dropdown
+      - hueSpeed:slider
+      - tonemap:slider
+      - ARstrobetype:toggle
+      - ARstrobe:toggle
+      - MarchDistance:toggle
+      - wave_effect:slider
+      - pixelate:slider
+      - kaleidoscope:dropdown
+      - twistStrength:knob
+      - twistspeed:knob
+      - orb_amount:dropdown
+      - orb_movement:dropdown
+      - orbcolor_palette:dropdown
+      - scale:slider
+      - opacity:slider
+      - reset:bang
+      - FeedbackOnOff:toggle
+      - MirrorX:knob
+      - MirrorXY:knob
+      - LatticeBoltsSize:slider
+      - LatticeJointsSize:slider
+      - LatticeJointType:slider
+      - LatticeBoltType:slider
+  Neuron Proximitors:
+    bank: neuronproximitors
+    title: Neuron Proximitors
+    auto: true
+    z:
+      control: zoompower
+      label: zoom_power
+      type: slider
+      group: multiplexer
+      reason: push/pull = zoom / size
+    y:
+      control: verticalflow
+      label: vertical_flow
+      type: knob
+      group: flow
+      reason: forward/back
+    roll:
+      control: flowamount
+      label: flow_amount
+      type: slider
+      group: flow
+      reason: tilt sideways = amount
+    x:
+      control: multiplexerlayers
+      label: multiplexer_layers
+      type: slider
+      group: multiplexer
+      reason: next free slider
+    yaw:
+      control: ratezoom
+      label: rate_zoom
+      type: knob
+      group: multiplexer
+      reason: next free slider
+    pitch:
+      control: particlespeed
+      label: particle_speed
+      type: slider
+      group: motion
+      reason: next free slider
+    left:
+      control: minimalmode
+      label: minimal_mode
+      type: toggle
+      group: modes
+      reason: toggle
+      action: toggle
+    right:
+      control: multiplexeron
+      label: multiplexer_on
+      type: toggle
+      group: multiplexer
+      reason: toggle
+      action: toggle
+    unassigned:
+      - randomize_layers:toggle
+      - beat_randomizer:toggle
+      - audio_motion:toggle
+      - flow_in_out:knob
+      - reactive_flow:toggle
+      - particle_col:toggle
+      - simple_multiply:toggle
+      - feedback_mask:toggle
+      - flashing_lines:toggle
+      - FPS_fewer_particles:toggle
+  Entombed Silicon Dreams:
+    bank: entombedsilicondreams
+    title: Entombed Silicon Dreams
+    auto: true
+    x:
+      control: cameradirection
+      label: camera_direction
+      type: xy
+      group: Movement
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: cameradirection
+      label: camera_direction
+      type: xy
+      group: Movement
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: speed
+      label: speed
+      type: slider
+      group: Movement
+      reason: push/pull = speed
+    yaw:
+      control: basehue
+      label: base_hue
+      type: knob
+      group: Color
+      reason: twist = hue / phase
+    pitch:
+      control: fov
+      label: fov
+      type: slider
+      group: Visual
+      reason: tilt fwd/back = camera
+    roll:
+      control: colorburnintensity
+      label: color_burn_intensity
+      type: slider
+      group: Color
+      reason: tilt sideways = amount
+    unassigned:
+      - media_opacity:slider
+      - media_displace:slider
+      - camera_pos:xy
+      - color_burn_hue:knob
+      - color_burn_saturation:slider
+      - bloom_amount:knob
+      - tomb_probability:slider
+      - ring_direction:xy
+      - light_direction:xy
+      - gas_giant_position:xy
+      - motion_blur:slider
+      - fft_limit:slider
+      - bass_mix:xy
+      - bass_pow:slider
+  Sprinkles:
+    bank: sprinkles
+    title: Sprinkles
+    auto: true
+    z:
+      control: scale
+      label: scale
+      type: slider
+      group: simulation
+      reason: push/pull = zoom / size
+    left:
+      control: pulseout
+      label: pulse_out
+      type: bang
+      group: feed
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: blackpulse
+      label: black_pulse
+      type: bang
+      group: erase
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - auto_feed:toggle
+      - full_erase:bang
+      - grow:bang
+      - pulse_ripple:bang
+  Sinusoidal Warp:
+    bank: sinusoidalwarp
+    title: Sinusoidal Warp
+    auto: true
+    x:
+      control: direction
+      label: direction
+      type: xy
+      group: effect
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: direction
+      label: direction
+      type: xy
+      group: effect
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: rate
+      label: rate
+      type: knob
+      group: effect
+      reason: push/pull = speed
+    roll:
+      control: intensity
+      label: intensity
+      type: slider
+      group: effect
+      reason: tilt sideways = amount
+    yaw:
+      control: warp
+      label: warp
+      type: slider
+      group: effect
+      reason: next free slider
+    pitch:
+      control: refraction
+      label: refraction
+      type: slider
+      group: effect
+      reason: next free slider
+    unassigned:
+      - media_xy:xy
+      - brightness:slider
+  Traced Tunnel:
+    bank: tracedtunnel
+    title: Traced Tunnel
+    auto: true
+    x:
+      control: camlook
+      label: cam_look
+      type: xy
+      group: camera
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: camlook
+      label: cam_look
+      type: xy
+      group: camera
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: flatspace
+      label: flat_space
+      type: slider
+      group: geometry
+      reason: push/pull = speed
+    yaw:
+      control: rotateplanes
+      label: rotate_planes
+      type: knob
+      group: geometry
+      reason: twist = rotation
+    pitch:
+      control: fov
+      label: FOV
+      type: slider
+      group: camera
+      reason: tilt fwd/back = camera
+    roll:
+      control: pixelation
+      label: pixelation
+      type: slider
+      group: walls_coloration
+      reason: next free slider
+    left:
+      control: fovbump
+      label: FOV_bump
+      type: bang
+      group: camera
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: scanx
+      label: scan_x
+      type: bang
+      group: walls_coloration
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - auto_camera:toggle
+      - focused:toggle
+      - scan_z:bang
+      - media_scrolling:toggle
+      - auto_flasher:toggle
+      - small_circles:knob
+  Tunnel Beauty 6:
+    bank: tunnelbeauty6
+    title: Tunnel Beauty 6
+    auto: true
+    x:
+      control: xyoffset
+      label: xyOffset
+      type: xy
+      group: camera
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: xyoffset
+      label: xyOffset
+      type: xy
+      group: camera
+      reason: "xy pad: forward/back"
+      sub: y
+    pitch:
+      control: fovin
+      label: fov_in
+      type: slider
+      group: camera
+      reason: tilt fwd/back = camera
+    z:
+      control: diameter
+      label: diameter
+      type: slider
+      group: transforms
+      reason: next free slider
+    yaw:
+      control: flatten
+      label: flatten
+      type: slider
+      group: transforms
+      reason: next free slider
+    roll:
+      control: simplify
+      label: simplify
+      type: slider
+      group: transforms
+      reason: next free slider
+    left:
+      control: lookback
+      label: look_back
+      type: toggle
+      group: camera
+      reason: toggle
+      action: toggle
+    unassigned:
+      - churner:slider
+      - xyLook:xy
+      - col_presence:slider
+      - deeper_colors:slider
+      - media_width:slider
+  Mandelbrot Decoration:
+    bank: mandelbrotdecoration
+    title: Mandelbrot Decoration
+    auto: true
+    x:
+      control: navigate
+      label: navigate
+      type: xy
+      group: camera
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: navigate
+      label: navigate
+      type: xy
+      group: camera
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: zoom
+      label: zoom
+      type: slider
+      group: camera
+      reason: push/pull = zoom / size
+    yaw:
+      control: grid
+      label: grid
+      type: slider
+      group: shape
+      reason: next free slider
+    left:
+      control: bubbling
+      label: bubbling
+      type: toggle
+      group: shape
+      reason: toggle
+      action: toggle
+    right:
+      control: minimal
+      label: minimal
+      type: toggle
+      group: shape
+      reason: toggle
+      action: toggle
+    unassigned:
+      - constant_rotate:toggle
+      - auto_camera_jumps:toggle
+      - random_camera:bang
+      - media_xy:xy
+      - media_style:toggle
+      - sub_pattern:toggle
+      - pulser:bang
+      - pulse2:bang
+      - flasher_on:toggle
+  Chroma Cascade:
+    bank: chromacascade
+    title: Chroma Cascade
+    auto: true
+    z:
+      control: fluidspeed
+      label: fluid_speed
+      type: slider
+      group: animation
+      reason: push/pull = speed
+    left:
+      control: highlight
+      label: highlight
+      type: bang
+      group: color
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: autofluid
+      label: auto_fluid
+      type: toggle
+      group: animation
+      reason: toggle
+      action: toggle
+    unassigned:
+      - mode:dropdown
+      - symmetry:dropdown
+      - auto_highlight:toggle
+      - contours:toggle
+      - color_scheme:dropdown
+      - media_invert:toggle
+      - media_color:slider
+  Dark Twister:
+    bank: darktwister
+    title: Dark Twister
+    auto: true
+    x:
+      control: bassmix
+      label: bass_mix
+      type: xy
+      group: Audio
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: bassmix
+      label: bass_mix
+      type: xy
+      group: Audio
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: flashdist
+      label: flash_dist
+      type: slider
+      group: Effects
+      reason: push/pull = zoom / size
+    yaw:
+      control: rotationspeed
+      label: rotation_speed
+      type: knob
+      group: Shape
+      reason: twist = rotation
+    pitch:
+      control: fov
+      label: fov
+      type: slider
+      group: Shape
+      reason: tilt fwd/back = camera
+    roll:
+      control: basspow
+      label: bass_pow
+      type: slider
+      group: Audio
+      reason: next free slider
+    left:
+      control: warpon
+      label: warp_on
+      type: toggle
+      group: Warp
+      reason: toggle
+      action: toggle
+    unassigned:
+      - flash_mix:xy
+      - flash_radius:xy
+      - motion_blur:slider
+      - ref_focus:slider
+      - ref_factor:slider
+      - camera_swing:xy
+      - zoom_speed:knob
+      - warp_swing:xy
+      - flash_col_min:color
+      - beam_hue:xy
+      - flash_col_max:color
+      - beam_lum:slider
+      - beam_rate:knob
+      - media_opacity:slider
+      - media_depth:slider
+      - media_displacement:slider
+  SquareShoals:
+    bank: squareshoals
+    title: SquareShoals
+    auto: true
+    x:
+      control: paintposition
+      label: paint_position
+      type: xy
+      group: painter
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: paintposition
+      label: paint_position
+      type: xy
+      group: painter
+      reason: "xy pad: forward/back"
+      sub: y
+    yaw:
+      control: rotate
+      label: ROTATE
+      type: slider
+      group: motion
+      reason: twist = rotation
+    z:
+      control: drift
+      label: DRIFT
+      type: slider
+      group: motion
+      reason: next free slider
+    left:
+      control: wavespeed
+      label: WAVE_SPEED
+      type: toggle
+      group: motion
+      reason: toggle
+      action: toggle
+    right:
+      control: distortion
+      label: DISTORTION
+      type: toggle
+      group: motion
+      reason: toggle
+      action: toggle
+    unassigned:
+      - auto_painter:toggle
+      - logo_type:toggle
+  Boreal:
+    bank: boreal
+    title: Boreal
+    auto: true
+    z:
+      control: scanneraudiorate
+      label: scanner_audio_rate
+      type: knob
+      group: scanning
+      reason: push/pull = speed
+    x:
+      control: extracolortint
+      label: extra_color_tint
+      type: slider
+      group: color
+      reason: next free slider
+    y:
+      control: scanlinethinness
+      label: scanline_thinness
+      type: slider
+      group: scanning
+      reason: next free slider
+    yaw:
+      control: staticscan
+      label: static_scan
+      type: slider
+      group: scanning
+      reason: next free slider
+    pitch:
+      control: scannerconstrate
+      label: scanner_const_rate
+      type: knob
+      group: scanning
+      reason: next free slider
+    left:
+      control: pulseforward
+      label: pulse_forward
+      type: bang
+      group: scanning
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - auto_cycle:toggle
+      - cycle:bang
+      - media_warp:toggle
+      - warp_type:dropdown
+      - wind_movement:dropdown
+      - image_select:dropdown
+  Nova:
+    bank: nova
+    title: Nova
+    auto: true
+    z:
+      control: simplify
+      label: simplify
+      type: slider
+      group: zoom
+      reason: push/pull = zoom / size (group)
+    x:
+      control: sandstorm
+      label: sandstorm
+      type: slider
+      group: zoom
+      reason: next free slider
+    left:
+      control: flashing
+      label: flashing
+      type: toggle
+      group: action
+      reason: toggle
+      action: toggle
+    right:
+      control: pulsate
+      label: pulsate
+      type: toggle
+      group: action
+      reason: toggle
+      action: toggle
+    unassigned:
+      - radial_grid:toggle
+      - beat_rotate:toggle
+  Eight-Tails Twist:
+    bank: eighttailstwist
+    title: Eight-Tails Twist
+    auto: true
+    x:
+      control: lookatmexy
+      label: lookatme_xy
+      type: xy
+      group: camera
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: lookatmexy
+      label: lookatme_xy
+      type: xy
+      group: camera
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: camzoom
+      label: cam_zoom
+      type: slider
+      group: camera
+      reason: push/pull = zoom / size
+    yaw:
+      control: twistdirection
+      label: twistdirection
+      type: slider
+      group: shapes
+      reason: twist = rotation
+    roll:
+      control: edgeglow
+      label: EdgeGlow
+      type: slider
+      group: lighting
+      reason: tilt sideways = amount
+    pitch:
+      control: fogmix
+      label: fogmix
+      type: slider
+      group: lighting
+      reason: next free slider
+    unassigned:
+      - cam_xy:xy
+      - lightbackground:slider
+      - twistdirection2:slider
+      - trythis:slider
+      - reactivetime:slider
+  HEXOplanet:
+    bank: hexoplanet
+    title: HEXOplanet
+    auto: true
+    z:
+      control: sizebumps
+      label: size_bumps
+      type: slider
+      group: geometry
+      reason: push/pull = zoom / size
+    y:
+      control: elevation
+      label: elevation
+      type: slider
+      group: geometry
+      reason: forward/back
+    x:
+      control: numhexes
+      label: num_hexes
+      type: slider
+      group: geometry
+      reason: next free slider
+    yaw:
+      control: intenselighting
+      label: intense_lighting
+      type: slider
+      group: lighting
+      reason: next free slider
+    left:
+      control: altgeometry
+      label: alt_geometry
+      type: toggle
+      group: geometry
+      reason: toggle
+      action: toggle
+    right:
+      control: flatplane
+      label: flat_plane
+      type: toggle
+      group: geometry
+      reason: toggle
+      action: toggle
+    unassigned:
+      - bass_bump:toggle
+      - DISCO:toggle
+      - disco_bkg:toggle
+      - bkg_off:toggle
+      - mult_col:color
+  Hills, Eels:
+    bank: hillseels
+    title: Hills, Eels
+    auto: true
+    z:
+      control: saturate
+      label: saturate
+      type: knob
+      group: color
+      reason: push/pull = speed
+    yaw:
+      control: huerange
+      label: hue_range
+      type: slider
+      group: color
+      reason: twist = hue / phase
+    roll:
+      control: density
+      label: density
+      type: knob
+      group: shape, etc
+      reason: tilt sideways = amount
+    x:
+      control: rate
+      label: rate
+      type: slider
+      group: zoetrope
+      reason: next free slider
+    y:
+      control: tune
+      label: tune
+      type: knob
+      group: zoetrope
+      reason: next free slider
+    pitch:
+      control: wavelength
+      label: wavelength
+      type: knob
+      group: zoetrope
+      reason: next free slider
+    left:
+      control: autodensity
+      label: auto_density
+      type: toggle
+      group: shape, etc
+      reason: toggle
+      action: toggle
+    right:
+      control: push
+      label: push
+      type: bang
+      group: shape, etc
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - palette:toggle
+      - dark:toggle
+      - warp:toggle
+      - glitch:toggle
+      - reverse:toggle
+      - invert:toggle
+      - spacing:toggle
+      - peak:slider
+      - auto_peak:toggle
+      - auto_push:toggle
+      - media:slider
+      - auto_tune:toggle
+      - manual:bang
+      - lighten:knob
+  Biopsy_V2:
+    bank: biopsyv2
+    title: Biopsy_V2
+    auto: true
+    z:
+      control: circlesize
+      label: circle_size
+      type: slider
+      group: circle
+      reason: push/pull = zoom / size
+    x:
+      control: inorout
+      label: in_or_out
+      type: slider
+      group: motion
+      reason: next free slider
+    y:
+      control: colorpalette
+      label: color_palette
+      type: slider
+      group: color
+      reason: next free slider
+    yaw:
+      control: noshading
+      label: no_shading
+      type: slider
+      group: color
+      reason: next free slider
+    left:
+      control: downsweep
+      label: down_sweep
+      type: bang
+      group: sweep
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: upsweep
+      label: up_sweep
+      type: bang
+      group: sweep
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - drips:toggle
+      - slicing:toggle
+      - stretching:toggle
+      - distort:toggle
+      - circle_on:toggle
+      - flashing:toggle
+      - left_sweep:bang
+      - right_sweep:bang
+  Micro Fractal Blob Toasted:
+    bank: microfractalblobtoasted
+    title: Micro Fractal Blob Toasted
+    auto: true
+    x:
+      control: shift
+      label: Shift
+      type: xy
+      group: Space
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: shift
+      label: Shift
+      type: xy
+      group: Space
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: zoomin
+      label: Zoomin
+      type: knob
+      group: Space
+      reason: push/pull = zoom / size
+    yaw:
+      control: rotate
+      label: Rotate
+      type: knob
+      group: Space
+      reason: twist = rotation
+    roll:
+      control: colorintensity
+      label: Color_Intensity
+      type: knob
+      group: Color
+      reason: tilt sideways = amount
+    pitch:
+      control: height
+      label: Height
+      type: knob
+      group: Shapes
+      reason: next free slider
+    left:
+      control: bassmorph2
+      label: Bass_Morph_2
+      type: toggle
+      group: Toggles
+      reason: toggle
+      action: toggle
+    right:
+      control: bassmorph
+      label: Bass_Morph
+      type: toggle
+      group: Toggles
+      reason: toggle
+      action: toggle
+    unassigned:
+      - Stretch:xy
+      - Definition:knob
+      - Cycle_Speed:knob
+      - Dissipate_1:knob
+      - Dissipate_2:knob
+      - Torus:knob
+      - Auto_Shift:toggle
+      - Media_Mix:toggle
+      - Reactive_Brightness:toggle
+      - Color_Saturation:knob
+      - palette:slider
+      - Hue_Shift_Feedback:toggle
+      - Feedback_Threshold:knob
+      - Feedback_Zoom:knob
+      - Feedback_Pan:xy
+      - Feedback_Fade:knob
+      - Feedback_Flow:knob
+      - Feedback_Intensity:slider
+      - Auto_Feedback_Flow:toggle
+      - Auto_Feedback_Threshold:toggle
+      - Auto_Feedback_Pan:toggle
+      - Auto_Feedback_Fade:toggle
+  Biopsy:
+    bank: biopsy
+    title: Biopsy
+    auto: true
+    x:
+      control: paintpos
+      label: paint_pos
+      type: xy
+      group: paint
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: paintpos
+      label: paint_pos
+      type: xy
+      group: paint
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: paintsize
+      label: paint_size
+      type: slider
+      group: paint
+      reason: push/pull = zoom / size
+    roll:
+      control: colormix
+      label: color_mix
+      type: slider
+      group: color
+      reason: tilt sideways = amount
+    left:
+      control: drips
+      label: drips
+      type: toggle
+      group: mode
+      reason: toggle
+      action: toggle
+    right:
+      control: painton
+      label: paint_on
+      type: toggle
+      group: paint
+      reason: toggle
+      action: toggle
+    unassigned:
+      - paint_invert:toggle
+      - auto_slice:toggle
+      - manual_slice:xy
+      - flashing:toggle
+  Gaussian SmoothLife:
+    bank: gaussiansmoothlife
+    title: Gaussian SmoothLife
+    auto: true
+    z:
+      control: greyscale
+      label: greyscale
+      type: slider
+      group: colorize
+      reason: push/pull = zoom / size
+    x:
+      control: audioreactivity
+      label: audio_reactivity
+      type: slider
+      group: regime
+      reason: next free slider
+    y:
+      control: colorregime
+      label: color_regime
+      type: slider
+      group: colorize
+      reason: next free slider
+    yaw:
+      control: scale
+      label: scale
+      type: slider
+      group: parameters
+      reason: next free slider
+    pitch:
+      control: flowresistance
+      label: flow_resistance
+      type: slider
+      group: parameters
+      reason: next free slider
+    roll:
+      control: spacefilling
+      label: space_filling
+      type: slider
+      group: parameters
+      reason: next free slider
+    left:
+      control: regimetoggle
+      label: regime_toggle
+      type: toggle
+      group: regime
+      reason: toggle
+      action: toggle
+    right:
+      control: cyclingrings
+      label: cycling_rings
+      type: toggle
+      group: regime
+      reason: toggle
+      action: toggle
+    unassigned:
+      - no_blur:toggle
+      - contrast:slider
+      - birth_lower:slider
+      - birth_upper:slider
+      - survival_lower:slider
+      - survival_upper:slider
+      - timestep:slider
+      - xy_flow:xy
+      - reset_sim:bang
+  Sun_Set:
+    bank: sunset
+    title: Sun_Set
+    auto: true
+    yaw:
+      control: hue
+      label: hue
+      type: slider
+      group: color
+      reason: twist = hue / phase
+    x:
+      control: levels
+      label: levels
+      type: slider
+      group: color
+      reason: next free slider
+    y:
+      control: fire
+      label: fire
+      type: slider
+      group: color
+      reason: next free slider
+    z:
+      control: feedback
+      label: feedback
+      type: slider
+      group: subtle
+      reason: next free slider
+    pitch:
+      control: stutter
+      label: stutter
+      type: slider
+      group: subtle
+      reason: next free slider
+    left:
+      control: bright
+      label: bright
+      type: bang
+      group: flash
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: dark
+      label: dark
+      type: bang
+      group: flash
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - invert:toggle
+      - sun_pierce:bang
+      - auto_reset:toggle
+      - manual_reset:bang
+  Turbo Encabulator Fluid:
+    bank: turboencabulatorfluid
+    title: Turbo Encabulator Fluid
+    auto: true
+    x:
+      control: lightpos
+      label: light_pos
+      type: xy
+      group: coloring
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: lightpos
+      label: light_pos
+      type: xy
+      group: coloring
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: sizemodifier
+      label: size_modifier
+      type: slider
+      group: field
+      reason: push/pull = zoom / size
+    roll:
+      control: meltydetail
+      label: meltyDetail
+      type: slider
+      group: field
+      reason: tilt sideways = amount
+    yaw:
+      control: manualgrowth
+      label: manual_growth
+      type: slider
+      group: rate
+      reason: next free slider
+    pitch:
+      control: colorpalette
+      label: color_palette
+      type: slider
+      group: coloring
+      reason: next free slider
+    left:
+      control: scatter
+      label: scatter
+      type: bang
+      group: field
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: autogrowth
+      label: auto_growth
+      type: toggle
+      group: rate
+      reason: toggle
+      action: toggle
+    unassigned:
+      - reset:bang
+      - disrupt_field:toggle
+      - color_rotate:toggle
+      - media_color_mix:slider
+      - media_refraction:slider
+      - media_multiply:toggle
+      - run_twice_fps:toggle
+      - curl_scale:slider
+      - zooming:slider
+      - media_pulse:bang
+      - media_pulse_auto:toggle
+      - media_hint:slider
+      - Tracers_on:toggle
+      - tracer_intensity:slider
+      - tracer_size:slider
+      - tracer_control:xy
+  Min Max Hex:
+    bank: minmaxhex
+    title: Min Max Hex
+    auto: true
+    z:
+      control: speed
+      label: speed
+      type: slider
+      group: speed
+      reason: push/pull = speed
+    x:
+      control: noise
+      label: noise
+      type: slider
+      group: effects
+      reason: next free slider
+    left:
+      control: flashingmode
+      label: flashing_mode
+      type: toggle
+      group: mode
+      reason: toggle
+      action: toggle
+    right:
+      control: trianglemode
+      label: triangle_mode
+      type: toggle
+      group: mode
+      reason: toggle
+      action: toggle
+    unassigned:
+      - circular_mode:toggle
+      - center_pulse:bang
+      - fragment_media:toggle
+      - media_pulse:bang
+      - EXPLODE:toggle
+  Quicksand:
+    bank: quicksand
+    title: Quicksand
+    auto: true
+    left:
+      control: pusher
+      label: pusher
+      type: toggle
+      group: action
+      reason: toggle
+      action: toggle
+    right:
+      control: scroller
+      label: scroller
+      type: toggle
+      group: action
+      reason: toggle
+      action: toggle
+    unassigned:
+      - soften:toggle
+      - monochrome:toggle
+      - vert_speed:toggle
+      - hor_speed:toggle
+  Fire Tunnel:
+    bank: firetunnel
+    title: Fire Tunnel
+    auto: true
+    z:
+      control: autoin
+      label: auto_in
+      type: slider
+      group: speed
+      reason: push/pull = speed (group)
+    yaw:
+      control: twist
+      label: twist
+      type: slider
+      group: rotation
+      reason: twist = rotation
+    pitch:
+      control: fov
+      label: fov
+      type: slider
+      group: camera
+      reason: tilt fwd/back = camera
+    x:
+      control: sharpness
+      label: sharpness
+      type: slider
+      group: tunnel
+      reason: next free slider
+    y:
+      control: constriction
+      label: constriction
+      type: slider
+      group: tunnel
+      reason: next free slider
+    roll:
+      control: noise
+      label: noise
+      type: slider
+      group: tunnel
+      reason: next free slider
+    unassigned:
+      - planes_only:slider
+      - const_speed:slider
+      - spin:slider
+  Circuit Bending:
+    bank: circuitbending
+    title: Circuit Bending
+    auto: true
+    x:
+      control: lookxy
+      label: lookXY
+      type: xy
+      group: camera
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: lookxy
+      label: lookXY
+      type: xy
+      group: camera
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: rate
+      label: rate
+      type: slider
+      group: reactivity
+      reason: push/pull = speed
+    pitch:
+      control: perspective
+      label: perspective
+      type: slider
+      group: camera
+      reason: tilt fwd/back = camera
+    yaw:
+      control: noise
+      label: noise
+      type: slider
+      group: structure
+      reason: next free slider
+    left:
+      control: thinstructure
+      label: thin_structure
+      type: toggle
+      group: structure
+      reason: toggle
+      action: toggle
+    right:
+      control: fullyopen
+      label: fully_open
+      type: toggle
+      group: structure
+      reason: toggle
+      action: toggle
+    unassigned:
+      - media_scale:slider
+      - media_mult_or_add:slider
+  Circles5:
+    bank: circles5
+    title: Circles5
+    auto: true
+    z:
+      control: speed
+      label: speed_
+      type: slider
+      group: time
+      reason: push/pull = speed
+    x:
+      control: feedbackwarp
+      label: feedback_warp
+      type: slider
+      group: feedback
+      reason: next free slider
+    left:
+      control: rain
+      label: rain
+      type: toggle
+      group: effects
+      reason: toggle
+      action: toggle
+    right:
+      control: pop
+      label: pop
+      type: bang
+      group: effects
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - feedback_on:toggle
+      - reverse:toggle
+  Cloud Ten:
+    bank: cloudten
+    title: Cloud Ten
+    auto: true
+    z:
+      control: speed
+      label: speed
+      type: slider
+      group: motion
+      reason: push/pull = speed
+    x:
+      control: horizontalmotion
+      label: horizontal_motion
+      type: knob
+      group: motion
+      reason: left/right
+    y:
+      control: manualheight
+      label: manual_height
+      type: slider
+      group: height
+      reason: forward/back
+    yaw:
+      control: sunposition
+      label: sun_position
+      type: slider
+      group: motion
+      reason: next free slider
+    left:
+      control: autoheight
+      label: auto_height
+      type: toggle
+      group: height
+      reason: toggle
+      action: toggle
+    right:
+      control: flipside
+      label: flip_side
+      type: toggle
+      group: motion
+      reason: toggle
+      action: toggle
+    unassigned:
+      - city_fps:toggle
+  Cosmic Dust:
+    bank: cosmicdust
+    title: Cosmic Dust
+    auto: true
+    roll:
+      control: stardustmix
+      label: star_dust_mix
+      type: knob
+      group: aesthetic
+      reason: tilt sideways = amount
+    x:
+      control: starrynight
+      label: starry_night
+      type: slider
+      group: action
+      reason: next free slider
+    y:
+      control: flattenlayers
+      label: flatten_layers
+      type: slider
+      group: star_arrangement
+      reason: next free slider
+    left:
+      control: rippleinspacetime
+      label: ripple_in_spacetime
+      type: bang
+      group: action
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: audiobrightness
+      label: audio_brightness
+      type: toggle
+      group: action
+      reason: toggle
+      action: toggle
+    unassigned:
+      - media_split_mix:knob
+      - purple_stars:toggle
+      - nebula_off:toggle
+      - media_mask:toggle
+      - billions_and_billions:toggle
+      - patterns_in_the_stars:toggle
+      - no_big_clumps:toggle
+  Molten:
+    bank: molten
+    title: Molten
+    auto: true
+    z:
+      control: racerspeed
+      label: racer_speed
+      type: slider
+      group: camera
+      reason: push/pull = speed
+    pitch:
+      control: racerlook
+      label: racer_look
+      type: slider
+      group: camera
+      reason: tilt fwd/back = camera (group)
+    x:
+      control: insideout
+      label: inside_out
+      type: slider
+      group: color
+      reason: next free slider
+    left:
+      control: racer
+      label: racer
+      type: toggle
+      group: camera
+      reason: toggle
+      action: toggle
+    right:
+      control: zoomout
+      label: zoom_out
+      type: toggle
+      group: camera
+      reason: toggle
+      action: toggle
+    unassigned:
+      - invert:toggle
+      - Mirror:toggle
+  Magnetismic:
+    bank: magnetismic
+    title: Magnetismic
+    auto: true
+    z:
+      control: speed
+      label: speed
+      type: slider
+      group: field
+      reason: push/pull = speed
+    x:
+      control: intricacy
+      label: intricacy
+      type: slider
+      group: field
+      reason: next free slider
+    y:
+      control: scale
+      label: scale
+      type: slider
+      group: field
+      reason: next free slider
+    yaw:
+      control: ghostly
+      label: ghostly
+      type: slider
+      group: coloring
+      reason: next free slider
+    pitch:
+      control: mainlight
+      label: main_light
+      type: knob
+      group: lighting
+      reason: next free slider
+    left:
+      control: pixelate
+      label: pixelate
+      type: toggle
+      group: fx
+      reason: toggle
+      action: toggle
+    right:
+      control: containfield
+      label: contain_field
+      type: toggle
+      group: fx
+      reason: toggle
+      action: toggle
+    unassigned:
+      - pulse:bang
+      - audio_reactive:toggle
+      - colMode:toggle
+      - solar_flare:toggle
+      - reactive_lights:toggle
+  Filter Blown:
+    bank: filterblown
+    title: Filter Blown
+    auto: true
+    roll:
+      control: contrast
+      label: contrast
+      type: slider
+      group: effects
+      reason: tilt sideways = amount
+    x:
+      control: motionblur
+      label: motion_blur
+      type: slider
+      group: effects
+      reason: next free slider
+    y:
+      control: animationstyle
+      label: animation_style
+      type: slider
+      group: animation
+      reason: next free slider
+    left:
+      control: colorpalette
+      label: color_palette
+      type: bang
+      group: color
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: manualanimation
+      label: manual_animation
+      type: bang
+      group: animation
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - MODE_1_OR_2:toggle
+      - invert_regime:toggle
+      - color_oscillator:toggle
+  Hex Array:
+    bank: hexarray
+    title: Hex Array
+    auto: true
+    x:
+      control: xymod
+      label: xy_mod
+      type: xy
+      group: space
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: xymod
+      label: xy_mod
+      type: xy
+      group: space
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: size
+      label: size
+      type: slider
+      group: hexagons
+      reason: push/pull = zoom / size
+    yaw:
+      control: spin
+      label: spin
+      type: knob
+      group: twist
+      reason: twist = rotation
+    pitch:
+      control: squiggle
+      label: squiggle
+      type: knob
+      group: twist
+      reason: next free slider
+    roll:
+      control: separation
+      label: separation
+      type: slider
+      group: space
+      reason: next free slider
+    left:
+      control: greyscale
+      label: greyscale
+      type: toggle
+      group: color
+      reason: toggle
+      action: toggle
+    unassigned:
+      - fly_in_out:slider
+      - size_hole:slider
+      - depth:slider
+      - lighting:slider
+  EXOplanet:
+    bank: exoplanet
+    title: EXOplanet
+    auto: true
+    x:
+      control: refracttype
+      label: refract_type
+      type: slider
+      group: refractor
+      reason: next free slider
+    y:
+      control: intnsatmos
+      label: intns_atmos
+      type: slider
+      group: effects
+      reason: next free slider
+    z:
+      control: intnsplanet
+      label: intns_planet
+      type: slider
+      group: effects
+      reason: next free slider
+    left:
+      control: rgbsplit
+      label: RGB_Split
+      type: toggle
+      group: effects
+      reason: toggle
+      action: toggle
+    right:
+      control: mirrorchange
+      label: mirror_change
+      type: bang
+      group: mirror
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - mirror_on:toggle
+      - color_scheme:toggle
+      - color_low:color
+      - color_high:color
+  Ray Marching Experiment 62:
+    bank: raymarchingexperiment62
+    title: Ray Marching Experiment 62
+    auto: true
+    z:
+      control: basstime
+      label: bass_time
+      type: knob
+      group: time
+      reason: push/pull = speed
+    pitch:
+      control: fovmod
+      label: fov_mod
+      type: slider
+      group: camera
+      reason: tilt fwd/back = camera
+    x:
+      control: darker
+      label: darker
+      type: slider
+      group: color
+      reason: next free slider
+    y:
+      control: flatten
+      label: flatten
+      type: slider
+      group: shape
+      reason: next free slider
+    yaw:
+      control: spiralridges
+      label: spiral_ridges
+      type: slider
+      group: shape
+      reason: next free slider
+    left:
+      control: highhitsridges
+      label: highhits_ridges
+      type: toggle
+      group: shape
+      reason: toggle
+      action: toggle
+    right:
+      control: autohue
+      label: auto_hue
+      type: toggle
+      group: color
+      reason: toggle
+      action: toggle
+    unassigned:
+      - flashing:toggle
+      - ridges_constant:toggle
+      - speed_direction:knob
+      - media_scale:slider
+      - media_only:slider
+      - selector:slider
+  Ink Shot:
+    bank: inkshot
+    title: Ink Shot
+    auto: true
+    roll:
+      control: pulseintensity
+      label: pulse_intensity
+      type: slider
+      group: pulse
+      reason: tilt sideways = amount
+    left:
+      control: contrast
+      label: contrast
+      type: toggle
+      group: effects
+      reason: toggle
+      action: toggle
+    right:
+      control: slices
+      label: slices
+      type: toggle
+      group: effects
+      reason: toggle
+      action: toggle
+    unassigned:
+      - auto_jumper:toggle
+      - jump:bang
+      - auto_pulse:toggle
+      - pulse:bang
+  Iteration Disposal:
+    bank: iterationdisposal
+    title: Iteration Disposal
+    auto: true
+    x:
+      control: camoffset
+      label: cam_offset
+      type: xy
+      group: cam
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: camoffset
+      label: cam_offset
+      type: xy
+      group: cam
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: camzoom
+      label: cam_zoom
+      type: slider
+      group: cam
+      reason: push/pull = zoom / size
+    yaw:
+      control: spin
+      label: spin
+      type: slider
+      group: tunnel
+      reason: twist = rotation
+    pitch:
+      control: camfov
+      label: cam_fov
+      type: slider
+      group: cam
+      reason: tilt fwd/back = camera
+    roll:
+      control: rate
+      label: rate
+      type: knob
+      group: shapes
+      reason: next free slider
+    left:
+      control: kick
+      label: kick
+      type: toggle
+      group: shapes
+      reason: toggle
+      action: toggle
+    right:
+      control: melt
+      label: melt
+      type: toggle
+      group: shapes
+      reason: toggle
+      action: toggle
+    unassigned:
+      - cam_hits:toggle
+      - box_color:color
+      - tri_color:color
+      - glow_color:color
+      - ambient_occlusion:slider
+      - more_its:toggle
+      - mix_media:slider
+      - infl:bang
+      - inner_kick:bang
+      - middle_kick:bang
+      - outer_kick:bang
+      - hole:slider
+      - tunnel:toggle
+      - tunnel_rate:knob
+      - reset_tun:bang
+  Glitch:
+    bank: glitch
+    title: Glitch
+    auto: true
+    z:
+      control: driprate
+      label: drip_rate
+      type: slider
+      group: slice
+      reason: push/pull = speed
+    yaw:
+      control: rotateslice
+      label: rotate_slice
+      type: knob
+      group: slice
+      reason: twist = rotation
+    x:
+      control: rgbsplit
+      label: rgb_split
+      type: slider
+      group: rgb
+      reason: next free slider
+    left:
+      control: jump
+      label: jump
+      type: bang
+      group: jump
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: whiteon
+      label: white_on
+      type: toggle
+      group: white
+      reason: toggle
+      action: toggle
+    unassigned:
+      - linesOn:toggle
+      - invert_white:toggle
+      - auto_jumps:toggle
+  Churning:
+    bank: churning
+    title: Churning
+    auto: true
+    roll:
+      control: imgmix
+      label: img_mix
+      type: slider
+      group: general
+      reason: tilt sideways = amount
+    x:
+      control: manualpush
+      label: manual_push
+      type: slider
+      group: push
+      reason: next free slider
+    y:
+      control: divein
+      label: dive_in
+      type: slider
+      group: dive
+      reason: next free slider
+    left:
+      control: lift
+      label: lift
+      type: bang
+      group: movement
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: swirl
+      label: swirl
+      type: bang
+      group: movement
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - turbulence:toggle
+      - plasma:toggle
+      - broad_strokes:toggle
+      - color_phasing:toggle
+      - blur_on_fps:toggle
+      - auto_push:toggle
+  Beamers:
+    bank: beamers
+    title: Beamers
+    auto: true
+    x:
+      control: beamwidth
+      label: beam_width
+      type: slider
+      group: beams
+      reason: left/right
+    y:
+      control: numbeams
+      label: num_beams
+      type: slider
+      group: beams
+      reason: next free slider
+    z:
+      control: separation
+      label: separation
+      type: slider
+      group: beams
+      reason: next free slider
+    left:
+      control: colorpalette
+      label: color_palette
+      type: bang
+      group: color
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: wobbleon
+      label: wobble_on
+      type: toggle
+      group: beams
+      reason: toggle
+      action: toggle
+    unassigned:
+      - spiral:toggle
+      - direct_shot:toggle
+      - random:toggle
+      - monochrome:toggle
+      - monochrome_color:color
+  Bouncy Hexagons:
+    bank: bouncyhexagons
+    title: Bouncy Hexagons
+    auto: true
+    x:
+      control: bouncyislands
+      label: bouncy_islands
+      type: xy
+      group: Hexagons
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: bouncyislands
+      label: bouncy_islands
+      type: xy
+      group: Hexagons
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: wavebarspeed
+      label: wave_bar_speed
+      type: knob
+      group: Hexagons
+      reason: push/pull = speed
+    pitch:
+      control: fov
+      label: fov
+      type: knob
+      group: Camera
+      reason: tilt fwd/back = camera
+    yaw:
+      control: spectbarheight
+      label: spect_bar_height
+      type: slider
+      group: Hexagons
+      reason: next free slider
+    roll:
+      control: wavebarheight
+      label: wave_bar_height
+      type: slider
+      group: Hexagons
+      reason: next free slider
+    left:
+      control: minimalmode
+      label: minimal_mode
+      type: toggle
+      group: Main Color
+      reason: toggle
+      action: toggle
+    right:
+      control: topsvssides
+      label: tops_vs_sides
+      type: toggle
+      group: Main Color
+      reason: toggle
+      action: toggle
+    unassigned:
+      - black_freq:xy
+      - red_freq:xy
+      - world_zoom:xy
+      - red_col:color
+      - black_col:color
+      - white_col:color
+      - border_col:color
+      - fog_col:color
+      - media_mode:toggle
+      - media_scale:slider
+      - light_dir:knob
+      - motion_blur:slider
+      - vignette:slider
+      - auto_light_dir:toggle
+      - speed:slider
+      - height:slider
+      - look_dir:knob
+      - camera_tilt:xy
+  Transparent Isoslices:
+    bank: transparentisoslices
+    title: Transparent Isoslices
+    auto: true
+    x:
+      control: cameradirection
+      label: camera_direction
+      type: xy
+      group: camera
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: cameradirection
+      label: camera_direction
+      type: xy
+      group: camera
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: sizevoxels
+      label: size_voxels
+      type: slider
+      group: geometry
+      reason: push/pull = zoom / size
+    yaw:
+      control: colorize
+      label: colorize
+      type: slider
+      group: color
+      reason: next free slider
+    pitch:
+      control: waterytex
+      label: watery_tex
+      type: slider
+      group: color
+      reason: next free slider
+    roll:
+      control: digitaltex
+      label: digital_tex
+      type: slider
+      group: color
+      reason: next free slider
+    left:
+      control: alwayssliced
+      label: always_sliced
+      type: toggle
+      group: geometry
+      reason: toggle
+      action: toggle
+    right:
+      control: beatslice
+      label: beat_slice
+      type: toggle
+      group: reactivity
+      reason: toggle
+      action: toggle
+    unassigned:
+      - voxelate:slider
+      - mids_color:slider
+      - bass_morph:slider
+      - flashing:slider
+      - rate_in:knob
+      - bass_rate:knob
+  Swarm:
+    bank: swarm
+    title: Swarm
+    auto: true
+    x:
+      control: runaway
+      label: run_away
+      type: xy
+      group: fear
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: runaway
+      label: run_away
+      type: xy
+      group: fear
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: size
+      label: size
+      type: slider
+      group: color
+      reason: push/pull = zoom / size
+    yaw:
+      control: excitement
+      label: excitement
+      type: slider
+      group: motion
+      reason: next free slider
+    left:
+      control: colorpop
+      label: color_pop
+      type: bang
+      group: color
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: colorpalette
+      label: color_palette
+      type: bang
+      group: color
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - fear_on:toggle
+      - frantic:toggle
+      - energize_center:toggle
+      - calm_collect:toggle
+      - invert_col:toggle
+  Glob:
+    bank: glob
+    title: Glob
+    auto: true
+    z:
+      control: size
+      label: size
+      type: slider
+      group: object
+      reason: push/pull = zoom / size
+    x:
+      control: fadetocolor
+      label: fade_to_color
+      type: slider
+      group: lighting
+      reason: next free slider
+    y:
+      control: simplify
+      label: simplify
+      type: slider
+      group: object
+      reason: next free slider
+    left:
+      control: fuzz
+      label: fuzz
+      type: toggle
+      group: effects
+      reason: toggle
+      action: toggle
+    right:
+      control: autofuzz
+      label: autofuzz
+      type: toggle
+      group: effects
+      reason: toggle
+      action: toggle
+    unassigned:
+      - shading:toggle
+      - fog:toggle
+      - electrify:toggle
+      - scratch:toggle
+      - bump_up:bang
+  Thresholder:
+    bank: thresholder
+    title: Thresholder
+    auto: true
+    z:
+      control: zoomtovolume
+      label: zoom_to_volume
+      type: slider
+      group: feedback motion
+      reason: push/pull = zoom / size
+    yaw:
+      control: colorspin
+      label: color_spin
+      type: slider
+      group: feedback hsv
+      reason: twist = rotation
+    x:
+      control: brightadjust
+      label: bright_adjust
+      type: slider
+      group: feedback hsv
+      reason: left/right
+    y:
+      control: threshold
+      label: THRESHOLD
+      type: slider
+      group: feedback threshold
+      reason: next free slider
+    pitch:
+      control: thresholdvol
+      label: threshold_vol
+      type: slider
+      group: feedback threshold
+      reason: next free slider
+    roll:
+      control: tonemovement
+      label: tone_movement
+      type: slider
+      group: feedback motion
+      reason: next free slider
+    left:
+      control: randompalette
+      label: random_palette
+      type: bang
+      group: palettes
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: palette1
+      label: palette1
+      type: bang
+      group: palettes
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - keep_color:color
+      - random_keep_color:toggle
+      - bufferglitch:toggle
+      - saturate_adjust:slider
+      - bright_adjust_auto:toggle
+      - palletize_after:toggle
+      - palletize_before:toggle
+      - palette2:bang
+      - palette3:bang
+      - palette4:bang
+      - palette5:bang
+      - get_frame:bang
+      - play_media:toggle
+      - auto_get_frame:toggle
+      - synthScale:slider
+      - synthMacro:slider
+      - synthSpeed:slider
+  Fluid Body:
+    bank: fluidbody
+    title: Fluid Body
+    auto: true
+    x:
+      control: colorrotate
+      label: color_rotate
+      type: xy
+      group: color
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: colorrotate
+      label: color_rotate
+      type: xy
+      group: color
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: flow
+      label: flow
+      type: slider
+      group: motion
+      reason: push/pull = speed
+    yaw:
+      control: coruscate
+      label: coruscate
+      type: slider
+      group: color
+      reason: next free slider
+    pitch:
+      control: pulse
+      label: pulse
+      type: knob
+      group: motion
+      reason: next free slider
+    roll:
+      control: chromatic
+      label: chromatic
+      type: slider
+      group: color
+      reason: next free slider
+    left:
+      control: zap
+      label: zap
+      type: bang
+      group: perform
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: lens
+      label: lens
+      type: bang
+      group: perform
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - flash_x:toggle
+      - flash_y:toggle
+      - drift:xy
+      - momentum:knob
+      - scale_factor:knob
+      - bars:bang
+  REDRUM:
+    bank: redrum
+    title: REDRUM
+    auto: true
+    roll:
+      control: intensitypunch
+      label: intensity_punch
+      type: slider
+      group: puncher
+      reason: tilt sideways = amount
+    x:
+      control: shake
+      label: shake
+      type: slider
+      group: effects
+      reason: next free slider
+    y:
+      control: moreblood
+      label: more_blood
+      type: slider
+      group: blood
+      reason: next free slider
+    z:
+      control: lessblood
+      label: less_blood
+      type: slider
+      group: blood
+      reason: next free slider
+    left:
+      control: highsglitch
+      label: highs_glitch
+      type: toggle
+      group: effects
+      reason: toggle
+      action: toggle
+    right:
+      control: manualsplatter
+      label: manual_splatter
+      type: bang
+      group: splatter
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - auto_splatter:toggle
+      - extra_drips:toggle
+      - auto_slicer:toggle
+      - constrast_slices:toggle
+      - manual_slice:bang
+      - punch_out:bang
+      - punch_in:bang
+  Deeper:
+    bank: deeper
+    title: Deeper
+    auto: true
+    roll:
+      control: beamglow
+      label: beam_glow
+      type: slider
+      group: beams
+      reason: tilt sideways = amount
+    x:
+      control: wallstexture
+      label: walls_texture
+      type: slider
+      group: lighting
+      reason: next free slider
+    left:
+      control: wavepulse
+      label: wave_pulse
+      type: bang
+      group: cavern
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: rotating
+      label: rotating
+      type: toggle
+      group: camera
+      reason: toggle
+      action: toggle
+    unassigned:
+      - fly_in_out:slider
+      - beams_on:toggle
+      - many_beams:toggle
+      - undulating:toggle
+      - light_chaser:toggle
+      - lights_react:toggle
+      - colorful:toggle
+  Vein Melter:
+    bank: veinmelter
+    title: Vein Melter
+    auto: true
+    x:
+      control: paint1xy
+      label: paint1XY
+      type: xy
+      group: paint1
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: paint1xy
+      label: paint1XY
+      type: xy
+      group: paint1
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: zooming
+      label: zooming
+      type: slider
+      group: distortion
+      reason: push/pull = zoom / size
+    roll:
+      control: heartbeatintensity
+      label: heartbeat_intensity
+      type: slider
+      group: simulation
+      reason: tilt sideways = amount
+    yaw:
+      control: colorpalette
+      label: color_palette
+      type: slider
+      group: coloration
+      reason: next free slider
+    pitch:
+      control: meltupordown
+      label: melt_up_or_down
+      type: slider
+      group: distortion
+      reason: next free slider
+    left:
+      control: pulseout
+      label: pulse_out
+      type: bang
+      group: simulation
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: fullpulse
+      label: full_pulse
+      type: bang
+      group: simulation
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - retract:toggle
+      - devolve:toggle
+      - paint1_on:toggle
+      - brush_size1:slider
+      - paint2_on:toggle
+      - paint2XY:xy
+      - grab_frame:bang
+      - opacity:slider
+      - refraction:slider
+      - combine_colors:toggle
+      - reset_sim:bang
+  Neon City by Night:
+    bank: neoncitybynight
+    title: Neon City by Night
+    auto: true
+    z:
+      control: speed
+      label: speed
+      type: knob
+      group: Movement
+      reason: push/pull = speed
+    yaw:
+      control: neonhue
+      label: neon_hue
+      type: slider
+      group: City
+      reason: twist = hue / phase
+    y:
+      control: heightmul
+      label: height_mul
+      type: slider
+      group: City
+      reason: forward/back
+    roll:
+      control: density
+      label: density
+      type: slider
+      group: City
+      reason: tilt sideways = amount
+    x:
+      control: height
+      label: height
+      type: knob
+      group: Movement
+      reason: next free slider
+    pitch:
+      control: pathamplitude
+      label: path_amplitude
+      type: knob
+      group: Movement
+      reason: next free slider
+    left:
+      control: triggerwave
+      label: trigger_wave
+      type: bang
+      group: Wave
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: reflection
+      label: reflection
+      type: toggle
+      group: City
+      reason: toggle
+      action: toggle
+    unassigned:
+      - lighting_mode:dropdown
+      - tower_lights:toggle
+      - path_frequency:knob
+      - camera_mode:dropdown
+      - motion_blur:slider
+      - retain_glow:slider
+      - neon_glow:slider
+      - media_transparency:slider
+      - glass_effect:slider
+      - media_multiplier:slider
+      - billboard_density:slider
+      - wave_speed:knob
+  Glassier:
+    bank: glassier
+    title: Glassier
+    auto: true
+    x:
+      control: manualposition
+      label: manual_position
+      type: xy
+      group: position
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: manualposition
+      label: manual_position
+      type: xy
+      group: position
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: impulsepower
+      label: impulse_power
+      type: slider
+      group: impulse
+      reason: next free slider
+    yaw:
+      control: inout
+      label: in_out
+      type: slider
+      group: motion
+      reason: next free slider
+    left:
+      control: shockback
+      label: shock_back
+      type: bang
+      group: shock
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: shockforward
+      label: shock_forward
+      type: bang
+      group: shock
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - image_block:toggle
+      - color_inv:toggle
+      - auto_position:toggle
+      - auto_impulse:toggle
+      - manual_impulse:bang
+      - motion_mode:toggle
+  Overload:
+    bank: overload
+    title: Overload
+    auto: true
+    left:
+      control: theritualhasbegun
+      label: the_ritual_has_begun
+      type: toggle
+      group: action
+      reason: toggle
+      action: toggle
+    right:
+      control: weirdcolor
+      label: weird_color
+      type: toggle
+      group: aesthetic
+      reason: toggle
+      action: toggle
+    unassigned:
+      - auto_cycle:toggle
+      - cycle:bang
+      - distortion_type:dropdown
+      - color_scheme:dropdown
+      - media_tile:toggle
+      - logo_center:toggle
+      - media_glitch:toggle
+  Lost in the Sauce:
+    bank: lostinthesauce
+    title: Lost in the Sauce
+    auto: true
+    z:
+      control: scale
+      label: scale
+      type: slider
+      group: feedback
+      reason: push/pull = zoom / size
+    yaw:
+      control: hueadjust
+      label: hue_adjust
+      type: slider
+      group: coloration
+      reason: twist = hue / phase
+    x:
+      control: feedbackamt
+      label: feedback_amt
+      type: slider
+      group: feedback
+      reason: next free slider
+    y:
+      control: iterations
+      label: iterations
+      type: slider
+      group: feedback
+      reason: next free slider
+    pitch:
+      control: feedthickness
+      label: feed_thickness
+      type: slider
+      group: feedback
+      reason: next free slider
+    left:
+      control: syncedtwitcher
+      label: synced_twitcher
+      type: toggle
+      group: time
+      reason: toggle
+      action: toggle
+    right:
+      control: mode2
+      label: mode_2
+      type: toggle
+      group: coloration
+      reason: toggle
+      action: toggle
+    unassigned:
+      - pixel_garbage:toggle
+      - media_feeder:toggle
+      - media_mask:slider
+      - media_refract:slider
+      - media_color:slider
+      - media_subtract:slider
+  Myoplasm:
+    bank: myoplasm
+    title: Myoplasm
+    auto: true
+    x:
+      control: xypos
+      label: xyPos
+      type: xy
+      group: motion
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: xypos
+      label: xyPos
+      type: xy
+      group: motion
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: zoom
+      label: zoom
+      type: slider
+      group: cells
+      reason: push/pull = zoom / size
+    yaw:
+      control: levels
+      label: levels
+      type: slider
+      group: color
+      reason: next free slider
+    pitch:
+      control: feedback
+      label: feedback
+      type: slider
+      group: feedback
+      reason: next free slider
+    left:
+      control: colormode
+      label: color_mode
+      type: toggle
+      group: color
+      reason: toggle
+      action: toggle
+    right:
+      control: arranged
+      label: arranged
+      type: toggle
+      group: cells
+      reason: toggle
+      action: toggle
+    unassigned:
+      - rotation:knob
+  Party Doodad:
+    bank: partydoodad
+    title: Party Doodad
+    auto: true
+    x:
+      control: doodadrot
+      label: doodad_rot
+      type: xy
+      group: doodad
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: doodadrot
+      label: doodad_rot
+      type: xy
+      group: doodad
+      reason: "xy pad: forward/back"
+      sub: y
+    roll:
+      control: glowydoodad
+      label: glowydoodad
+      type: slider
+      group: doodad
+      reason: tilt sideways = amount
+    z:
+      control: wallstripes
+      label: wall_stripes
+      type: slider
+      group: doodad
+      reason: next free slider
+    yaw:
+      control: doodadonly
+      label: doodad_only
+      type: slider
+      group: doodad
+      reason: next free slider
+    left:
+      control: hidedoodad
+      label: hide_doodad
+      type: toggle
+      group: doodad
+      reason: toggle
+      action: toggle
+    unassigned:
+      - scene_speed:slider
+      - lazorpresence:slider
+      - glowhits:slider
+      - walls:slider
+      - illustration_land:toggle
+      - glow_factor:slider
+      - glow_color:color
+      - fog_color1:color
+      - fog_color2:color
+      - scene_color1:color
+      - scene_color2:color
+      - scene_color3:color
+  Dynamical Flame:
+    bank: dynamicalflame
+    title: Dynamical Flame
+    auto: true
+    x:
+      control: colorpalette
+      label: color_palette
+      type: slider
+      group: color
+      reason: next free slider
+    y:
+      control: glassysurface
+      label: glassy_surface
+      type: slider
+      group: action
+      reason: next free slider
+    left:
+      control: scanlines
+      label: scan_lines
+      type: bang
+      group: action
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: ringoffire
+      label: ring_of_fire
+      type: bang
+      group: action
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - pulsing_fire:toggle
+      - bass_travel:toggle
+      - media_color_only:slider
+      - multiply_color:toggle
+      - media_refract:slider
+      - darken:bang
+      - fireworks:bang
+      - reset_sim:bang
+  Mouse Demo:
+    bank: mousedemo
+    title: Mouse Demo
+    auto: true
+    z:
+      control: brushsize
+      label: brush_size
+      type: slider
+      group: brush
+      reason: push/pull = zoom / size
+    x:
+      control: brushsmooth
+      label: brush_smooth
+      type: slider
+      group: brush
+      reason: next free slider
+    unassigned:
+      - draw_mode:dropdown
+  Fuzzy Signal:
+    bank: fuzzysignal
+    title: Fuzzy Signal
+    auto: true
+    z:
+      control: glitchscale
+      label: glitch_scale
+      type: slider
+      group: glitch
+      reason: push/pull = zoom / size
+    x:
+      control: glitchflashes
+      label: glitch_flashes
+      type: knob
+      group: glitch
+      reason: next free slider
+    y:
+      control: glitchconstant
+      label: glitch_constant
+      type: slider
+      group: glitch
+      reason: next free slider
+    yaw:
+      control: fuzzflashes
+      label: fuzz_flashes
+      type: knob
+      group: fuzz
+      reason: next free slider
+    pitch:
+      control: fuzzconstant
+      label: fuzz_constant
+      type: slider
+      group: fuzz
+      reason: next free slider
+    roll:
+      control: fuzzscale
+      label: fuzz_scale
+      type: slider
+      group: fuzz
+      reason: next free slider
+    left:
+      control: angershake
+      label: anger_shake
+      type: bang
+      group: fx
+      reason: momentary trigger
+      action: momentary
+    right:
+      control: ripplesnap
+      label: ripple_snap
+      type: bang
+      group: fx
+      reason: momentary trigger
+      action: momentary
+    unassigned:
+      - rgb_vs_cmyk:toggle
+      - feedback_amt:slider
+      - feedback_scale:slider
+      - feedback_style:toggle
+      - save_fps:toggle
+      - mix_type:toggle
+      - pattern_media_multiply:toggle
+      - beat_jump:toggle
+      - media_glitch:toggle
+      - vignette:slider
+      - vignette_invert:toggle
+  KaleidoWHOA, MAN:
+    bank: kaleidowhoaman
+    title: KaleidoWHOA, MAN
+    auto: true
+    z:
+      control: ratecolor
+      label: rate_color
+      type: knob
+      group: speed
+      reason: push/pull = speed
+    yaw:
+      control: smoothrotate
+      label: smooth_rotate
+      type: slider
+      group: rotate
+      reason: twist = rotation
+    roll:
+      control: complexity
+      label: complexity
+      type: slider
+      group: shape
+      reason: tilt sideways = amount
+    x:
+      control: rateforward
+      label: rate_forward
+      type: knob
+      group: speed
+      reason: next free slider
+    y:
+      control: beatreaction
+      label: beat_reaction
+      type: slider
+      group: speed
+      reason: next free slider
+    pitch:
+      control: colorselector
+      label: color_selector
+      type: slider
+      group: color
+      reason: next free slider
+    left:
+      control: square
+      label: square
+      type: toggle
+      group: shape
+      reason: toggle
+      action: toggle
+    right:
+      control: octagon
+      label: octagon
+      type: toggle
+      group: shape
+      reason: toggle
+      action: toggle
+    unassigned:
+      - jump_rotate:toggle
+      - media_distort:slider
+      - sunset:toggle
+      - two_color_minimal:toggle
+      - col1:color
+      - col2:color
+  VideoFX_1:
+    bank: videofx1
+    title: VideoFX_1
+    auto: true
+    x:
+      control: fbmotion
+      label: fb_motion
+      type: xy
+      group: feedback
+      reason: "xy pad: left/right"
+      sub: x
+    y:
+      control: fbmotion
+      label: fb_motion
+      type: xy
+      group: feedback
+      reason: "xy pad: forward/back"
+      sub: y
+    z:
+      control: woozyspeed
+      label: woozy_speed
+      type: slider
+      group: rgb split
+      reason: push/pull = speed
+    yaw:
+      control: fbrotate
+      label: fb_rotate
+      type: knob
+      group: feedback
+      reason: twist = rotation
+    roll:
+      control: normalmix
+      label: normal_mix
+      type: slider
+      group: master mixer
+      reason: tilt sideways = amount
+    pitch:
+      control: edgemix
+      label: edge_mix
+      type: slider
+      group: master mixer
+      reason: next free slider
+    left:
+      control: colorfix
+      label: color_fix
+      type: toggle
+      group: edge detect
+      reason: toggle
+      action: toggle
+    right:
+      control: autosplit
+      label: auto_split
+      type: toggle
+      group: rgb split
+      reason: toggle
+      action: toggle
+    unassigned:
+      - rgb_mix:slider
+      - pixelate_mix:slider
+      - feedback_mix:slider
+      - subtract:toggle
+      - expand:slider
+      - split_amount:slider
+      - woozy:toggle
+      - square_pix:toggle
+      - tri_pix:toggle
+      - circle_pix:toggle
+      - pixel_size:slider
+      - clamp_color:toggle
+      - extra_bright:slider
+      - fb_zoom:slider

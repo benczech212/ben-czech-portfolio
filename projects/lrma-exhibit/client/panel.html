@@ -1,0 +1,1418 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exhibit Control</title>
+<style>
+  :root {
+    --bg:#0c0f14; --bg2:#11151c; --panel:#161b23; --panel2:#1c232d; --line:#232b36; --line2:#2d3745;
+    --fg:#e9edf2; --fg2:#aab4c1; --dim:#6f7b8a;
+    --accent:#5b9cff; --accent2:#3f7fe6; --ok:#38d39f; --warn:#f2b747; --bad:#ff5f6d; --purple:#a78bfa;
+    --r:14px; --r2:10px; --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:15px/1.45 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif; }
+  body { display:grid; grid-template-columns:208px 1fr; height:100vh; overflow:hidden; }
+  ::selection { background:var(--accent); color:#fff; }
+  svg.i { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+
+  /* ── sidebar ─────────────────────────────────────────────── */
+  aside { background:var(--bg2); border-right:1px solid var(--line); display:flex; flex-direction:column; padding:18px 14px; gap:6px; overflow:hidden; }
+  .brand { display:flex; align-items:center; gap:11px; padding:2px 8px 16px; }
+  .brand .logo { width:32px; height:32px; border-radius:10px; background:linear-gradient(135deg,var(--accent),var(--purple)); display:grid; place-items:center; color:#fff; flex:none; }
+  .brand h1 { font-size:15.5px; margin:0; font-weight:650; letter-spacing:.2px; }
+  .brand small { display:block; color:var(--dim); font-size:11.5px; font-weight:400; }
+  nav a { display:flex; align-items:center; gap:11px; padding:11px 13px; border-radius:var(--r2); color:var(--fg2); text-decoration:none; font-weight:550; cursor:pointer; user-select:none; }
+  nav a:hover { background:var(--panel); color:var(--fg); }
+  nav a.active { background:var(--panel2); color:var(--fg); box-shadow:inset 3px 0 0 var(--accent); }
+  .side-foot { margin-top:auto; padding:10px 8px 4px; color:var(--dim); font-size:12px; display:grid; gap:7px; }
+  .side-foot .clock { font-size:21px; color:var(--fg); font-weight:600; letter-spacing:.5px; }
+  .side-foot .credit { margin-top:2px; padding-top:9px; border-top:1px solid var(--line); color:var(--dim); font-size:11.5px; }
+  .side-foot .credit b { color:var(--fg2); font-weight:600; }
+  .pill { display:inline-flex; align-items:center; gap:8px; padding:5px 10px; border-radius:999px; background:var(--panel); color:var(--fg2); font-size:12px; }
+  .dot { width:9px; height:9px; border-radius:50%; background:var(--dim); display:inline-block; flex:none; }
+  .dot.ok { background:var(--ok); box-shadow:0 0 8px var(--ok); } .dot.warn { background:var(--warn); box-shadow:0 0 8px var(--warn); } .dot.bad { background:var(--bad); }
+  .pill.engaged { background:rgba(167,139,250,.18); color:#d9ccff; }
+
+  /* ── main ────────────────────────────────────────────────── */
+  main { padding:18px 22px; overflow:auto; }
+  main.fit { overflow:hidden; padding:16px 18px; }
+  .page { display:none; } .page.active { display:block; }
+  .page > h2 { font-size:22px; font-weight:650; margin:0 0 14px; letter-spacing:.2px; }
+  .grid { display:grid; gap:16px; }
+  .cols-2 { grid-template-columns:1fr 1fr; } .cols-3 { grid-template-columns:repeat(3,1fr); } .cols-32 { grid-template-columns:3fr 2fr; }
+  @media (max-width:1200px) { .cols-2,.cols-3,.cols-32 { grid-template-columns:1fr; } }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:16px 18px; }
+  .card h3 { margin:0 0 12px; font-size:12px; text-transform:uppercase; letter-spacing:1.3px; color:var(--dim); font-weight:650; display:flex; align-items:center; gap:10px; }
+  .card h3 .sp { flex:1; }
+  .card h3 .muted, .section .body h3 .muted { text-transform:none; letter-spacing:0; font-weight:450; }
+  .muted { color:var(--dim); font-size:13px; }
+  .row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+
+  /* ── HOME: one screen, no scrolling ─────────────────────── */
+  #page-home.active { display:grid; height:100%; gap:14px;
+    grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);
+    grid-template-rows:auto minmax(0,1.14fr) minmax(0,1fr); }
+  #page-home > .card { min-height:0; overflow:hidden; display:flex; flex-direction:column; }
+  #page-home > #homeStatus { grid-column:1/-1; display:flex; flex-direction:row; align-items:center; gap:18px; padding:11px 18px; }
+  #homeStatus .big { font-size:17px; font-weight:650; display:flex; align-items:center; gap:11px; }
+  #homeStatus .sep { width:1px; height:26px; background:var(--line2); }
+  #homeStatus .sp { flex:1; }
+  #homeStatus .kv { display:flex; flex-direction:column; line-height:1.25; }
+  #homeStatus .kv b { font-size:14px; font-weight:600; } #homeStatus .kv span { font-size:11.5px; color:var(--dim); }
+  #homePreview .preview { flex:1; min-height:0; }
+  .preview { position:relative; background:#05070a; border:1px solid var(--line); border-radius:var(--r2); overflow:hidden; display:grid; place-items:center; }
+  .preview img { width:100%; height:100%; object-fit:contain; display:block; }
+  .preview .muted { padding:20px; text-align:center; max-width:460px; }
+  .fpsbadge { position:absolute; right:10px; top:10px; background:rgba(8,11,16,.75); border:1px solid var(--line2); border-radius:8px; padding:3px 9px; font-size:12px; color:var(--ok); }
+  .fpsbadge.low { color:var(--warn); } .fpsbadge.bad { color:var(--bad); }
+  .fpsbadge .muted { font-size:11px; padding:0; }
+
+  /* ── buttons ─────────────────────────────────────────────── */
+  .btn { appearance:none; border:1px solid var(--line2); border-radius:var(--r2); background:var(--panel2); color:var(--fg); font:inherit; font-weight:600; padding:0 15px; height:44px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:9px; transition:background .12s, transform .05s, border-color .12s; user-select:none; }
+  .btn:hover { background:#242d39; border-color:#3a4656; } .btn:active { transform:translateY(1px); } .btn:disabled { opacity:.45; cursor:default; }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; } .btn.primary:hover { background:var(--accent2); }
+  .btn.danger { background:#3a1d22; border-color:#5a2a33; color:#ffb4bb; } .btn.danger:hover { background:#4a2229; }
+  .btn.ghost { background:transparent; }
+  .btn.sm { height:34px; padding:0 12px; font-size:13px; font-weight:550; border-radius:8px; }
+  .btn.xs { height:26px; padding:0 9px; font-size:11.5px; font-weight:550; border-radius:7px; }
+  .btn.on { background:rgba(91,156,255,.18); border-color:var(--accent); color:#cfe1ff; }
+  .btn.icon { width:44px; padding:0; }
+  .actions { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:11px; }
+  .action { display:flex; align-items:center; gap:13px; text-align:left; height:70px; padding:0 15px; }
+  .action .ic { width:38px; height:38px; border-radius:11px; display:grid; place-items:center; background:rgba(255,255,255,.06); flex:none; }
+  .action.primary .ic, .action.danger .ic { background:rgba(255,255,255,.14); }
+  .action b { display:block; font-size:15px; } .action small { display:block; color:inherit; opacity:.7; font-weight:450; font-size:12px; }
+
+  /* ── faders + widgets ────────────────────────────────────── */
+  .widgets { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:9px 12px; align-items:start; }
+  .w { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r2); padding:9px 11px 10px; display:grid; gap:7px; align-content:start; }
+  .w:hover { border-color:var(--line2); }
+  .w .head { display:flex; align-items:center; gap:8px; }
+  .w .name { font-weight:600; font-size:13px; text-transform:capitalize; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .w .val { margin-left:auto; font-variant-numeric:tabular-nums; color:var(--fg2); font-size:12px; }
+  .w .tools { display:flex; gap:4px; opacity:0; transition:opacity .15s; }
+  .w:hover .tools { opacity:1; }
+  .w .slot { font-size:10px; text-transform:uppercase; letter-spacing:.9px; color:var(--purple); font-weight:700; line-height:1; }
+  .fader { position:relative; height:26px; border-radius:7px; background:#0d1117; border:1px solid var(--line); cursor:ew-resize; overflow:hidden; touch-action:none; }
+  .fader .fill { position:absolute; inset:0; width:0; background:linear-gradient(90deg,#2e6fe0,#5b9cff); }
+  .fader .thumb { position:absolute; top:0; bottom:0; width:3px; background:#fff; opacity:.9; transform:translateX(-1px); }
+  .fader.wide { height:30px; } .fader.big { height:34px; }
+  .fader.muted .fill { background:#3a4250; }
+  .btn.xs.on { background:rgba(255,95,109,.16); border-color:var(--bad); }
+  .switch { width:48px; height:27px; border-radius:14px; background:#2a3441; position:relative; cursor:pointer; flex:none; transition:background .15s; }
+  .switch::after { content:""; position:absolute; top:3px; left:3px; width:21px; height:21px; border-radius:50%; background:#8d99a8; transition:.15s; }
+  .switch.on { background:var(--accent); } .switch.on::after { left:24px; background:#fff; }
+  .seg { display:flex; gap:4px; flex-wrap:wrap; }
+  .seg button { appearance:none; border:1px solid var(--line2); background:transparent; color:var(--fg2); font:inherit; font-size:12.5px; font-weight:550; padding:6px 11px; border-radius:8px; cursor:pointer; text-transform:capitalize; }
+  .seg button.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .seg.tight button { padding:4px 9px; font-size:11.5px; }
+  select.sel { background:#0d1117; border:1px solid var(--line2); color:var(--fg); border-radius:8px; padding:7px 10px; font:inherit; font-size:13px; width:100%; }
+  .txt { background:#0d1117; border:1px solid var(--line2); color:var(--fg); border-radius:8px; padding:9px 11px; font:inherit; font-size:13.5px; }
+  .swatch { display:flex; align-items:center; gap:10px; cursor:pointer; }
+  .swatch .chip { width:50px; height:28px; border-radius:8px; border:1px solid rgba(255,255,255,.15); }
+  .swatch input { position:absolute; opacity:0; width:0; height:0; }
+  .swatch code { color:var(--fg2); font-size:12px; }
+  .pad { position:relative; width:100%; aspect-ratio:1; max-height:200px; border-radius:var(--r2); background:#0d1117; border:1px solid var(--line); cursor:crosshair; touch-action:none; overflow:hidden; }
+  .pad.sm { max-height:150px; }
+  #wBasic { grid-template-columns:repeat(auto-fill,minmax(188px,1fr)); }
+  #wBasic .pad { aspect-ratio:auto; height:70px; max-height:70px; }
+  #wBasic .w .name { font-size:12.5px; }
+  .pad .h, .pad .v { position:absolute; background:rgba(255,255,255,.12); } .pad .h { left:0; right:0; height:1px; } .pad .v { top:0; bottom:0; width:1px; }
+  .pad .pt { position:absolute; width:16px; height:16px; border-radius:50%; background:var(--accent); border:2px solid #fff; transform:translate(-50%,-50%); box-shadow:0 0 12px rgba(91,156,255,.8); }
+
+  /* ── meters ──────────────────────────────────────────────── */
+  .meters { display:grid; grid-template-columns:auto 1fr auto; gap:5px 10px; align-items:center; font-size:12px; color:var(--dim); }
+  .meters.inline { grid-template-columns:auto 70px auto auto 70px auto auto 70px auto; gap:4px 8px; }
+  .meter { height:10px; background:#0d1117; border-radius:6px; overflow:hidden; border:1px solid var(--line); }
+  .meter i { display:block; height:100%; width:0; background:linear-gradient(90deg,var(--ok) 60%,var(--warn) 85%,var(--bad)); transition:width .07s linear; }
+
+  /* ── apps / stats / log ──────────────────────────────────── */
+  .apps { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:9px; }
+  .app { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r2); padding:11px 13px; display:flex; align-items:center; gap:11px; }
+  .app .name { font-weight:600; } .app .st { color:var(--dim); font-size:12px; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:9px; }
+  .stat { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r2); padding:9px 11px; }
+  .stat .k { color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.9px; font-weight:650; }
+  .stat .v { font-size:21px; font-weight:700; line-height:1.2; } .stat .s { color:var(--dim); font-size:11.5px; }
+  .stat .bar { height:5px; background:#0d1117; border-radius:3px; overflow:hidden; margin-top:6px; }
+  .stat .bar i { display:block; height:100%; background:var(--ok); } .stat.warn .bar i { background:var(--warn); } .stat.bad .bar i { background:var(--bad); }
+  .stat.warn .v { color:var(--warn); } .stat.bad .v { color:var(--bad); }
+  .log { font:12px/1.55 Consolas,ui-monospace,monospace; white-space:pre-wrap; color:var(--fg2); background:#0b0e13; border:1px solid var(--line); border-radius:var(--r2); padding:11px 13px; max-height:220px; overflow:auto; }
+  .log .warn { color:var(--warn); } .log .error { color:var(--bad); } .log .debug { color:var(--dim); }
+
+  /* ── music ───────────────────────────────────────────────── */
+  .np { display:grid; grid-template-columns:118px 1fr; gap:14px; align-items:center; }
+  .art { width:118px; height:118px; border-radius:12px; background:#0d1117 center/cover no-repeat; border:1px solid var(--line); display:grid; place-items:center; color:var(--dim); flex:none; }
+  .np .title { font-size:19px; font-weight:700; line-height:1.2; max-height:2.4em; overflow:hidden; }
+  .np .artist { color:var(--fg2); font-size:13.5px; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .progress { height:7px; background:#0d1117; border-radius:4px; overflow:hidden; border:1px solid var(--line); margin:10px 0 5px; }
+  .progress i { display:block; height:100%; width:0; background:var(--accent); transition:width .5s linear; }
+  .times { display:flex; justify-content:space-between; color:var(--dim); font-size:12px; font-variant-numeric:tabular-nums; }
+  .transport { display:flex; gap:9px; align-items:center; margin-top:12px; flex-wrap:wrap; }
+  .transport .btn.icon.lg { width:56px; height:56px; border-radius:50%; }
+
+  /* ── feedback ────────────────────────────────────────────── */
+  .votes { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .btn.vote { height:96px; flex-direction:column; gap:3px; font-size:16px; }
+  .btn.vote svg { width:28px; height:28px; }
+  .btn.vote.up { background:rgba(56,211,159,.12); border-color:rgba(56,211,159,.4); color:#a8f0d5; }
+  .btn.vote.up:hover { background:rgba(56,211,159,.22); }
+  .btn.vote.down { background:rgba(255,95,109,.1); border-color:rgba(255,95,109,.35); color:#ffb4bb; }
+  .btn.vote.down:hover { background:rgba(255,95,109,.2); }
+  .btn.vote small { font-weight:450; opacity:.75; font-size:12px; }
+  .counts { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; text-align:center; }
+  .counts .num { font-size:24px; font-weight:700; } .counts .num.up { color:var(--ok); } .counts .num.down { color:var(--bad); }
+  .fbrow { display:grid; grid-template-columns:auto 1fr auto; gap:10px; padding:7px 0; border-bottom:1px solid var(--line); font-size:13px; }
+  .fbrow:last-child { border-bottom:0; } .fbrow .t { color:var(--dim); font-size:12px; white-space:nowrap; }
+
+  /* ── scene page ──────────────────────────────────────────── */
+  .section { border:1px solid var(--line); border-radius:var(--r); background:var(--panel); margin-bottom:16px; overflow:hidden; }
+  .section > header { display:flex; align-items:center; gap:12px; padding:13px 18px; background:var(--panel2); border-bottom:1px solid var(--line); }
+  .section > header .badge { width:30px; height:30px; border-radius:9px; display:grid; place-items:center; background:rgba(91,156,255,.16); color:var(--accent); flex:none; }
+  .section > header .badge.res { background:rgba(167,139,250,.16); color:var(--purple); }
+  .section > header h3 { margin:0; font-size:15px; text-transform:none; letter-spacing:0; color:var(--fg); font-weight:650; }
+  .section > header .sub { color:var(--dim); font-size:12.5px; }
+  .section > header .sp { flex:1; }
+  .section > .body { padding:16px 18px; }
+  .section .body h3 { margin:0 0 12px; font-size:12px; text-transform:uppercase; letter-spacing:1.3px; color:var(--dim); font-weight:650; display:flex; align-items:center; gap:10px; }
+  .section .body h3 .sp { flex:1; }
+  .scenebar { display:flex; align-items:center; gap:18px; flex-wrap:wrap; padding:13px 16px; background:var(--panel2); border:1px solid var(--line); border-radius:var(--r2); }
+  .scene-id .scene-name { font-size:20px; font-weight:700; line-height:1.15; }
+  .fold summary { cursor:pointer; list-style:none; }
+  .fold summary::-webkit-details-marker { display:none; }
+  .fold summary::before { content:"▸"; color:var(--dim); margin-right:9px; display:inline-block; transition:transform .15s; }
+  .fold[open] summary::before { transform:rotate(90deg); }
+  .group h4 { margin:14px 0 8px; font-size:11.5px; text-transform:uppercase; letter-spacing:1.2px; color:var(--dim); font-weight:650; }
+  .reslayers { display:grid; gap:6px; }
+  .reslayer { display:grid; grid-template-columns:26px 1.2fr 1fr 1fr; gap:10px; align-items:center; padding:8px 11px; background:var(--panel2); border:1px solid var(--line); border-radius:8px; font-size:13px; }
+  .reslayer .n { color:var(--dim); font-variant-numeric:tabular-nums; }
+  .reslayer .nm { font-weight:600; } .reslayer .c { color:var(--fg2); } .reslayer .ap { color:var(--dim); font-size:12px; }
+  .reslayer.keep { border-color:rgba(91,156,255,.4); }
+  .cols { display:grid; grid-template-columns:repeat(auto-fill,minmax(52px,1fr)); gap:6px; }
+  .cols button { appearance:none; border:1px solid var(--line2); background:var(--panel2); color:var(--fg2); font:inherit; font-size:13px; font-weight:600; height:34px; border-radius:8px; cursor:pointer; }
+  .cols button.on { background:var(--purple); border-color:var(--purple); color:#fff; }
+
+  /* ── inputs page ─────────────────────────────────────────── */
+  .devrow { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:11px; }
+  .dev { display:flex; align-items:center; gap:11px; background:var(--panel); border:1px solid var(--line); border-radius:var(--r2); padding:11px 13px; }
+  .dev .nm { font-weight:600; } .dev .st { color:var(--dim); font-size:12px; }
+  .dev .rate { margin-left:auto; text-align:right; font-size:12px; color:var(--fg2); font-variant-numeric:tabular-nums; }
+  .axes { display:grid; gap:5px; }
+  .axis { display:grid; grid-template-columns:120px 1fr 48px; gap:9px; align-items:center; font-size:12.5px; color:var(--fg2); }
+  .axis .k { color:var(--dim); } .axis .v { text-align:right; font-variant-numeric:tabular-nums; }
+  .bip { position:relative; height:10px; background:#0d1117; border:1px solid var(--line); border-radius:5px; overflow:hidden; }
+  .bip i { position:absolute; top:0; bottom:0; background:var(--accent); }
+  .bip i.neg { background:var(--purple); }
+  .bip.uni i { left:0 !important; }
+  .smwrap { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:center; }
+  .smstage { position:relative; height:190px; perspective:700px; display:grid; place-items:center; }
+  .smgrid { position:absolute; inset:14px; border-radius:12px; background:
+      linear-gradient(rgba(91,156,255,.09) 1px,transparent 1px) 0 0/100% 24px,
+      linear-gradient(90deg,rgba(91,156,255,.09) 1px,transparent 1px) 0 0/24px 100%; border:1px solid var(--line); }
+  .smshadow { position:absolute; width:96px; height:20px; border-radius:50%; background:rgba(0,0,0,.5); filter:blur(7px); transform:translateY(46px); }
+  .smpuck { position:relative; width:104px; height:104px; transform-style:preserve-3d; transition:transform .05s linear; }
+  .smpuck .smcap { position:absolute; inset:0; border-radius:50%; background:radial-gradient(circle at 34% 28%,#3d4a5c,#1a2029 70%); border:2px solid #47566b; box-shadow:0 10px 26px rgba(0,0,0,.55); }
+  .smpuck .smdot { position:absolute; left:50%; top:50%; width:15px; height:15px; margin:-7px 0 0 -7px; border-radius:50%; background:var(--dim); }
+  .smpuck.active .smdot { background:var(--accent); box-shadow:0 0 16px var(--accent); }
+  .xbwrap { display:grid; grid-template-columns:1fr 1.15fr 1fr; gap:12px; align-items:center; }
+  .xbmid { display:grid; gap:9px; }
+  .trig { display:grid; grid-template-columns:auto 1fr auto 1fr; gap:7px; align-items:center; font-size:12px; }
+  .abxy { display:grid; grid-template-columns:repeat(3,30px); grid-template-rows:repeat(3,30px); justify-content:center; gap:3px; }
+  .xbtn { display:grid; place-items:center; border-radius:50%; background:var(--panel2); border:1px solid var(--line2); font-size:12px; font-weight:700; color:var(--fg2); }
+  .xbtn.y { grid-area:1/2; } .xbtn.x { grid-area:2/1; } .xbtn.b { grid-area:2/3; } .xbtn.a { grid-area:3/2; }
+  .xbtn.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .dpad { display:grid; grid-template-columns:repeat(3,26px); grid-template-rows:repeat(3,26px); justify-content:center; gap:2px; }
+  .dpad span { display:grid; place-items:center; background:var(--panel2); border:1px solid var(--line); border-radius:5px; font-size:10px; color:var(--dim); }
+  .dpad span[data-d=up] { grid-area:1/2; } .dpad span[data-d=left] { grid-area:2/1; } .dpad span[data-d=c] { grid-area:2/2; background:transparent; border:0; }
+  .dpad span[data-d=right] { grid-area:2/3; } .dpad span[data-d=down] { grid-area:3/2; }
+  .dpad span.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .scheme { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px; }
+  .slot { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r2); padding:10px 12px; display:grid; gap:5px; }
+  .slot.hot { border-color:var(--accent); box-shadow:0 0 0 1px rgba(91,156,255,.35); }
+  .slot .g { font-size:11.5px; color:var(--dim); } .slot .g b { color:var(--purple); text-transform:uppercase; letter-spacing:.6px; }
+  .slot .c { font-weight:600; font-size:13.5px; } .slot .c.none { color:var(--dim); font-weight:450; }
+  .slot .d { font-size:11.5px; color:var(--dim); min-height:1.2em; }
+  .maps { display:grid; gap:5px; }
+  .maprow { display:grid; grid-template-columns:1.1fr 1.4fr auto 70px; gap:10px; align-items:center; font-size:12.5px; padding:5px 8px; border-radius:7px; }
+  .maprow.hot { background:rgba(91,156,255,.1); }
+  .maprow code { color:var(--fg2); font-family:Consolas,monospace; font-size:12px; }
+  .maprow .mode { color:var(--dim); font-size:11.5px; }
+
+  /* ── toast ───────────────────────────────────────────────── */
+  .toast { position:fixed; left:50%; bottom:28px; transform:translate(-50%,24px); background:#1d2632; border:1px solid var(--line2); border-radius:11px; padding:12px 20px; box-shadow:var(--shadow); opacity:0; pointer-events:none; transition:.22s; z-index:10000; font-weight:550; }
+  .toast.show { opacity:1; transform:translate(-50%,0); }
+
+  /* ── SCREENSAVER ─────────────────────────────────────────── */
+  #saver { position:fixed; inset:0; z-index:9000; background:#05070a; display:none; place-items:center; overflow:hidden; cursor:none; }
+  #saver.on { display:grid; animation:fadeIn .5s ease; }
+  @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
+  #saverImg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; filter:blur(26px) saturate(1.5) brightness(.55); transform:scale(1.14); }
+  #saver .aurora { position:absolute; inset:-25%; background:
+      radial-gradient(42% 42% at 24% 30%, rgba(91,156,255,.42), transparent 62%),
+      radial-gradient(38% 38% at 74% 24%, rgba(167,139,250,.38), transparent 62%),
+      radial-gradient(45% 45% at 58% 78%, rgba(56,211,159,.26), transparent 62%);
+      filter:blur(42px); animation:drift 26s ease-in-out infinite alternate; }
+  @keyframes drift { from { transform:translate(-4%,-3%) scale(1) } to { transform:translate(5%,4%) scale(1.14) } }
+  #saver .vig { position:absolute; inset:0; background:radial-gradient(70% 70% at 50% 50%, transparent 30%, rgba(3,5,8,.85) 100%); }
+  #saver .sv { position:relative; text-align:center; padding:0 6vw; max-width:1400px; }
+  #saverTitle { font-size:clamp(38px,5.6vw,92px); font-weight:800; line-height:1.06; letter-spacing:-1.5px; margin:0;
+    background:linear-gradient(120deg,#fff 20%,#bcd6ff 55%,#e5d9ff 85%); -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 8px 48px rgba(0,0,0,.5); }
+  #saverSub { font-size:clamp(17px,1.8vw,30px); color:#c6d2e2; margin:20px 0 0; font-weight:450; text-shadow:0 2px 20px rgba(0,0,0,.7); }
+  #saver .sv.swap { animation:slideUp .8s cubic-bezier(.2,.7,.2,1); }
+  @keyframes slideUp { from { opacity:0; transform:translateY(26px) } to { opacity:1; transform:none } }
+  #saverDots { position:absolute; left:50%; bottom:74px; transform:translateX(-50%); display:flex; gap:9px; }
+  #saverDots i { width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,.25); display:block; transition:.3s; }
+  #saverDots i.on { background:#fff; width:26px; border-radius:4px; }
+  #saver .nudge { position:absolute; left:50%; bottom:26px; transform:translateX(-50%); color:rgba(255,255,255,.55); font-size:14px; letter-spacing:1.4px; text-transform:uppercase; font-weight:600; display:flex; align-items:center; gap:11px; animation:pulse 2.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity:.4 } 50% { opacity:1 } }
+  #saver .brandmark { position:absolute; left:40px; top:34px; display:flex; align-items:center; gap:12px; color:rgba(255,255,255,.62); font-weight:600; letter-spacing:.4px; }
+  #saver .clocky { position:absolute; right:40px; top:30px; color:rgba(255,255,255,.5); font-size:19px; font-variant-numeric:tabular-nums; text-align:right; line-height:1.3; }
+  #saver .clocky .until { font-size:12.5px; letter-spacing:1.1px; text-transform:uppercase; color:rgba(255,255,255,.42); font-variant-numeric:normal; font-weight:600; }
+  #saver .credit { position:absolute; left:40px; bottom:26px; color:rgba(255,255,255,.34); font-size:12.5px; letter-spacing:1.1px; }
+
+  /* ── TUTORIAL ────────────────────────────────────────────── */
+  #tour { position:fixed; inset:0; z-index:9500; display:none; }
+  #tour.on { display:block; }
+  #tourSpot { position:absolute; border-radius:16px; box-shadow:0 0 0 9999px rgba(4,6,10,.78), 0 0 0 2px var(--accent), 0 0 40px rgba(91,156,255,.5);
+    transition:top .4s cubic-bezier(.3,.8,.3,1), left .4s cubic-bezier(.3,.8,.3,1), width .4s, height .4s, opacity .3s; pointer-events:none; }
+  #tourSpot.center { box-shadow:0 0 0 9999px rgba(4,6,10,.8); }
+  #tourCard { position:absolute; width:428px; max-width:calc(100vw - 48px); background:var(--panel); border:1px solid var(--line2); border-radius:var(--r);
+    box-shadow:0 24px 70px rgba(0,0,0,.6); padding:22px 24px 18px; transition:top .4s cubic-bezier(.3,.8,.3,1), left .4s cubic-bezier(.3,.8,.3,1); }
+  #tourCard.hero { width:620px; padding:34px 36px 26px; }
+  #tourCard .step { font-size:11.5px; text-transform:uppercase; letter-spacing:1.4px; color:var(--accent); font-weight:700; }
+  #tourCard h4 { margin:8px 0 9px; font-size:23px; font-weight:700; line-height:1.2; }
+  #tourCard.hero h4 { font-size:34px; letter-spacing:-.6px; }
+  #tourCard p { margin:0; color:var(--fg2); font-size:14.5px; line-height:1.55; }
+  #tourCard.hero p { font-size:17px; }
+  #tourFoot { display:flex; align-items:center; gap:9px; margin-top:20px; }
+  #tourDots { display:flex; gap:6px; margin-right:auto; }
+  #tourDots i { width:7px; height:7px; border-radius:50%; background:var(--line2); display:block; transition:.2s; }
+  #tourDots i.on { background:var(--accent); width:20px; border-radius:4px; }
+  #tourSkip { position:fixed; right:26px; top:22px; z-index:9600; background:var(--panel); border-color:var(--line2); box-shadow:0 8px 24px rgba(0,0,0,.6); }
+  #tourSkip[hidden] { display:none; }
+  #helpBtn, #saverBtn { width:100%; justify-content:flex-start; }
+
+  @media (max-height:900px) {
+    .btn.vote { height:74px; }
+    .art { width:96px; height:96px } .np { grid-template-columns:96px 1fr }
+    .transport .btn.icon.lg { width:48px; height:48px }
+    .counts .num { font-size:20px }
+  }
+</style>
+</head>
+<body>
+<aside>
+  <div class="brand"><div class="logo"><svg class="i"><use href="#i-monitor"/></svg></div><div><h1>Exhibit Control</h1><small>Leepa-Rattner 2026</small></div></div>
+  <nav>
+    <a data-page="home" id="navHome" onclick="go('home')"><svg class="i"><use href="#i-home"/></svg>Home</a>
+    <a data-page="scene" id="navScene" onclick="go('scene')"><svg class="i"><use href="#i-sliders"/></svg>Scene control</a>
+    <a data-page="inputs" id="navInputs" onclick="go('inputs')"><svg class="i"><use href="#i-gamepad"/></svg>Inputs</a>
+    <a data-page="system" onclick="go('system')"><svg class="i"><use href="#i-activity"/></svg>System</a>
+    <a data-page="admin" onclick="go('admin')" id="navAdmin"><svg class="i"><use href="#i-lock"/></svg>Admin</a>
+  </nav>
+  <div class="side-foot">
+    <button class="btn sm ghost" id="helpBtn" onclick="startTour()"><svg class="i"><use href="#i-help"/></svg>Show tutorial</button>
+    <button class="btn sm ghost" id="saverBtn" onclick="showSaver('manual')" title="Put the panel back into attract mode"><svg class="i"><use href="#i-moon"/></svg>Screensaver</button>
+    <div class="clock" id="clock">--:--</div>
+    <div id="dateLine"></div>
+    <div class="pill"><span class="dot" id="sideDot"></span><span id="sideState">connecting…</span></div>
+    <div class="pill" id="engBadge"></div>
+    <div id="nextEvent" class="muted"></div>
+    <div class="credit">Created by <b>Benjamin Czech</b></div>
+  </div>
+</aside>
+
+<main id="main">
+<!-- ═══════════ HOME — everything on one screen ═══════════ -->
+<section class="page" id="page-home">
+
+  <div class="card" id="homeStatus">
+    <div class="big"><span class="dot" id="heroDot"></span><span id="heroText">…</span></div>
+    <div class="muted" id="heroSub" style="max-width:520px"></div>
+    <div class="sp"></div>
+    <div class="kv"><b id="heroScene">–</b><span>visual scene</span></div>
+    <div class="sep"></div>
+    <div class="kv"><b id="heroTrack">–</b><span id="heroArtist">now playing</span></div>
+    <div class="sep"></div>
+    <div class="kv"><b id="heroNext">–</b><span id="heroNextSub"></span></div>
+  </div>
+
+  <div class="card" id="homePreview">
+    <h3>Live projection <span class="sp"></span><span class="muted" id="pvInfo"></span></h3>
+    <div class="preview">
+      <img id="pvImg" alt="" hidden>
+      <div class="muted" id="pvEmpty">No Spout sender available. In Arena add a Spout output under Output › Advanced (any name); Synesthesia's own output shows here too.</div>
+      <div class="fpsbadge" id="pvFps" hidden></div>
+    </div>
+    <div class="seg tight" id="pvSenders" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card" id="homeMusic">
+    <h3>Music <span class="sp"></span><span class="muted" id="mState"></span></h3>
+    <div class="np">
+      <div class="art" id="art"><svg class="i" style="width:34px;height:34px;opacity:.4"><use href="#i-music"/></svg></div>
+      <div style="min-width:0">
+        <div class="title" id="mTitle">–</div>
+        <div class="artist" id="mArtist"></div>
+        <div class="progress"><i id="mProg"></i></div>
+        <div class="times"><span id="mPos">0:00</span><span id="mDur">0:00</span></div>
+      </div>
+    </div>
+    <div class="transport">
+      <button class="btn icon" title="Previous track" onclick="music('prev')"><svg class="i"><use href="#i-prev"/></svg></button>
+      <button class="btn icon lg primary" id="mPlayBtn" title="Play / pause" onclick="musicToggle()"><svg class="i" style="width:24px;height:24px"><use href="#i-play" id="mPlayIcon"/></svg></button>
+      <button class="btn icon" title="Next track" onclick="music('next')"><svg class="i"><use href="#i-next"/></svg></button>
+      <button class="btn sm" onclick="music('shuffle')"><svg class="i"><use href="#i-shuffle"/></svg>Shuffle</button>
+    </div>
+    <div class="row" style="gap:12px; margin-top:auto; padding-top:12px">
+      <button class="btn xs ghost" id="volMute" title="Mute the room" onclick="toggleMute()" style="width:30px;padding:0"><svg class="i" style="width:17px;height:17px;color:var(--dim)"><use href="#i-volume"/></svg></button>
+      <div class="fader wide" id="volFader" style="flex:1"><div class="fill"></div><div class="thumb"></div></div>
+      <span class="val" id="volVal" style="min-width:42px;text-align:right;color:var(--fg2);font-size:12.5px">–</span>
+    </div>
+    <div class="row" style="margin-top:4px"><span class="muted" id="volInfo">–</span><span class="muted" id="queueInfo" style="margin-left:auto">–</span></div>
+  </div>
+
+  <div class="card" id="homeScene">
+    <h3>Visuals <span class="sp"></span>
+      <span class="muted" id="basicScene"></span>
+      <button class="btn xs" onclick="resetVisuals()" title="Put every control back to its default">Reset</button>
+      <button class="btn xs" onclick="go('scene')">All controls →</button>
+    </h3>
+    <div class="row" style="margin-bottom:10px">
+      <button class="btn icon" title="Previous scene" onclick="synInput();syn('/playlist',{action:'previous'})"><svg class="i"><use href="#i-prev"/></svg></button>
+      <button class="btn icon primary" title="Next scene" onclick="synInput();syn('/playlist',{action:'next'})"><svg class="i"><use href="#i-next"/></svg></button>
+      <div class="meters inline" style="margin-left:14px">
+        <span>Level</span><div class="meter"><i id="mLevel"></i></div><span id="vLevel">0</span>
+        <span>Bass</span><div class="meter"><i id="mBass"></i></div><span id="vBass">0</span>
+        <span>Beat</span><div class="meter"><i id="mBeat"></i></div><span id="vBeat">0</span>
+      </div>
+      <span class="muted" id="synBpm" style="margin-left:auto"></span>
+    </div>
+    <div class="widgets" id="wBasic" style="overflow:auto; min-height:0">
+      <div class="muted">Waiting for Synesthesia to broadcast the scene's controls…</div>
+    </div>
+  </div>
+
+  <div class="card" id="homeFeedback">
+    <h3>How does it look? <span class="sp"></span><span class="muted" id="fbMini"></span></h3>
+    <div class="votes">
+      <button class="btn vote up" onclick="vote('up')"><svg class="i"><use href="#i-thumb"/></svg><b>Looks good</b><small>thumbs up</small></button>
+      <button class="btn vote down" onclick="vote('down')"><svg class="i" style="transform:scaleY(-1)"><use href="#i-thumb"/></svg><b>Not great</b><small>thumbs down</small></button>
+    </div>
+    <div class="row" style="margin-top:11px">
+      <span class="muted">About</span>
+      <span class="seg tight" id="fbTags">
+        <button data-t="visuals">Visuals</button><button data-t="music">Music</button><button data-t="sync">Sync</button><button data-t="volume">Volume</button><button data-t="brightness">Brightness</button><button data-t="other">Other</button>
+      </span>
+    </div>
+    <div class="row" style="margin-top:9px"><input class="txt" id="fbNote" placeholder="optional note — e.g. 'too dark on the left projector'" style="flex:1" maxlength="500"></div>
+    <div class="muted" id="fbLast" style="margin-top:10px"></div>
+    <div class="counts" style="margin-top:auto; padding-top:12px">
+      <div><div class="num up" id="cUpToday">0</div><div class="muted">👍 today</div></div>
+      <div><div class="num down" id="cDownToday">0</div><div class="muted">👎 today</div></div>
+      <div><div class="num" id="cUpAll">0</div><div class="muted">👍 all time</div></div>
+      <div><div class="num" id="cDownAll">0</div><div class="muted">👎 all time</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ SCENE CONTROL — detailed ═══════════ -->
+<section class="page" id="page-scene">
+  <h2>Scene control <span class="muted" style="font-size:13.5px;font-weight:400;margin-left:8px" id="resetHint"></span></h2>
+
+  <!-- Synesthesia ------------------------------------------------------- -->
+  <div class="section" id="secSyn">
+    <header>
+      <span class="badge"><svg class="i"><use href="#i-zap"/></svg></span>
+      <div><h3>Synesthesia</h3><div class="sub">the scene generator — its controls change with every scene</div></div>
+      <span class="sp"></span>
+      <span class="muted" id="synLink"></span>
+      <button class="btn sm" onclick="resetSyn()"><svg class="i"><use href="#i-refresh"/></svg>Reset to defaults</button>
+    </header>
+    <div class="body">
+      <div class="scenebar">
+        <div class="scene-id"><div class="muted">Scene</div><div class="scene-name" id="synScene">–</div></div>
+        <div class="row">
+          <button class="btn icon" title="Previous scene" onclick="synInput();syn('/playlist',{action:'previous'})"><svg class="i"><use href="#i-prev"/></svg></button>
+          <button class="btn icon" title="Play / pause playlist" onclick="synInput();syn('/playlist',{action:'toggleplay'})"><svg class="i"><use href="#i-pause"/></svg></button>
+          <button class="btn icon primary" title="Next scene" onclick="synInput();syn('/playlist',{action:'next'})"><svg class="i"><use href="#i-next"/></svg></button>
+          <button class="btn sm on" id="bShuffle" onclick="synToggle('bShuffle','shuffle')"><svg class="i"><use href="#i-shuffle"/></svg>Shuffle</button>
+          <button class="btn sm on" id="bAuto" onclick="synToggle('bAuto','auto')">Auto</button>
+          <button class="btn sm on" id="bRender" onclick="synRender()">Render</button>
+        </div>
+        <span class="seg tight favs" id="favs"></span>
+        <div class="meters" style="margin-left:auto;min-width:210px">
+          <span>Level</span><div class="meter"><i id="mLevel2"></i></div><span id="vLevel2">0</span>
+          <span>Bass</span><div class="meter"><i id="mBass2"></i></div><span id="vBass2">0</span>
+          <span>Beat</span><div class="meter"><i id="mBeat2"></i></div><span id="vBeat2">0</span>
+          <span hidden id="vMid"></span><span hidden id="vHigh"></span><i hidden id="mMid"></i><i hidden id="mHigh"></i>
+        </div>
+      </div>
+
+      <h3 style="margin:18px 0 10px">Scene controls <span class="muted" id="wSceneName" style="text-transform:none;letter-spacing:0;font-weight:450"></span><span class="sp"></span>
+        <button class="btn xs" onclick="synInput();syn('/bank/default',{bank:'scene'})">Reset scene</button>
+        <button class="btn xs" onclick="synInput();syn('/bank/random',{bank:'scene'})">Randomize</button>
+        <button class="btn xs" onclick="synInput();syn('/bank/undo',{bank:'scene'})">Undo</button></h3>
+      <div class="widgets" id="wScene"><div class="muted">Waiting for Synesthesia to broadcast the scene's controls (they arrive when a scene loads)…</div></div>
+
+      <details class="fold" style="margin-top:16px" id="foldMeta">
+        <summary><h3 style="margin:0;display:inline-flex">Global look <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:450">· brightness, colour, mirror, media</span></h3>
+          <span class="row" style="display:inline-flex;margin-left:12px" onclick="event.preventDefault();event.stopPropagation()">
+            <button class="btn xs" onclick="synInput();syn('/bank/default',{bank:'meta'})">Reset all</button>
+            <button class="btn xs" onclick="synInput();syn('/bank/random',{bank:'meta'})">Randomize</button>
+            <button class="btn xs" onclick="synInput();syn('/bank/undo',{bank:'meta'})">Undo</button></span></summary>
+        <div id="wMeta" style="margin-top:8px"><div class="muted">Waiting for Synesthesia to broadcast its controls…</div></div>
+      </details>
+    </div>
+  </div>
+
+  <!-- Resolume ---------------------------------------------------------- *-->
+  <div class="section" id="secRes">
+    <header>
+      <span class="badge res"><svg class="i"><use href="#i-layers"/></svg></span>
+      <div><h3>Resolume Arena</h3><div class="sub">the composition that maps the scene onto the room</div></div>
+      <span class="sp"></span>
+      <span class="muted" id="resInfo"></span>
+      <button class="btn sm" onclick="resetRes()"><svg class="i"><use href="#i-refresh"/></svg>Reset to defaults</button>
+    </header>
+    <div class="body">
+      <div class="grid cols-2">
+        <div>
+          <h3>Scene mode</h3>
+          <div class="seg" id="resMode">
+            <button data-m="simple" onclick="resAction('simple')">Simple · Synesthesia only</button>
+            <button data-m="full" onclick="resAction('full')">Full · all layers</button>
+          </div>
+          <div class="muted" style="margin-top:8px">Simple mode strips the Main Scene group down to the Synesthesia clip and stops the layer autopilots — it is what a visitor's first input switches to. Full mode puts back whatever was playing.</div>
+
+          <h3 style="margin-top:20px">Composition</h3>
+          <div class="widgets" style="grid-template-columns:1fr 1fr">
+            <div class="w"><div class="head"><span class="name">Master</span><span class="val" id="resMasterVal">–</span></div>
+              <div class="fader big" id="resMaster"><div class="fill"></div><div class="thumb"></div></div></div>
+            <div class="w"><div class="head"><span class="name">Speed</span><span class="val" id="resSpeedVal">–</span></div>
+              <div class="fader big" id="resSpeed"><div class="fill"></div><div class="thumb"></div></div></div>
+          </div>
+          <div class="muted" style="margin-top:8px">Tempo <span id="resTempo">–</span></div>
+
+          <h3 style="margin-top:20px">Columns <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:450">· trigger a whole scene</span></h3>
+          <div class="cols" id="resCols"></div>
+        </div>
+        <div>
+          <h3>Main Scene layers</h3>
+          <div class="reslayers" id="resLayers"><div class="muted">–</div></div>
+          <div class="muted" style="margin-top:10px">Layer, connected clip and autopilot, read live from Arena's REST API. Simple mode clears everything but the Synesthesia layer.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <details class="card fold">
+    <summary><h3 style="margin:0;display:inline-flex">Advanced <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:450">· playlist select, raw OSC, message log</span></h3></summary>
+    <div class="row" style="margin-top:10px"><span class="muted">Playlist</span><input class="txt" id="plName" value="SPC" style="width:110px"><button class="btn sm" onclick="syn('/playlist',{action:'select',value:$('plName').value})">Select</button></div>
+    <div class="grid cols-2" style="margin-top:12px">
+      <div>
+        <div class="muted" style="margin-bottom:6px">Raw OSC to Synesthesia (numbers go as floats; i: int, s: string)</div>
+        <div class="row"><input class="txt" id="rawAddr" placeholder="/controls/meta/brightness" style="flex:2"><input class="txt" id="rawArgs" placeholder="0.5   i:1   s:text" style="flex:1"><button class="btn sm" onclick="sendRaw()">Send</button></div>
+      </div>
+      <div class="log" id="synRaw" style="max-height:160px">–</div>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════ INPUTS — detailed ═══════════ -->
+<section class="page" id="page-inputs">
+  <h2>Inputs <span class="muted" style="font-size:13.5px;font-weight:400;margin-left:8px" id="inHead"></span></h2>
+  <div class="devrow" id="devRow"></div>
+  <div class="grid cols-2" style="margin-top:16px">
+    <div class="card">
+      <h3>SpaceMouse <span class="sp"></span><span class="muted" id="smName"></span></h3>
+      <div class="smwrap">
+        <div class="smstage"><div class="smgrid"></div><div class="smshadow" id="smShadow"></div><div class="smpuck" id="smPuck"><div class="smcap"></div><div class="smdot"></div></div></div>
+        <div class="axes" id="smAxes"></div>
+      </div>
+      <div class="row" style="margin-top:10px"><span class="muted">Buttons</span><span class="seg" id="smBtns"><button disabled>LEFT</button><button disabled>RIGHT</button></span><span class="muted" id="smHint" style="margin-left:auto">move the mouse to see it here</span></div>
+    </div>
+    <div class="card">
+      <h3>Xbox controller <span class="sp"></span><span class="muted" id="xbName"></span></h3>
+      <div class="xbwrap">
+        <div><div class="muted" style="text-align:center;margin-bottom:4px">Left stick</div><div class="pad sm"><div class="h"></div><div class="v"></div><div class="pt" id="xbL"></div></div></div>
+        <div class="xbmid">
+          <div class="trig"><span class="muted">LT</span><div class="meter"><i id="xbLT"></i></div><span class="muted">RT</span><div class="meter"><i id="xbRT"></i></div></div>
+          <div class="abxy"><span class="xbtn y" data-b="btn_y">Y</span><span class="xbtn x" data-b="btn_x">X</span><span class="xbtn b" data-b="btn_b">B</span><span class="xbtn a" data-b="btn_a">A</span></div>
+          <div class="seg tight" style="justify-content:center"><button disabled data-b="btn_lb">LB</button><button disabled data-b="btn_rb">RB</button><button disabled data-b="btn_back">⧉</button><button disabled data-b="btn_start">≡</button><button disabled data-b="btn_ls">LS</button><button disabled data-b="btn_rs">RS</button></div>
+          <div class="dpad"><span data-d="up">▲</span><span data-d="left">◀</span><span data-d="c"></span><span data-d="right">▶</span><span data-d="down">▼</span></div>
+        </div>
+        <div><div class="muted" style="text-align:center;margin-bottom:4px">Right stick</div><div class="pad sm"><div class="h"></div><div class="v"></div><div class="pt" id="xbR"></div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:16px" id="schemeCard">
+    <h3>Scene scheme <span class="muted" id="schemeTitle"></span><span class="sp"></span><span class="muted" id="schemeNote"></span></h3>
+    <div class="scheme" id="schemeGrid"></div>
+  </div>
+  <div class="grid cols-2" style="margin-top:16px">
+    <div class="card"><h3>Other sources <span class="muted">TouchDesigner, Raspberry Pi, API…</span></h3><div class="axes" id="otherAxes"><div class="muted">nothing received yet</div></div></div>
+    <div class="card"><h3>Mappings <span class="muted">what each control drives</span></h3><div class="maps" id="mapRows"></div></div>
+  </div>
+</section>
+
+<!-- ═══════════ SYSTEM ═══════════ -->
+<section class="page" id="page-system">
+  <h2>System</h2>
+  <div class="grid cols-32">
+    <div>
+      <div class="card"><h3>Apps</h3><div class="apps" id="apps"></div></div>
+      <div class="card" style="margin-top:16px"><h3>This PC</h3><div class="stats" id="sysStats"><div class="muted">–</div></div>
+        <div class="muted" style="margin-top:10px">Full history in Grafana at <a href="http://localhost:3000/d/exhibit-overview" target="_blank" style="color:var(--fg2)">localhost:3000</a>.</div></div>
+      <div class="card" style="margin-top:16px"><h3>Recent feedback</h3><div id="fbRecent" class="muted">–</div>
+        <div class="muted" id="lokiState" style="margin-top:10px"></div></div>
+    </div>
+    <div>
+      <div class="card">
+        <h3>Exhibit</h3>
+        <div class="actions">
+          <button class="btn action danger" onclick="run('pause')"><span class="ic"><svg class="i"><use href="#i-moon"/></svg></span><span><b>Pause exhibit</b><small>Black screens, music off</small></span></button>
+          <button class="btn action primary" onclick="run('wake')"><span class="ic"><svg class="i"><use href="#i-sun"/></svg></span><span><b>Wake exhibit</b><small>Screens off, music on</small></span></button>
+          <button class="btn action" onclick="run('boot')"><span class="ic"><svg class="i"><use href="#i-power"/></svg></span><span><b>Boot / re-apply</b><small>Audio, apps, OSC, music</small></span></button>
+          <button class="btn action ghost" onclick="go('admin')"><span class="ic"><svg class="i"><use href="#i-lock"/></svg></span><span><b>Admin</b><small>Restart, flip output, exit fullscreen</small></span></button>
+        </div>
+        <div class="row" style="margin-top:12px"><button class="btn sm ghost" onclick="location.reload()"><svg class="i"><use href="#i-refresh"/></svg>Reload panel</button></div>
+      </div>
+      <div class="card" style="margin-top:16px"><h3>Schedule</h3><div id="schedInfo" class="muted">–</div></div>
+      <div class="card" style="margin-top:16px"><h3>Activity</h3><div class="log" id="log">no jobs yet</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ ADMIN ═══════════ -->
+<section class="page" id="page-admin">
+  <h2>Admin <span class="muted" style="font-size:13.5px;font-weight:400;margin-left:8px" id="adminState"></span></h2>
+  <div id="adminLocked" class="card" style="max-width:520px">
+    <h3>Locked</h3>
+    <div class="muted" style="margin-bottom:12px">Enter the admin password to leave fullscreen, restart or stop apps, and reach the other admin controls.</div>
+    <form class="row" onsubmit="event.preventDefault();adminUnlock()">
+      <input class="txt" type="password" id="adminPw" placeholder="password" autocomplete="off" style="flex:1;font-size:18px;letter-spacing:2px">
+      <button class="btn primary" type="submit"><svg class="i"><use href="#i-lock"/></svg>Unlock</button>
+    </form>
+    <div class="muted" id="adminErr" style="margin-top:10px;color:var(--bad)"></div>
+  </div>
+  <div id="adminUnlocked" hidden>
+    <div class="grid cols-2">
+      <div class="card">
+        <h3>Panel window</h3>
+        <div class="actions">
+          <button class="btn action primary" onclick="adminPanel('windowed')"><span class="ic"><svg class="i"><use href="#i-monitor"/></svg></span><span><b>Exit fullscreen</b><small>Reopen the panel as a normal window</small></span></button>
+          <button class="btn action" onclick="adminPanel('kiosk')"><span class="ic"><svg class="i"><use href="#i-monitor"/></svg></span><span><b>Back to fullscreen</b><small>Kiosk mode on display 1</small></span></button>
+          <button class="btn action" onclick="adminPanel('close')"><span class="ic"><svg class="i"><use href="#i-eyeoff"/></svg></span><span><b>Close panel</b><small>Use the desktop; returns at wake / boot</small></span></button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Apps</h3>
+        <div class="actions">
+          <button class="btn action" onclick="confirmRun('restart','Restart all exhibit apps? Unsaved Arena changes may be lost.')"><span class="ic"><svg class="i"><use href="#i-refresh"/></svg></span><span><b>Restart apps</b><small>Close and relaunch everything</small></span></button>
+          <button class="btn action" onclick="confirmRun('flip_output','Restart Arena with the flipped projector preset?')"><span class="ic"><svg class="i"><use href="#i-flip"/></svg></span><span><b>Flip projector output</b><small>Swap left / right preset</small></span></button>
+          <button class="btn action danger" onclick="confirmRun('shutdown','Stop Arena, Synesthesia and the music app? The projectors go dark.')"><span class="ic"><svg class="i"><use href="#i-power"/></svg></span><span><b>Stop all apps</b><small>Projectors go dark</small></span></button>
+          <button class="btn action" onclick="adminReload()"><span class="ic"><svg class="i"><use href="#i-refresh"/></svg></span><span><b>Reload config</b><small>Re-read exhibit.yaml</small></span></button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Monitoring</h3>
+        <div class="row">
+          <a class="btn sm" href="http://localhost:3000/d/exhibit-overview" target="_blank">Grafana</a>
+          <a class="btn sm" href="http://localhost:9090/targets" target="_blank">Prometheus</a>
+          <a class="btn sm" href="/metrics" target="_blank">/metrics</a>
+          <a class="btn sm" href="/api/snapshot" target="_blank">Snapshot JSON</a>
+          <button class="btn sm" onclick="run('monitoring')">Start monitoring stack</button>
+          <button class="btn sm" onclick="confirmRun('monitoring_stop','Stop Prometheus, Loki, Grafana and the exporters?')">Stop monitoring stack</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Idle / engaged / reset</h3>
+        <div class="muted" id="adminEng">–</div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn sm" onclick="post('/api/input',{source:'admin-test',detail:{note:'manual'}}).then(()=>{toast('Input simulated → engaged');refresh()}).catch(e=>toast(e.message))">Simulate visitor input</button>
+          <button class="btn sm" onclick="post('/api/engagement/idle').then(()=>{toast('Forced idle');refresh()}).catch(e=>toast(e.message))">Force idle now</button>
+          <button class="btn sm" onclick="resetVisuals()">Reset visuals to defaults</button>
+          <button class="btn sm" onclick="showSaver('admin')">Preview screensaver</button>
+        </div>
+        <div class="muted" style="margin-top:10px">Controllers send OSC <code>/input/&lt;source&gt;/&lt;control&gt;</code> to port 9004. Behaviour lives in the <code>engaged</code> / <code>idle</code> / <code>reset_defaults</code> macros, routing in <code>inputs.mappings</code>.</div>
+        <div class="muted" id="inputsLive" style="margin-top:10px;font-family:Consolas,monospace;font-size:12px;white-space:pre-wrap">–</div>
+      </div>
+      <div class="card">
+        <h3>Session</h3>
+        <div class="muted" id="adminExpiry"></div>
+        <div class="row" style="margin-top:10px"><button class="btn sm" onclick="adminLock()"><svg class="i"><use href="#i-lock"/></svg>Lock now</button></div>
+      </div>
+      <div class="card"><h3>Activity</h3><div class="log" id="log2">no jobs yet</div></div>
+    </div>
+    <div class="card" style="margin-top:16px"><h3>Apps detail</h3><div class="apps" id="apps2"></div><div class="stats" id="sysStats2" style="margin-top:12px"></div></div>
+  </div>
+</section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<!-- ═══════════ SCREENSAVER ═══════════ -->
+<div id="saver">
+  <img id="saverImg" alt="">
+  <div class="aurora"></div>
+  <div class="vig"></div>
+  <div class="brandmark"><svg class="i"><use href="#i-monitor"/></svg><span>Leepa-Rattner · Projection Lab</span></div>
+  <div class="clocky"><div id="saverClock"></div><div class="until" id="saverUntil"></div></div>
+  <div class="credit" id="saverCredit">Created by Benjamin Czech</div>
+  <div class="sv" id="saverSlide">
+    <h1 id="saverTitle">Control the visuals from here!</h1>
+    <p id="saverSub">Move the mouse to get started.</p>
+  </div>
+  <div id="saverDots"></div>
+  <div class="nudge"><svg class="i"><use href="#i-pointer"/></svg><span>Touch the screen, move the mouse, or pick up a controller</span></div>
+</div>
+
+<!-- ═══════════ TUTORIAL ═══════════ -->
+<div id="tour">
+  <div id="tourSpot"></div>
+  <div id="tourCard">
+    <div class="step" id="tourStep"></div>
+    <h4 id="tourTitle"></h4>
+    <p id="tourBody"></p>
+    <div id="tourFoot">
+      <div id="tourDots"></div>
+      <button class="btn sm ghost" id="tourBack" onclick="tourGo(tourIdx-1)">Back</button>
+      <button class="btn sm primary" id="tourNext" onclick="tourGo(tourIdx+1)">Next</button>
+    </div>
+  </div>
+</div>
+<button class="btn sm" id="tourSkip" hidden onclick="endTour('skipped')">Skip tutorial ✕</button>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 5h3v14H7zM14 5h3v14h-3z"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path d="M5 5l10 7-10 7zM19 5v14"/></symbol>
+    <symbol id="i-prev" viewBox="0 0 24 24"><path d="M19 19L9 12l10-7zM5 5v14"/></symbol>
+    <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></symbol>
+    <symbol id="i-power" viewBox="0 0 24 24"><path d="M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M23 4v6h-6M1 20v-6h6M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+    <symbol id="i-eyeoff" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
+    <symbol id="i-flip" viewBox="0 0 24 24"><path d="M17 1l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/></symbol>
+    <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+    <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></symbol>
+    <symbol id="i-gamepad" viewBox="0 0 24 24"><path d="M6 12h4M8 10v4M15 13h.01M18 11h.01"/><path d="M17.32 5H6.68a4 4 0 0 0-3.98 3.6L2 14.9A2.6 2.6 0 0 0 6.5 17l1.9-2h7.2l1.9 2a2.6 2.6 0 0 0 4.5-2.1l-.7-6.3A4 4 0 0 0 17.32 5z"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+    <symbol id="i-thumb" viewBox="0 0 24 24"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5V21H3z"/><path d="M9 21v-7h6v7"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 2l9 5-9 5-9-5 9-5zM3 12l9 5 9-5M3 17l9 5 9-5"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.2 9a3 3 0 0 1 5.8 1c0 2-3 2.4-3 4M12 17.5h.01"/></symbol>
+    <symbol id="i-pointer" viewBox="0 0 24 24"><path d="M4 3l7.5 17 2.3-6.7 6.7-2.3z"/></symbol>
+  </defs>
+</svg>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = (s) => { s = Math.max(0, Math.round(s || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+const pct = (v) => Math.round(Math.max(0, Math.min(1, v)) * 100) + '%';
+let toastTimer;
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600); }
+let adminTok = (() => { try { return sessionStorage.getItem('adminToken'); } catch { return null; } })();
+async function post(url, body) {
+  const headers = { 'content-type': 'application/json' }; if (adminTok) headers['x-admin-token'] = adminTok;
+  const r = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body ?? {}) });
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401 && j.admin) { setAdminLocked(); go('admin'); throw new Error('admin password required'); }
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+const PAGES = ['home', 'scene', 'inputs', 'system', 'admin'];
+function go(page) {
+  if (!PAGES.includes(page)) page = 'home';
+  for (const p of document.querySelectorAll('.page')) p.classList.toggle('active', p.id === 'page-' + page);
+  for (const a of document.querySelectorAll('nav a')) a.classList.toggle('active', a.dataset.page === page);
+  $('main').classList.toggle('fit', page === 'home');     // home never scrolls
+  try { localStorage.setItem('page', page); } catch {}
+  if (page === 'scene') { refreshSyn(); refreshRes(); }
+  if (page === 'home') { refreshSyn(); refreshPreview(); }
+  if (page === 'system') refreshSystem();
+  if (page === 'inputs') refreshInputs();
+  if (page === 'admin') { adminStatus(); setTimeout(() => $('adminPw')?.focus(), 50); }
+}
+go((() => { const h = location.hash.replace('#', ''); if (PAGES.includes(h)) return h; try { return localStorage.getItem('page') || 'home'; } catch { return 'home'; } })());
+window.addEventListener('hashchange', () => { const h = location.hash.replace('#', ''); if (PAGES.includes(h)) go(h); });
+
+async function run(macro) { try { await post('/api/run/' + macro); toast('Running ' + macro + '…'); setTimeout(refresh, 900); } catch (e) { toast('Error: ' + e.message); } }
+function confirmRun(macro, msg) { if (confirm(msg)) run(macro); }
+async function music(action, value) { try { await post('/api/music/' + action, { value }); if (action !== 'volume') toast('music ' + action); setTimeout(refresh, 900); } catch (e) { toast('Error: ' + e.message); } }
+let musicPlaying = false;
+function musicToggle() { music(musicPlaying ? 'pause' : 'play'); }
+
+// ── generic fader component ───────────────────────────────────────────────
+const faders = new Map();
+function makeFader(el, opts) {
+  const fill = el.querySelector('.fill'), thumb = el.querySelector('.thumb');
+  const st = { value: 0, dragging: false, opts };
+  const draw = (v) => { st.value = v; fill.style.width = (v * 100) + '%'; thumb.style.left = (v * 100) + '%'; opts.onDraw?.(v); };
+  const fromEvent = (e) => { const r = el.getBoundingClientRect(); return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)); };
+  el.addEventListener('pointerdown', (e) => { st.dragging = true; el.setPointerCapture(e.pointerId); const v = fromEvent(e); draw(v); opts.onChange(v); });
+  el.addEventListener('pointermove', (e) => { if (!st.dragging) return; const v = fromEvent(e); draw(v); opts.onChange(v); });
+  const end = () => { if (st.dragging) { st.dragging = false; setTimeout(() => { st.recent = false; }, 600); st.recent = true; } };
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  el.addEventListener('wheel', (e) => { e.preventDefault(); const v = Math.max(0, Math.min(1, st.value + (e.deltaY < 0 ? 0.01 : -0.01))); draw(v); opts.onChange(v); st.recent = true; clearTimeout(st.rt); st.rt = setTimeout(() => st.recent = false, 800); }, { passive: false });
+  el.addEventListener('dblclick', () => opts.onReset?.());
+  st.set = (v) => { if (!st.dragging && !st.recent) draw(v); };
+  faders.set(el, st); return st;
+}
+const sendQ = new Map();   // throttle per key
+function throttled(key, fn, ms = 40) {
+  const now = Date.now(), last = sendQ.get(key)?.t || 0;
+  clearTimeout(sendQ.get(key)?.timer);
+  if (now - last >= ms) { sendQ.set(key, { t: now }); fn(); }
+  else sendQ.set(key, { t: last, timer: setTimeout(() => { sendQ.set(key, { t: Date.now() }); fn(); }, ms - (now - last)) });
+}
+// The volume fader is the room level: it drives the VoiceMeeter output bus's fader gain
+// (exhibit.yaml apps.voicemeeter.output), not the music app — so it covers everything
+// that makes sound, and it cannot go above the configured max_db ceiling.
+let volState = null;
+const volLabel = (v) => pct(v);
+function showVol(st) {
+  if (!st || st.volume == null) return;
+  volState = st;
+  volFader.set(st.volume);
+  $('volFader').classList.toggle('muted', !!st.muted);
+  $('volVal').textContent = volLabel(st.volume);
+  $('volInfo').textContent = `${st.name ?? 'out'} ${st.db != null ? st.db.toFixed(1) + ' dB' : ''}${st.muted ? ' · muted' : ''} · max ${st.maxDb} dB`;
+  $('volMute').classList.toggle('on', !!st.muted);
+  $('volMute').querySelector('svg').style.color = st.muted ? 'var(--bad)' : 'var(--dim)';
+}
+async function setVolume(v) { try { showVol(await post('/api/volume', { value: Math.round(v * 1000) / 1000 })); } catch (e) { toast('Volume: ' + e.message); } }
+async function toggleMute() { try { showVol(await post('/api/volume', { mute: 'toggle' })); } catch (e) { toast('Volume: ' + e.message); } }
+const volFader = makeFader($('volFader'), {
+  onChange: (v) => { $('volVal').textContent = volLabel(v); if (volState) $('volInfo').textContent = `${volState.name ?? 'out'} ${(volState.minDb + (volState.maxDb - volState.minDb) * v).toFixed(1)} dB · max ${volState.maxDb} dB`; throttled('vol', () => setVolume(v), 120); },
+  onDraw: (v) => $('volVal').textContent = volLabel(v),
+});
+
+// ── status / home ─────────────────────────────────────────────────────────
+let panelCfg = { idle_seconds: 90, tutorial: true, slide_seconds: 7, slides: [] };
+function nextEvent(sched) {
+  if (!sched?.pause || !sched?.wake) return null;
+  const now = new Date();
+  const at = (hm) => { const [h, m] = hm.split(':').map(Number); const d = new Date(now); d.setHours(h, m, 0, 0); if (d <= now) d.setDate(d.getDate() + 1); return d; };
+  const p = at(sched.pause), w = at(sched.wake);
+  const [label, when] = p < w ? ['Pause', p] : ['Wake', w];
+  const mins = Math.round((when - now) / 60000);
+  return { label, when, text: mins >= 60 ? `${Math.floor(mins / 60)} h ${String(mins % 60).padStart(2, '0')} m` : `${mins} min` };
+}
+function appCard(a) {
+  if (!a.enabled) return '';
+  let cls = a.ready ? 'ok' : a.running ? 'warn' : 'bad', st = a.ready ? 'ready' : a.running ? 'running, not ready' : 'stopped';
+  if (a.type === 'screens' || a.type === 'chrome') { cls = a.running ? 'ok' : ''; st = a.running ? 'shown' : 'hidden'; }
+  if (a.type === 'keepalive' || a.type === 'control') { st = a.running ? 'active' : 'stopped'; }
+  return `<div class="app"><span class="dot ${cls}"></span><div><div class="name">${esc(a.id)}</div><div class="st">${st}</div></div></div>`;
+}
+let lastServerInputAt = 0, schedule = null;
+// "Running until 7:00 PM" while the exhibit is up, "Opens at 7:00 AM" overnight.
+function runsUntil() {
+  const ne = nextEvent(schedule);
+  if (!ne) return '';
+  const at = ne.when.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return ne.label === 'Pause' ? `Running until ${at}` : `Opens at ${at}`;
+}
+async function refresh() {
+  try {
+    const s = await (await fetch('/api/status')).json();
+    if (s.panel) panelCfg = { ...panelCfg, ...s.panel };
+    const core = s.apps.filter((a) => a.enabled && ['resolume', 'synesthesia', 'music', 'voicemeeter'].includes(a.id));
+    const allReady = core.every((a) => a.ready);
+    const paused = s.apps.find((a) => a.id === 'screens')?.running;
+    const cls = paused ? 'warn' : allReady ? 'ok' : 'bad';
+    const text = s.current ? `Running: ${s.current.label}` : paused ? 'Paused' : allReady ? 'Exhibit running' : 'Attention needed';
+    for (const [d, t] of [['heroDot', 'heroText'], ['sideDot', 'sideState']]) { $(d).className = 'dot ' + cls; $(t).textContent = text; }
+    if (s.volume) showVol(s.volume);
+    const eg = s.engagement;
+    // a controller input on the server counts as activity for the screensaver
+    if (eg?.lastInputAt && eg.lastInputAt !== lastServerInputAt) { lastServerInputAt = eg.lastInputAt; noteActivity('controller'); }
+    $('heroSub').textContent = paused ? 'Black screens are up on all displays, music paused'
+      : allReady ? (eg?.mode === 'engaged' ? `Visitors engaged · simple scene, auto-advance paused · idle in ${eg.idleIn ?? '?'} s` : 'All apps ready · projectors live · idle mode')
+      : core.filter((a) => !a.ready).map((a) => a.id + ' not ready').join(', ');
+    $('engBadge').textContent = eg ? (eg.mode === 'engaged' ? `Engaged · ${eg.lastSource ?? ''}` : 'Idle') : ''; $('engBadge').className = 'pill ' + (eg?.mode === 'engaged' ? 'engaged' : '');
+    $('resetHint').textContent = eg?.resetIn != null ? `everything resets to defaults in ${Math.floor(eg.resetIn / 60)}:${String(eg.resetIn % 60).padStart(2, '0')} of quiet`
+      : eg?.resetMacro ? `resets to defaults after ${Math.round((eg.resetSeconds ?? 600) / 60)} idle minutes` : '';
+    schedule = s.schedule;
+    const ne = nextEvent(s.schedule);
+    $('heroNext').textContent = ne ? `${ne.label} ${ne.when.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : '–';
+    $('heroNextSub').textContent = ne ? `in ${ne.text}` : 'no schedule';
+    $('nextEvent').textContent = ne ? `${ne.label} in ${ne.text}` : '';
+    $('saverUntil').textContent = runsUntil();
+    $('schedInfo').innerHTML = s.schedule.pause ? `Daily pause at <b>${s.schedule.pause}</b>, wake at <b>${s.schedule.wake}</b>. Managed by Windows scheduled tasks "Exhibit Pause" / "Exhibit Wake".` : 'No schedule configured.';
+    const html = s.apps.map(appCard).join(''); $('apps').innerHTML = html; if ($('apps2')) $('apps2').innerHTML = html;
+    const m = s.music;
+    if (m && !m.error) {
+      musicPlaying = m.playing;
+      $('mTitle').textContent = m.title || '–'; $('mArtist').textContent = [m.artist, m.album].filter(Boolean).join(' · ');
+      $('heroTrack').textContent = m.title || '–'; $('heroArtist').textContent = m.artist || 'now playing';
+      $('mState').textContent = m.stateKnown === false ? 'state unknown' : m.state;
+      $('mPlayIcon').setAttribute('href', m.playing ? '#i-pause' : '#i-play');
+      $('mProg').style.width = m.duration ? (100 * m.progress / m.duration) + '%' : '0';
+      $('mPos').textContent = fmt(m.progress); $('mDur').textContent = fmt(m.duration);
+      $('art').style.backgroundImage = m.thumbnail ? `url("${m.thumbnail}")` : ''; $('art').firstElementChild.style.display = m.thumbnail ? 'none' : '';
+
+      $('queueInfo').textContent = m.queueLength ? `${m.queueLength} tracks queued${m.playlistId ? ` · ${m.playlistId}` : ''}${m.adPlaying ? ' · AD PLAYING' : ''}` : 'queue empty';
+    } else { $('mTitle').textContent = m?.error ? 'Music: ' + m.error : 'Music app not ready'; $('mArtist').textContent = ''; $('heroTrack').textContent = '–'; }
+    const jobs = await (await fetch('/api/jobs')).json();
+    const last = jobs[jobs.length - 1];
+    if (last) {
+      const h = `<b>${esc(last.label)}</b> ${last.finished ? (last.ok ? '✔ done' : '✖ ' + esc(last.error || '')) : '… running'}\n` + last.lines.map((l) => `<span class="${l.level}">${new Date(l.t).toLocaleTimeString()}  ${esc(l.m)}</span>`).join('\n');
+      for (const id of ['log', 'log2']) { if ($(id)) { $(id).innerHTML = h; $(id).scrollTop = $(id).scrollHeight; } }
+    }
+  } catch (e) { for (const [d, t] of [['heroDot', 'heroText'], ['sideDot', 'sideState']]) { $(d).className = 'dot bad'; $(t).textContent = 'Control server unreachable'; } }
+}
+function tick() { const n = new Date(); const t = n.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); $('clock').textContent = t; $('saverClock').textContent = t; $('saverUntil').textContent = runsUntil(); $('dateLine').textContent = n.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }); }
+tick(); setInterval(tick, 10000);
+
+// ── Synesthesia ───────────────────────────────────────────────────────────
+async function syn(route, body) { try { await post('/api/synesthesia' + route, body); } catch (e) { toast('Error: ' + e.message); } }
+function synInput() { noteActivity('panel'); post('/api/input', { source: 'panel', detail: { ui: true } }).catch(() => {}); }
+const synFlags = { shuffle: true, auto: true, render: true };
+function synToggle(btnId, key) { synFlags[key] = !synFlags[key]; $(btnId).classList.toggle('on', synFlags[key]); syn('/playlist', { action: key, value: synFlags[key] }); }
+function synRender() { synFlags.render = !synFlags.render; $('bRender').classList.toggle('on', synFlags.render); syn('/render', { enabled: synFlags.render }); }
+$('favs').innerHTML = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => `<button onclick="syn('/favslot',{position:${n}})">${n}</button>`).join('');
+async function sendRaw() {
+  const address = $('rawAddr').value.trim(); if (!address) return;
+  const args = $('rawArgs').value.trim().split(/\s+/).filter(Boolean).map((t) => t.startsWith('i:') ? { i: Number(t.slice(2)) } : t.startsWith('s:') ? t.slice(2) : (isNaN(Number(t)) ? t : { f: Number(t) }));
+  await syn('/raw', { address, args }); toast('sent ' + address);
+}
+function sendControl(bank, name, value, sub) { throttled(`${bank}/${name}/${sub || ''}`, () => post('/api/synesthesia/control', { bank, name, value, sub }).catch((e) => toast('Error: ' + e.message))); }
+// Synesthesia sends every control as a float, so on/off controls are recognised by name
+// (exact global-control names plus common words in scene-control names) when their value is 0 or 1.
+const BOOL_EXACT = /^(invert|vertmirror|hormirror|limitcolors|alphachannel|invertmedia|vertflip|horflip|fitorfill|paused|mediaoverlay)$/i;
+const BOOL_WORD = /invert|mirror|flip|toggle|enable|colored|monochrome|wobbleon|spiral|directshot|^random$/i;
+const BANG_EXACT = /^(transition)$/i;   // momentary buttons ("Transition" fires a random transition)
+const kind = (c) => c.type === 'dropdown' ? 'dropdown' : c.type === 'color' ? 'color' : c.type === 'xy' ? 'xy'
+  : (c.bank === 'meta' && BANG_EXACT.test(c.name)) ? 'bang'
+  : (c.type === 'toggle' || ((BOOL_EXACT.test(c.name) || BOOL_WORD.test(c.name)) && (c.value === 0 || c.value === 1))) ? 'switch' : 'fader';
+const GROUPS = [
+  ['Output', /^(master|reactivity|audiospeed|transition|alphachannel)$/],
+  ['Colour', /^(brightness|gamma|contrast|hue|saturation|invert|limitcolors|lowcolor|highcolor)$/],
+  ['Mirror', /^(vertmirror|hormirror)$/],
+  ['Media', /^(paused|playbackspeed|playbackmode|mediaoverlay|mediaoverlaymode|mediascale|fitorfill|vertflip|horflip|mediacontrast|mediagamma|mediahue|mediasaturation|invertmedia)$/],
+];
+const toHex = (rgb) => '#' + ['r', 'g', 'b'].map((k) => Math.round(Math.max(0, Math.min(1, rgb[k] || 0)) * 255).toString(16).padStart(2, '0')).join('');
+const widgetStates = new Map();   // key → { kind, el, fader, ... }
+
+function buildWidget(c, key, container, slotLabel) {
+  const k = kind(c);
+  const w = document.createElement('div'); w.className = 'w'; w.dataset.w = key; w.dataset.kind = k + '|' + (c.options || []).join(',');
+  const tools = `<span class="tools"><button class="btn xs" title="Reset to default" data-cmd="default">↺</button><button class="btn xs" title="Randomize" data-cmd="random">⚄</button></span>`;
+  const head = (slotLabel ? `<span class="slot">${esc(slotLabel)}</span>` : '')
+    + `<div class="head"><span class="name">${esc(c.name.replace(/_/g, ' '))}</span>${tools}<span class="val"></span></div>`;
+  const st = { kind: k, el: w };
+  w.addEventListener('click', (e) => { const t = e.target.closest('.tools button[data-cmd]'); if (t) syn('/control/' + t.dataset.cmd, { bank: c.bank, name: c.name }); });
+  if (k === 'fader') {
+    w.innerHTML = head + `<div class="fader"><div class="fill"></div><div class="thumb"></div></div>`;
+    const val = w.querySelector('.val');
+    st.fader = makeFader(w.querySelector('.fader'), { onChange: (v) => { val.textContent = pct(v); sendControl(c.bank, c.name, Math.round(v * 1000) / 1000); }, onDraw: (v) => val.textContent = pct(v), onReset: () => syn('/control/default', { bank: c.bank, name: c.name }) });
+  } else if (k === 'bang') {
+    w.innerHTML = head + `<button class="btn sm"><svg class="i"><use href="#i-zap"/></svg>Trigger</button>`;
+    w.querySelector('button').onclick = () => { sendControl(c.bank, c.name, 1); toast(c.name + ' triggered'); };
+    st.set = () => {};
+  } else if (k === 'switch') {
+    w.innerHTML = head + `<div class="row"><div class="switch"></div><span class="muted sw-l">off</span></div>`;
+    const sw = w.querySelector('.switch'), l = w.querySelector('.sw-l');
+    sw.onclick = () => { const on = !sw.classList.contains('on'); sw.classList.toggle('on', on); l.textContent = on ? 'on' : 'off'; st.recent = Date.now(); sendControl(c.bank, c.name, on ? 1 : 0); };
+    st.set = (v) => { if (Date.now() - (st.recent || 0) < 1500) return; sw.classList.toggle('on', v >= 0.5); l.textContent = v >= 0.5 ? 'on' : 'off'; };
+  } else if (k === 'dropdown') {
+    const opts = c.options || [];
+    if (opts.length && opts.length <= 6) {
+      w.innerHTML = head + `<div class="seg tight">${opts.map((o, i) => `<button data-i="${i}">${esc(o)}</button>`).join('')}</div>`;
+      const btns = [...w.querySelectorAll('.seg button')];
+      btns.forEach((b) => b.onclick = () => { btns.forEach((x) => x.classList.toggle('on', x === b)); st.recent = Date.now(); sendControl(c.bank, c.name, Number(b.dataset.i)); });
+      st.set = (v) => { if (Date.now() - (st.recent || 0) < 1500) return; btns.forEach((x) => x.classList.toggle('on', Number(x.dataset.i) === Math.round(v))); };
+    } else {
+      w.innerHTML = head + `<select class="sel">${opts.map((o, i) => `<option value="${i}">${esc(o)}</option>`).join('')}</select>`;
+      const sel = w.querySelector('select'); sel.onchange = () => { st.recent = Date.now(); sendControl(c.bank, c.name, Number(sel.value)); };
+      st.set = (v) => { if (Date.now() - (st.recent || 0) < 1500 || document.activeElement === sel) return; sel.value = String(Math.round(v)); };
+    }
+  } else if (k === 'color') {
+    w.innerHTML = head + `<label class="swatch"><span class="chip"></span><code></code><input type="color"></label>`;
+    const chip = w.querySelector('.chip'), code = w.querySelector('code'), inp = w.querySelector('input');
+    inp.oninput = () => { const h = inp.value; chip.style.background = h; code.textContent = h; st.recent = Date.now(); const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255); sendControl(c.bank, c.name, r, 'r'); sendControl(c.bank, c.name, g, 'g'); sendControl(c.bank, c.name, b, 'b'); };
+    st.set = (rgb) => { if (Date.now() - (st.recent || 0) < 1500 || !rgb) return; const h = toHex(rgb); chip.style.background = h; code.textContent = h; inp.value = h; };
+  } else if (k === 'xy') {
+    w.innerHTML = head + `<div class="pad"><div class="h"></div><div class="v"></div><div class="pt"></div></div>`;
+    const pad = w.querySelector('.pad'), pt = w.querySelector('.pt'), hl = w.querySelector('.h'), vl = w.querySelector('.v'), val = w.querySelector('.val');
+    const draw = (x, y) => { pt.style.left = (x * 100) + '%'; pt.style.top = ((1 - y) * 100) + '%'; hl.style.top = ((1 - y) * 100) + '%'; vl.style.left = (x * 100) + '%'; val.textContent = `${x.toFixed(2)}, ${y.toFixed(2)}`; };
+    let drag = false;
+    const from = (e) => { const r = pad.getBoundingClientRect(); return [Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), Math.max(0, Math.min(1, 1 - (e.clientY - r.top) / r.height))]; };
+    const upd = (e) => { const [x, y] = from(e); draw(x, y); sendControl(c.bank, c.name, x, 'x'); sendControl(c.bank, c.name, y, 'y'); };
+    pad.addEventListener('pointerdown', (e) => { drag = true; pad.setPointerCapture(e.pointerId); upd(e); });
+    pad.addEventListener('pointermove', (e) => { if (drag) upd(e); });
+    const end = () => { drag = false; st.recent = Date.now(); }; pad.addEventListener('pointerup', end); pad.addEventListener('pointercancel', end);
+    st.set = (xy) => { if (drag || Date.now() - (st.recent || 0) < 800 || !xy) return; draw(xy.x, xy.y); };
+    draw(0.5, 0.5);
+  }
+  container.appendChild(w); widgetStates.set(key, st); return st;
+}
+// ns namespaces the widget keys so the same control can live on Home and on the Scene page at once.
+function renderControls(container, bank, controls, ns = '', labels = null) {
+  const names = Object.keys(controls);
+  if (!names.length) { if (!container.querySelector('.w')) container.innerHTML = '<div class="muted">no controls received yet</div>'; return; }
+  const placeholder = container.querySelector(':scope > .muted'); if (placeholder) placeholder.remove();
+  for (const name of names) {
+    const c = controls[name], key = ns + bank + ':' + name;
+    let st = widgetStates.get(key);
+    const sig = kind(c) + '|' + (c.options || []).join(',');
+    if (st && (st.el.dataset.kind !== sig || !container.contains(st.el))) { st.el.remove(); widgetStates.delete(key); st = null; }
+    if (!st) st = buildWidget(c, key, container, labels?.[name]);
+    if (st.kind === 'fader') st.fader.set(Number(c.value ?? 0));
+    else if (st.kind === 'color') st.set(c.rgb);
+    else if (st.kind === 'xy') st.set(c.xy);
+    else st.set(Number(c.value ?? 0));
+  }
+  const keep = new Set(names.map((n) => ns + bank + ':' + n));   // full key: a scene change re-banks the same names
+  for (const w of [...container.querySelectorAll(':scope > .w')]) if (!keep.has(w.dataset.w)) { w.remove(); widgetStates.delete(w.dataset.w); }
+}
+function renderMeta(meta) {
+  const host = $('wMeta');
+  const names = Object.keys(meta);
+  if (!names.length) return;
+  if (!host.querySelector('.group')) {
+    host.innerHTML = GROUPS.map(([g]) => `<div class="group" data-g="${g}"><h4>${g}</h4><div class="widgets"></div></div>`).join('') + `<div class="group" data-g="Other"><h4>Other</h4><div class="widgets"></div></div>`;
+  }
+  const buckets = {}; for (const [g] of GROUPS) buckets[g] = {}; buckets.Other = {};
+  for (const n of names) { const g = GROUPS.find(([, re]) => re.test(n))?.[0] || 'Other'; buckets[g][n] = meta[n]; }
+  for (const [g, controls] of Object.entries(buckets)) {
+    const grp = host.querySelector(`.group[data-g="${g}"]`); grp.style.display = Object.keys(controls).length ? '' : 'none';
+    renderControls(grp.querySelector('.widgets'), 'meta', controls);
+  }
+}
+// Home "Visuals" card: the handful of controls this scene's input scheme assigns to the
+// gesture slots — the same things the SpaceMouse and controller drive.
+const SLOT_LABEL = { x: 'left / right', y: 'fwd / back', z: 'push / pull', yaw: 'twist', pitch: 'tilt', roll: 'lean', left: 'button L', right: 'button R' };
+function renderBasics(s) {
+  const bank = Object.keys(s.banks || {}).find((b) => b !== 'meta' && b !== 'global');
+  if (!bank) return;
+  const all = s.banks[bank];
+  const picked = {}, labels = {};
+  for (const slot of ['x', 'y', 'z', 'yaw', 'pitch', 'roll', 'left', 'right']) {
+    const e = schemeState?.slots?.[slot]; if (!e?.control) continue;
+    const c = all[e.control]; if (!c || picked[e.control]) continue;
+    picked[e.control] = c; labels[e.control] = SLOT_LABEL[slot];
+  }
+  if (!Object.keys(picked).length) for (const [n, c] of Object.entries(all).slice(0, 7)) picked[n] = c;   // no scheme yet → first few
+  for (const [n, c] of Object.entries(all)) { if (Object.keys(picked).length >= 7) break; if (!picked[n]) picked[n] = c; }   // then the scene's other controls
+  const meta = s.banks.meta || {};
+  for (const n of ['brightness', 'saturation', 'hue', 'reactivity']) {   // always a few global ones to play with
+    if (Object.keys(picked).length >= 8) break;
+    if (meta[n]) { picked[n] = meta[n]; labels[n] = 'global'; }
+  }
+  renderControls($('wBasic'), bank, picked, 'b:', labels);
+}
+// Visuals are fed by a server-sent stream (full state every 3 s, changed controls + audio at ~30 Hz).
+let synFull = null, synStream = null;
+const synPageActive = () => $('page-scene').classList.contains('active') || $('page-home').classList.contains('active');
+function ensureSynStream() {
+  if (!synPageActive()) { if (synStream) { synStream.close(); synStream = null; } return; }
+  if (synStream) return;
+  synStream = new EventSource('/api/synesthesia/stream');
+  synStream.addEventListener('full', (e) => { synFull = JSON.parse(e.data); renderSyn(synFull); });
+  synStream.onmessage = (e) => {
+    if (!synFull) return; const d = JSON.parse(e.data);
+    synFull.audio = d.audio; if (d.scene !== synFull.scene) { synFull.scene = d.scene; for (const b of Object.keys(synFull.banks)) if (b !== 'meta') delete synFull.banks[b]; }
+    for (const [bank, ctrls] of Object.entries(d.controls)) for (const [name, c] of Object.entries(ctrls)) { const cur = ((synFull.banks[bank] ??= {})[name] ??= { name, bank, type: c.type }); Object.assign(cur, c); }
+    synFull.ageMs = 0; renderSyn(synFull);
+  };
+  synStream.onerror = () => { synStream.close(); synStream = null; };
+}
+async function refreshSyn() {
+  ensureSynStream();
+  if (!synPageActive()) return;
+  if (!synStream && !synFull) { try { synFull = await (await fetch('/api/synesthesia')).json(); renderSyn(synFull); } catch (e) { $('synLink').textContent = 'error: ' + e.message; } }
+}
+function renderSyn(s) {
+  try {
+    const home = $('page-home').classList.contains('active');
+    $('synScene').textContent = s.scene || '–'; $('heroScene').textContent = s.scene || '–';
+    $('basicScene').textContent = s.scene ? `· ${s.scene}` : '';
+    $('wSceneName').textContent = s.scene ? `· ${s.scene}` : '';
+    $('synLink').textContent = s.ageMs == null ? 'no OSC received yet' : s.ageMs < 3000 ? '● live' : `last message ${Math.round(s.ageMs / 1000)}s ago`;
+    const a = s.audio || {};
+    for (const [k, id] of [['level', 'Level'], ['bass', 'Bass'], ['mid', 'Mid'], ['high', 'High'], ['onbeat', 'Beat']]) {
+      const v = Math.max(0, Math.min(1, a[k] || 0));
+      for (const suffix of ['', '2']) { const bar = $('m' + id + suffix), num = $('v' + id + suffix); if (bar) bar.style.width = (v * 100) + '%'; if (num) num.textContent = Math.round(v * 100); }
+    }
+    $('synBpm').textContent = a.bpm ? Math.round(a.bpm) + ' BPM' : '';
+    if (home) { renderBasics(s); return; }
+    renderMeta(s.banks.meta || {});
+    const sceneBank = Object.keys(s.banks).find((b) => b !== 'meta' && b !== 'global');
+    renderControls($('wScene'), sceneBank || 'scene', sceneBank ? s.banks[sceneBank] : {});
+    $('synRaw').textContent = (s.raw || []).slice(-20).map((r) => `${new Date(r.t).toLocaleTimeString()}  ${r.address} ${JSON.stringify(r.args)}`).join('\n') || '–';
+  } catch (e) { $('synLink').textContent = 'error: ' + e.message; }
+}
+
+// ── Resolume section ──────────────────────────────────────────────────────
+let resState = null;
+const resMasterF = makeFader($('resMaster'), { onChange: (v) => { $('resMasterVal').textContent = pct(v); throttled('resm', () => resSet('master', v * (resState?.master?.max ?? 1)), 80); }, onDraw: (v) => $('resMasterVal').textContent = pct(v) });
+const resSpeedF = makeFader($('resSpeed'), { onChange: (v) => { const mx = resState?.speed?.max ?? 10; $('resSpeedVal').textContent = (v * mx).toFixed(2) + '×'; throttled('ress', () => resSet('speed', v * mx), 80); }, onDraw: (v) => $('resSpeedVal').textContent = (v * (resState?.speed?.max ?? 10)).toFixed(2) + '×' });
+async function resSet(name, value) { try { await post('/api/action/resolume/' + name, { value }); } catch (e) { toast('Arena: ' + e.message); } }
+async function resAction(name) { try { await post('/api/action/resolume/' + name); toast('Arena → ' + name); setTimeout(refreshRes, 700); } catch (e) { toast('Arena: ' + e.message); } }
+async function refreshRes() {
+  if (!$('page-scene').classList.contains('active')) return;
+  try {
+    const r = await (await fetch('/api/resolume')).json();
+    if (r.error) { $('resInfo').textContent = r.error; return; }
+    resState = r;
+    $('resInfo').textContent = `${r.name ?? 'composition'} · ${r.mode} mode`;
+    for (const b of $('resMode').children) b.classList.toggle('on', b.dataset.m === r.mode);
+    if (r.master) resMasterF.set(r.master.value / (r.master.max || 1));
+    if (r.speed) resSpeedF.set(r.speed.value / (r.speed.max || 10));
+    $('resTempo').textContent = r.tempo ? r.tempo.value.toFixed(1) + ' BPM' : '–';
+    const cols = (r.columns || []).slice(0, 24);
+    $('resCols').innerHTML = cols.map((c) => `<button class="${c.connected ? 'on' : ''}" title="${esc(c.name)}" onclick="resSet('column',${c.index});setTimeout(refreshRes,600)">${c.index}</button>`).join('');
+    $('resLayers').innerHTML = (r.groupLayers || []).length ? r.groupLayers.map((l) => `<div class="reslayer ${/synesthesia/i.test(l.name) ? 'keep' : ''}"><span class="n">${l.index}</span><span class="nm">${esc(l.name)}</span><span class="c">${l.connected ? esc(l.clip || 'clip ' + l.connected) : '<span class="muted">empty</span>'}</span><span class="ap">autopilot ${esc(l.autopilot)}</span></div>`).join('') : '<div class="muted">no layer group found</div>';
+  } catch (e) { $('resInfo').textContent = 'Arena unreachable'; }
+}
+// ── Reset to defaults ─────────────────────────────────────────────────────
+async function resetSyn() { syn('/bank/default', { bank: 'scene' }); syn('/bank/default', { bank: 'meta' }); toast('Synesthesia controls reset'); }
+async function resetRes() { await resAction('defaults'); }
+async function resetVisuals() { try { await post('/api/engagement/reset'); toast('Everything reset to defaults'); setTimeout(() => { refreshRes(); refresh(); }, 1200); } catch (e) { toast('Error: ' + e.message); } }
+
+// ── Live output preview + PC stats ────────────────────────────────────────
+let pvSender = null;
+function fmtBytes(b) { if (b == null) return '–'; const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; } return b.toFixed(i >= 3 ? 1 : 0) + ' ' + u[i]; }
+async function refreshPreview() {
+  const saverOn = $('saver').classList.contains('on');
+  if (!saverOn && !$('page-home').classList.contains('active')) return;
+  try {
+    const pv = await (await fetch('/api/preview/senders')).json();
+    const list = (pv.senders || []).filter((s) => s.connected);
+    if (!list.length) { $('pvImg').hidden = true; $('pvEmpty').hidden = false; $('pvFps').hidden = true; $('pvSenders').innerHTML = ''; $('pvInfo').textContent = pv.error ? pv.error : ''; return; }
+    if (!pvSender || !list.find((s) => s.name === pvSender)) pvSender = (list.find((s) => s.name === pv.defaultSender) || list.find((s) => /arena|resolume|composition/i.test(s.name)) || list[0]).name;
+    list.sort((a, b) => (a.name === pv.defaultSender ? -1 : b.name === pv.defaultSender ? 1 : 0));
+    $('pvSenders').innerHTML = list.length > 1 ? list.map((s) => `<button class="${s.name === pvSender ? 'on' : ''}" data-sender="${esc(s.name)}">${esc(s.name)}</button>`).join('') : '';
+    for (const b of $('pvSenders').querySelectorAll('button')) b.addEventListener('click', () => { pvSender = b.dataset.sender; refreshPreview(); });
+    const s = list.find((x) => x.name === pvSender);
+    $('pvInfo').textContent = `${s.name} · ${s.width}×${s.height}`;
+    // MJPEG stream: the service pushes frames continuously, so no per-frame reload / decode hitch.
+    // Only ever one connection — the screensaver takes it over while it is up.
+    const want = `/api/preview/stream?sender=${encodeURIComponent(s.name)}`;
+    const img = saverOn ? $('saverImg') : $('pvImg');
+    const other = saverOn ? $('pvImg') : $('saverImg');
+    if (other.getAttribute('src')) { other.removeAttribute('src'); other.dataset.stream = ''; }
+    if (!saverOn) { $('pvEmpty').hidden = true; $('pvImg').hidden = false; }
+    if (img.dataset.stream !== want || img.dataset.err === '1') { img.dataset.stream = want; img.dataset.err = ''; img.src = want + '&t=' + Date.now(); }
+    const f = $('pvFps'); f.hidden = s.fps == null;
+    if (s.fps != null) { f.innerHTML = `<b>${s.fps.toFixed(0)}</b> fps <span class="muted">${s.fpsSource === 'content' ? 'content' : ''}</span>`; f.className = 'fpsbadge' + (s.fps < 24 ? ' bad' : s.fps < 50 ? ' low' : ''); }
+  } catch { $('pvInfo').textContent = 'preview unavailable'; }
+}
+async function refreshSystem() {
+  if (!$('page-system').classList.contains('active') && !$('page-admin').classList.contains('active')) return;
+  try {
+    const s = await (await fetch('/api/system')).json();
+    const memUsed = s.memTotalBytes - s.memFreeBytes, memPct = 100 * memUsed / s.memTotalBytes;
+    const stat = (k, v, sub, pc, cls = '') => `<div class="stat ${cls}"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${sub || ''}</div>${pc != null ? `<div class="bar"><i style="width:${Math.max(0, Math.min(100, pc))}%"></i></div>` : ''}</div>`;
+    const lvl = (p, w = 75, b = 90) => (p >= b ? 'bad' : p >= w ? 'warn' : '');
+    let h = stat('CPU', s.cpuPercent != null ? s.cpuPercent.toFixed(0) + '%' : '–', `${s.cpuCount} threads`, s.cpuPercent, lvl(s.cpuPercent ?? 0));
+    h += stat('Memory', memPct.toFixed(0) + '%', `${fmtBytes(memUsed)} of ${fmtBytes(s.memTotalBytes)}`, memPct, lvl(memPct));
+    if (s.gpu) {
+      h += stat('GPU', (s.gpu.utilization ?? 0) + '%', `${s.gpu.name || ''} · ${s.gpu.temperatureC ?? '–'} °C · ${s.gpu.powerW != null ? s.gpu.powerW.toFixed(0) + ' W' : ''}`, s.gpu.utilization, lvl(s.gpu.utilization ?? 0));
+      const vp = s.gpu.memoryTotalMB ? 100 * s.gpu.memoryUsedMB / s.gpu.memoryTotalMB : null;
+      h += stat('VRAM', vp != null ? vp.toFixed(0) + '%' : '–', `${s.gpu.memoryUsedMB ?? '–'} of ${s.gpu.memoryTotalMB ?? '–'} MB`, vp, lvl(vp ?? 0));
+    }
+    for (const d of s.disks || []) { const used = 100 * (1 - d.freeBytes / d.totalBytes); h += stat(`Disk ${d.drive}`, fmtBytes(d.freeBytes) + ' free', `of ${fmtBytes(d.totalBytes)}`, used, lvl(used, 85, 95)); }
+    h += stat('Windows uptime', (s.uptimeSeconds / 3600).toFixed(1) + ' h', '', null);
+    $('sysStats').innerHTML = h; if ($('sysStats2')) $('sysStats2').innerHTML = h;
+  } catch { /* leave as is */ }
+}
+$('pvImg').addEventListener('error', () => { $('pvImg').dataset.err = '1'; });   // stream dropped → refreshPreview reconnects
+$('saverImg').addEventListener('error', () => { $('saverImg').dataset.err = '1'; });
+setInterval(refreshPreview, 2000); setInterval(refreshSystem, 5000); refreshSystem(); refreshPreview();
+
+// ── Inputs page ───────────────────────────────────────────────────────────
+const SM_AXES = ['x', 'y', 'z', 'roll', 'pitch', 'yaw'];
+const DEVICE_META = { spacemouse: 'SpaceMouse', xbox: 'Xbox controller', td: 'TouchDesigner', pi: 'Raspberry Pi', panel: 'Control panel', api: 'API' };
+function bipRow(k, v, uni = false) { return `<div class="axis"><span class="k">${esc(k)}</span><div class="bip ${uni ? 'uni' : ''}" data-ax="${esc(k)}"><i></i></div><span class="v">${typeof v === 'number' ? v.toFixed(2) : esc(v)}</span></div>`; }
+function setBip(el, v, uni = false) { const i = el.querySelector('i'); if (uni) { i.style.width = (Math.max(0, Math.min(1, v)) * 100) + '%'; return; } const p = Math.max(-1, Math.min(1, v)) * 50; i.classList.toggle('neg', v < 0); i.style.left = (v < 0 ? 50 + p : 50) + '%'; i.style.width = Math.abs(p) + '%'; }
+function renderAxes(container, items, uni) {   // items: [name, value]; rebuild only when the set changes
+  const key = items.map(([k]) => k).join('|');
+  if (container.dataset.key !== key) { container.dataset.key = key; container.innerHTML = items.length ? items.map(([k, v]) => bipRow(k, v, uni)).join('') : '<div class="muted">nothing received yet</div>'; }
+  for (const [k, v] of items) { const row = container.querySelector(`[data-ax="${CSS.escape(k)}"]`); if (!row) continue; if (typeof v === 'number') setBip(row, v, uni); row.parentElement.querySelector('.v').textContent = typeof v === 'number' ? v.toFixed(2) : String(v); }
+}
+// Live feed: server-sent events (~30 Hz while anything changes) merged into the last full state.
+let inState = null, inStream = null;
+function ensureInputStream() {
+  const active = $('page-inputs').classList.contains('active');
+  if (!active) { if (inStream) { inStream.close(); inStream = null; } return; }
+  if (inStream) return;
+  inStream = new EventSource('/api/inputs/stream');
+  inStream.addEventListener('full', (e) => { inState = JSON.parse(e.data); renderInputs(); });
+  inStream.onmessage = (e) => { if (!inState) return; const d = JSON.parse(e.data); for (const [k, v] of Object.entries(d.values)) inState.values[k] = { value: v, at: d.t }; for (const m of Object.values(inState.mapped)) if (d.mapped[m.id] != null) { m.value = d.mapped[m.id]; m.at = d.t; } for (const [id, v] of Object.entries(d.mapped)) if (!Object.values(inState.mapped).find((m) => m.id === id)) inState.mapped[id] = { id, value: v, at: d.t }; renderInputs(); };
+  inStream.onerror = () => { inStream.close(); inStream = null; };
+}
+setInterval(ensureInputStream, 500);
+function refreshInputs() { ensureInputStream(); refreshScheme(); if (inState) renderInputs(); }
+function renderInputs() {
+  const i = inState; if (!i || !$('page-inputs').classList.contains('active')) return;
+  const now = Date.now(); const val = (k) => i.values[k]?.value; const fresh = (k, ms = 400) => i.values[k] && now - i.values[k].at < ms;
+  $('inHead').textContent = i.port ? `OSC port ${i.port} · ${i.msgCount} messages · ${Object.keys(i.mappings).length} mappings` : 'no input port configured';
+  const devs = new Set([...Object.keys(i.devices), ...Object.keys(i.sources), 'spacemouse', 'xbox', 'td', 'pi']);
+  $('devRow').innerHTML = [...devs].filter((d) => d !== 'panel' && d !== 'admin-test').map((d) => {
+    const dev = i.devices[d], src = i.sources[d];
+    const bridged = dev !== undefined;
+    const live = src && src.ageMs < 3000;
+    const connected = bridged ? dev.connected : !!(src && src.ageMs < 15000);
+    const cls = connected ? (live ? 'ok' : 'warn') : '';
+    const st = bridged ? (dev.connected ? (dev.name || 'connected') : (dev.stale ? 'bridge not running' : 'not plugged in')) : (src ? `last message ${src.ageMs < 60000 ? Math.round(src.ageMs / 1000) + ' s ago' : 'long ago'}` : 'waiting for messages');
+    return `<div class="dev"><span class="dot ${cls}"></span><div><div class="nm">${esc(DEVICE_META[d] || d)}</div><div class="st">${esc(st)}</div></div><div class="rate">${src ? `${src.rate}/s<br><span class="muted">${src.count} total</span>` : ''}</div></div>`;
+  }).join('');
+  const sm = SM_AXES.map((a) => [a, Number(val('spacemouse/' + a) ?? 0)]);
+  const [x, y, z, roll, pitch, yaw] = sm.map(([, v]) => v);
+  $('smPuck').style.transform = `translate(${x * 55}px, ${-y * 55}px) rotateX(${pitch * 40}deg) rotateY(${roll * 40}deg) rotateZ(${yaw * 60}deg) scale(${1 + z * 0.3})`;
+  $('smShadow').style.transform = `translate(${x * 55}px, ${-y * 55 + 6}px) scale(${1 + z * 0.4})`;
+  const smActive = sm.some(([, v]) => Math.abs(v) > 0.02) || SM_AXES.some((a) => fresh('spacemouse/' + a));
+  $('smPuck').classList.toggle('active', smActive);
+  renderAxes($('smAxes'), sm.map(([k, v]) => [{ x: 'x (left/right)', y: 'y (fwd/back)', z: 'z (push/pull)' }[k] || k, v]));
+  for (const [n, b] of [['LEFT', 'btn_0'], ['RIGHT', 'btn_1']]) { const el = [...$('smBtns').children].find((c) => c.textContent === n); if (el) el.classList.toggle('on', Number(val('spacemouse/' + b)) >= 0.5); }
+  $('smName').textContent = i.devices.spacemouse?.connected ? i.devices.spacemouse.name : (i.devices.spacemouse?.stale ? 'bridge offline' : 'not detected');
+  $('smHint').textContent = smActive ? 'live' : (i.devices.spacemouse?.connected ? 'move the mouse to see it here' : '');
+  const stick = (el, ax, ay) => { const sx = Number(val('xbox/' + ax) ?? 0), sy = Number(val('xbox/' + ay) ?? 0); el.style.left = (50 + sx * 45) + '%'; el.style.top = (50 - sy * 45) + '%'; };
+  stick($('xbL'), 'lx', 'ly'); stick($('xbR'), 'rx', 'ry');
+  $('xbLT').style.width = (Number(val('xbox/lt') ?? 0) * 100) + '%'; $('xbRT').style.width = (Number(val('xbox/rt') ?? 0) * 100) + '%';
+  for (const el of document.querySelectorAll('#page-inputs [data-b]')) el.classList.toggle('on', Number(val('xbox/' + el.dataset.b)) >= 0.5);
+  const dx = Number(val('xbox/dpad_x') ?? 0), dy = Number(val('xbox/dpad_y') ?? 0);
+  for (const el of document.querySelectorAll('.dpad span')) el.classList.toggle('on', (el.dataset.d === 'up' && dy > 0) || (el.dataset.d === 'down' && dy < 0) || (el.dataset.d === 'left' && dx < 0) || (el.dataset.d === 'right' && dx > 0));
+  $('xbName').textContent = i.devices.xbox?.connected ? i.devices.xbox.name : (i.devices.xbox?.stale ? 'bridge offline' : 'not detected');
+  const others = Object.entries(i.values).filter(([k, v]) => !/^(xbox|spacemouse)\//.test(k) && now - v.at < 120000).map(([k, v]) => [k, typeof v.value === 'number' ? v.value : String(v.value)]);
+  renderAxes($('otherAxes'), others, true);
+  const hotSlots = new Set(Object.values(i.mapped).filter((m) => m.slot && now - m.at < 350).map((m) => m.slot));
+  if (schemeState) {
+    const S = schemeState; const G = { x: 'left / right', y: 'forward / back', z: 'push / pull', yaw: 'twist', pitch: 'tilt fwd / back', roll: 'tilt sideways', left: 'left button · A', right: 'right button · B' };
+    $('schemeTitle').textContent = S.scene ? (S.title || S.scene) : 'no scene playing';
+    $('schemeNote').textContent = S.scene ? (S.hasScheme ? (S.auto === false ? 'hand-tuned' : 'auto-generated · edit input_schemes.yaml') : 'no scheme for this scene (exhibit schemes generate)') : '';
+    $('schemeGrid').innerHTML = ['x', 'y', 'z', 'yaw', 'pitch', 'roll', 'left', 'right'].map((k) => { const e = S.slots[k]; const v = e?.value; const isBtn = k === 'left' || k === 'right';
+      return `<div class="slot ${hotSlots.has(k) ? 'hot' : ''}"><div class="g"><b>${k}</b> ${G[k]}</div><div class="c ${e ? '' : 'none'}">${e ? esc(e.label + (e.sub ? ' · ' + e.sub : '')) : 'nothing assigned'}</div><div class="d">${e ? esc(e.description || e.reason || '') : ''}</div>${e ? (isBtn ? `<div class="seg"><button class="${Number(v) >= 0.5 ? 'on' : ''}" disabled>${e.action === 'momentary' ? 'momentary' : 'toggle'} · ${Number(v) >= 0.5 ? 'on' : 'off'}</button></div>` : `<div class="bip uni"><i style="width:${typeof v === 'number' ? Math.round(Math.max(0, Math.min(1, v)) * 100) : 0}%"></i></div>`) : ''}</div>`; }).join('');
+  }
+  const mapped = Object.values(i.mapped);
+  const rows = i.mappings.map((m) => { const hit = mapped.find((x) => x.id === m.id); const hot = hit && now - hit.at < 350; const to = m.to.scheme ? `scene slot ${m.to.scheme}${hit?.label ? ' → ' + hit.label : ''}` : m.to.synesthesia ? (m.to.synesthesia.scene_control_index != null ? `scene control #${m.to.synesthesia.scene_control_index + 1}` : `${m.to.synesthesia.bank ?? 'meta'} / ${m.to.synesthesia.name}`) : m.to.macro ? `macro ${m.to.macro}` : m.to.music ? `music ${m.to.music}` : m.to.osc ? `osc ${m.to.osc.address}` : JSON.stringify(m.to);
+    return `<div class="maprow ${hot ? 'hot' : ''}"><code>${esc(m.match.replace('/input/', ''))}</code><span>${esc(to)}</span><span class="mode">${esc(m.mode)}</span><div class="bip uni"><i style="width:${hit ? Math.round(Math.max(0, Math.min(1, hit.value)) * 100) : 0}%"></i></div></div>`; });
+  $('mapRows').innerHTML = rows.join('');
+}
+let schemeState = null;
+async function refreshScheme() { try { schemeState = await (await fetch('/api/schemes/current')).json(); } catch {} }
+setInterval(refreshScheme, 1500);   // also feeds the Home card's control picks
+refreshScheme();
+setInterval(refreshInputs, 1000);   // stream events drive the fast path; this keeps ages/rates ticking
+
+// ── Feedback ──────────────────────────────────────────────────────────────
+const fbTags = new Set();
+for (const b of document.querySelectorAll('#fbTags button')) b.onclick = () => { const t = b.dataset.t; if (fbTags.has(t)) { fbTags.delete(t); b.classList.remove('on'); } else { fbTags.add(t); b.classList.add('on'); } };
+let voteBusy = false;
+async function vote(v) {
+  if (voteBusy) return; voteBusy = true;
+  for (const b of document.querySelectorAll('.btn.vote')) b.disabled = true;
+  try {
+    const r = await post('/api/feedback', { vote: v, note: $('fbNote').value.trim() || null, tags: [...fbTags] });
+    const rec = r.recorded;
+    $('fbLast').innerHTML = `Recorded <b>${v === 'up' ? '👍' : '👎'}</b> at ${new Date(rec.ts).toLocaleTimeString()} — scene <b>${esc(rec.scene || '–')}</b>, track <b>${esc(rec.track || '–')}</b>.`;
+    $('fbNote').value = ''; fbTags.clear(); for (const b of document.querySelectorAll('#fbTags button')) b.classList.remove('on');
+    toast('Thanks — feedback recorded'); refreshFeedback();
+  } catch (e) { toast('Error: ' + e.message); }
+  finally { voteBusy = false; for (const b of document.querySelectorAll('.btn.vote')) b.disabled = false; }
+}
+async function refreshFeedback() {
+  if ($('saver').classList.contains('on')) return;
+  try {
+    const f = await (await fetch('/api/feedback?limit=15')).json();
+    $('cUpToday').textContent = f.counts.today.up; $('cDownToday').textContent = f.counts.today.down; $('cUpAll').textContent = f.counts.total.up; $('cDownAll').textContent = f.counts.total.down;
+    $('fbMini').textContent = `${f.counts.today.up + f.counts.today.down} votes today`;
+    $('lokiState').textContent = f.loki?.url ? (f.loki.failures ? `Loki push failing (${f.loki.lastError}) — events are still saved locally` : `Streaming to Loki at ${f.loki.url}`) : 'Loki push not configured; events saved locally (NDJSON + SQLite)';
+    $('fbRecent').innerHTML = f.recent.length ? f.recent.map((r) => `<div class="fbrow"><span>${r.vote === 'up' ? '👍' : '👎'}</span><span>${esc(r.scene || '–')} · ${esc(r.track || '–')}${r.note ? ' — <i>' + esc(r.note) + '</i>' : ''}${r.tags ? ' <span class="muted">' + esc(JSON.parse(r.tags).join(', ')) + '</span>' : ''}</span><span class="t">${new Date(r.ts).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span></div>`).join('') : 'no votes yet';
+  } catch (e) { $('fbRecent').textContent = 'error: ' + e.message; }
+}
+
+// ── Admin ────────────────────────────────────────────────────────────────
+function setAdminLocked() { adminTok = null; try { sessionStorage.removeItem('adminToken'); } catch {} $('adminLocked').hidden = false; $('adminUnlocked').hidden = true; $('adminState').textContent = 'locked'; }
+function setAdminUnlocked(expiresAt) { $('adminLocked').hidden = true; $('adminUnlocked').hidden = false; $('adminState').textContent = 'unlocked'; $('adminErr').textContent = ''; if (expiresAt) $('adminExpiry').textContent = `Unlocked. Locks itself after ${Math.round((expiresAt - Date.now()) / 60000)} min without admin activity.`; }
+async function adminUnlock() {
+  const pw = $('adminPw').value; $('adminPw').value = '';
+  try { const r = await post('/api/admin/unlock', { password: pw }); adminTok = r.token; try { sessionStorage.setItem('adminToken', r.token); } catch {} setAdminUnlocked(r.expiresAt); toast('Admin unlocked'); }
+  catch (e) { $('adminErr').textContent = e.message; }
+}
+async function adminLock() { try { await post('/api/admin/lock'); } catch {} setAdminLocked(); toast('Admin locked'); }
+async function adminStatus() {
+  if (!$('page-admin').classList.contains('active')) return;
+  try { const e = await (await fetch('/api/engagement')).json(); $('adminEng').textContent = `Mode: ${e.mode} for ${e.secondsInMode}s · inputs seen: ${e.inputs}${e.lastSource ? ' · last from ' + e.lastSource : ''} · idle after ${e.idleSeconds}s${e.idleIn != null ? ' (in ' + e.idleIn + 's)' : ''} · reset after ${e.resetSeconds}s${e.resetIn != null ? ' (in ' + e.resetIn + 's)' : ''}`; } catch {}
+  try { const i = await (await fetch('/api/inputs')).json(); const now = Date.now(); const live = Object.entries(i.values).filter(([, v]) => now - v.at < 15000).map(([k, v]) => `${k.padEnd(22)} ${typeof v.value === 'number' ? v.value.toFixed(3) : v.value}`); $('inputsLive').textContent = (i.port ? `OSC input port ${i.port} · ${i.msgCount} msgs · ${i.mappings.length} mappings\n` : 'input port not configured\n') + (live.length ? live.join('\n') : '(no controller activity in the last 15 s)'); } catch {}
+  try { const h = adminTok ? { 'x-admin-token': adminTok } : {}; const s = await (await fetch('/api/admin/status', { headers: h })).json(); if (s.unlocked) setAdminUnlocked(s.expiresAt); else setAdminLocked(); if (!s.enabled) $('adminErr').textContent = 'No admin password configured (set admin.password in exhibit.local.yaml).'; } catch {}
+}
+async function adminPanel(mode) { try { toast(mode === 'close' ? 'Closing panel…' : mode === 'windowed' ? 'Reopening as a window…' : 'Back to fullscreen…'); await post('/api/admin/panel', { mode }); } catch (e) { toast('Error: ' + e.message); } }
+async function adminReload() { try { const r = await post('/api/reload'); toast('Config reloaded: ' + r.files.map((f) => f.split(/[\\/]/).pop()).join(', ')); } catch (e) { toast('Error: ' + e.message); } }
+setInterval(adminStatus, 3000);
+
+// ══════════════════════════════════════════════════════════════════════════
+// SCREENSAVER — slideshow while nobody is using the panel
+// ══════════════════════════════════════════════════════════════════════════
+const FALLBACK_SLIDES = [
+  { title: 'Control the visuals from here!', sub: 'This screen drives the projections around you.' },
+  { title: 'Move the mouse to get started', sub: 'Or just touch the screen.' },
+  { title: 'Use the XBOX controller!', sub: 'Sticks bend the scene, triggers push it further.' },
+];
+let lastActivity = Date.now(), slideIdx = 0, slideTimer = null, saverReason = null, saverShownAt = 0;
+const slides = () => (panelCfg.slides?.length ? panelCfg.slides : FALLBACK_SLIDES);
+function noteActivity(source) {
+  lastActivity = Date.now();
+  if (!$('saver').classList.contains('on')) return;
+  if (Date.now() - saverShownAt < 700) return;   // the tap that summoned it must not dismiss it
+  hideSaver(source);
+}
+function drawSlide() {
+  const list = slides(), s = list[slideIdx % list.length];
+  $('saverTitle').textContent = s.title ?? ''; $('saverSub').textContent = s.sub ?? '';
+  const sv = $('saverSlide'); sv.classList.remove('swap'); void sv.offsetWidth; sv.classList.add('swap');
+  $('saverDots').innerHTML = list.map((_, i) => `<i class="${i === slideIdx % list.length ? 'on' : ''}"></i>`).join('');
+  slideIdx++;
+}
+function showSaver(reason) {
+  if ($('saver').classList.contains('on')) return;
+  if (reason === 'idle' && adminTok) return;               // an operator is working; don't cover the panel
+  if (reason !== 'idle') endTour('superseded');            // asked for directly: drop the tour if it is up
+  saverReason = reason; slideIdx = 0; saverShownAt = Date.now();
+  $('saver').classList.add('on');
+  $('saverUntil').textContent = runsUntil();
+  drawSlide(); clearInterval(slideTimer);
+  slideTimer = setInterval(drawSlide, Math.max(3, panelCfg.slide_seconds ?? 7) * 1000);
+  refreshPreview();                                        // hand the MJPEG stream to the saver backdrop
+}
+function hideSaver(source) {
+  if (!$('saver').classList.contains('on')) return;
+  $('saver').classList.remove('on'); clearInterval(slideTimer); slideTimer = null;
+  lastActivity = Date.now();
+  if (!adminTok) go('home');                               // visitors always land on Home
+  refreshPreview(); refreshFeedback();
+  if (saverReason !== 'admin') maybeStartTour();
+  saverReason = null;
+}
+// Movement is measured from the cursor position, not movementX/movementY: over Remote
+// Desktop (and some touch drivers) the mouse is absolute and those deltas are always 0,
+// which would make a real mouse move look like jitter and never wake the panel.
+let lastPt = null;
+function pointerActivity(e) {
+  const x = e.clientX, y = e.clientY;
+  if (x == null) return void noteActivity('panel');
+  if (lastPt && Math.abs(x - lastPt[0]) < 3 && Math.abs(y - lastPt[1]) < 3) return;   // stationary repeats
+  lastPt = [x, y];
+  noteActivity('panel');
+}
+for (const ev of ['pointermove', 'mousemove']) window.addEventListener(ev, pointerActivity, { passive: true, capture: true });
+for (const ev of ['pointerdown', 'mousedown', 'keydown', 'wheel', 'touchstart', 'click']) window.addEventListener(ev, () => noteActivity('panel'), { passive: true, capture: true });
+$('saver').addEventListener('pointerdown', () => noteActivity('panel'));   // tapping the screensaver always wakes it
+window.addEventListener('focus', () => noteActivity('panel'));             // someone brought the panel forward
+document.addEventListener('visibilitychange', () => { if (!document.hidden) noteActivity('panel'); });
+setInterval(() => {
+  if (document.hidden) { lastActivity = Date.now(); return; }   // occluded / minimised: don't bank up idle time
+  const idleFor = (Date.now() - lastActivity) / 1000;
+  if (idleFor >= (panelCfg.idle_seconds ?? 90) && !$('tour').classList.contains('on')) showSaver('idle');
+}, 2000);
+// While the screensaver is up, watch the server closely so a controller wakes it in ~1 s
+// instead of waiting for the 4 s status poll.
+setInterval(async () => {
+  if (!$('saver').classList.contains('on')) return;
+  try { const e = await (await fetch('/api/engagement')).json(); if (e.lastInputAt && e.lastInputAt !== lastServerInputAt) { lastServerInputAt = e.lastInputAt; noteActivity('controller'); } } catch {}
+}, 1200);
+
+// ══════════════════════════════════════════════════════════════════════════
+// TUTORIAL — overlay tour of the basics (never shows the admin page)
+// ══════════════════════════════════════════════════════════════════════════
+const TOUR = [
+  { page: 'home', hero: true, title: 'You are driving the wall', body: 'Everything projected around this room is controlled from this screen. Here is the 30-second tour — you can skip it any time.' },
+  { page: 'home', el: '#homePreview', title: 'This is the live projection', body: 'A real-time feed of exactly what the projectors are showing. Whatever you change here, you will see happen there.' },
+  { page: 'home', el: '#homeScene', title: 'Change the look', body: 'Jump to the next visual scene, or grab a slider and bend the one that is playing. Every scene has its own set of controls.' },
+  { page: 'home', el: '#homeMusic', title: 'The music drives the visuals', body: 'The scenes listen to whatever is playing. Skip a track and watch the wall change with it.' },
+  { page: 'home', el: '#homeFeedback', title: 'Tell us what you think', body: 'A thumbs up or down saves a snapshot of everything on screen — the scene, every control value and the track — so we learn which looks people love.' },
+  { page: 'inputs', el: '#devRow', title: 'Use the controllers', body: 'The Xbox controller and the SpaceMouse drive the visuals too. This page mirrors every stick, button and axis as you move them.' },
+  { page: 'inputs', el: '#schemeCard', title: 'Each scene maps differently', body: 'Push, pull and twist do something different in every scene. This card always shows what your hands are doing right now.' },
+  { page: 'scene', el: '#secSyn', title: 'Every control, if you want it', body: 'The Scene control page opens the full set of Synesthesia controls for the scene that is playing.' },
+  { page: 'scene', el: '#secRes', title: 'Nothing here is permanent', body: 'Reset to defaults whenever you like — and the exhibit resets itself after ten quiet minutes. Experiment freely.' },
+  { page: 'home', hero: true, title: 'That is everything', body: 'Go ahead — move something and watch the wall.' },
+];
+let tourIdx = -1, tourTimer = null;
+// Every visitor is a first-time visitor: waking the screensaver always runs the tour
+// (panel.tutorial: false turns it off; the Skip button and Esc end it immediately).
+function maybeStartTour() {
+  if (panelCfg.tutorial === false) return;
+  startTour();
+}
+function startTour() {
+  $('tour').classList.add('on'); $('tourSkip').hidden = false;
+  tourGo(0);
+}
+function tourGo(i) {
+  if (i < 0) return;
+  if (i >= TOUR.length) return endTour('finished');
+  tourIdx = i;
+  const s = TOUR[i];
+  if (s.page) go(s.page);
+  $('tourStep').textContent = `Step ${i + 1} of ${TOUR.length}`;
+  $('tourTitle').textContent = s.title; $('tourBody').textContent = s.body;
+  $('tourCard').classList.toggle('hero', !!s.hero);
+  $('tourBack').disabled = i === 0;
+  $('tourNext').textContent = i === TOUR.length - 1 ? 'Start exploring' : 'Next';
+  $('tourDots').innerHTML = TOUR.map((_, n) => `<i class="${n === i ? 'on' : ''}"></i>`).join('');
+  const target = s.el ? document.querySelector(s.el) : null;
+  if (target) target.scrollIntoView({ block: 'center', behavior: 'auto' });   // the Scene/Inputs pages scroll
+  requestAnimationFrame(() => placeTour(s));
+  setTimeout(() => { if (tourIdx === i) placeTour(s); }, 220);                // settle after the page switch
+  clearTimeout(tourTimer); tourTimer = setTimeout(() => endTour('timeout'), 90000);   // never strand the overlay
+}
+function placeTour(s) {
+  const spot = $('tourSpot'), card = $('tourCard');
+  const el = s.el ? document.querySelector(s.el) : null;
+  if (!el) {
+    spot.classList.add('center');
+    spot.style.top = '50%'; spot.style.left = '50%'; spot.style.width = '0'; spot.style.height = '0';
+    card.style.top = Math.max(12, (innerHeight - card.offsetHeight) / 2) + 'px';
+    card.style.left = Math.max(12, (innerWidth - card.offsetWidth) / 2) + 'px';
+    return;
+  }
+  spot.classList.remove('center');
+  const r = el.getBoundingClientRect(), pad = 8;
+  spot.style.top = (r.top - pad) + 'px'; spot.style.left = (r.left - pad) + 'px';
+  spot.style.width = (r.width + pad * 2) + 'px'; spot.style.height = (r.height + pad * 2) + 'px';
+  const cw = card.offsetWidth, ch = card.offsetHeight, gap = 18;
+  let left = r.left + r.width / 2 - cw / 2, top = r.bottom + gap;
+  if (top + ch > innerHeight - 12) top = r.top - ch - gap;                 // no room below → above
+  if (top < 12) { top = Math.min(Math.max(12, r.top), innerHeight - ch - 12); left = r.right + gap; }   // still no room → beside
+  if (left + cw > innerWidth - 12) left = Math.max(12, r.left - cw - gap);
+  card.style.top = Math.max(12, Math.min(top, innerHeight - ch - 12)) + 'px';
+  card.style.left = Math.max(12, Math.min(left, innerWidth - cw - 12)) + 'px';
+}
+function endTour(why) {
+  clearTimeout(tourTimer);
+  if (!$('tour').classList.contains('on')) return;   // nothing running: don't log an outcome or bounce the page
+  $('tour').classList.remove('on'); $('tourSkip').hidden = true; tourIdx = -1;
+  post('/api/event', { type: 'tutorial', outcome: why }).catch(() => {});
+  if (!$('saver').classList.contains('on')) go('home');
+}
+window.addEventListener('keydown', (e) => {
+  if (!$('tour').classList.contains('on')) return;
+  if (e.key === 'Escape') endTour('skipped');
+  if (e.key === 'ArrowRight' || e.key === 'Enter') tourGo(tourIdx + 1);
+  if (e.key === 'ArrowLeft') tourGo(tourIdx - 1);
+});
+window.addEventListener('resize', () => { if (tourIdx >= 0) placeTour(TOUR[tourIdx]); });
+
+// ── pollers ───────────────────────────────────────────────────────────────
+refresh(); setInterval(refresh, 4000);
+setInterval(refreshSyn, 1000);      // the stream drives updates; this only (re)opens it when a page needs it
+setInterval(refreshRes, 4000);
+setInterval(refreshFeedback, 15000); refreshFeedback();
+</script>
+</body>
+</html>

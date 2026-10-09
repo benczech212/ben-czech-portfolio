@@ -1,0 +1,202 @@
+{
+  "_comment": "Source of truth for the Ticket Fund project list. Derived 2026-09-15 from applications/art/grant-budget-v2.md (submission draft, sections A-D + camp-funded), applications/art/itemized-budget.md (for projects cut from the grant but still planned), camp/finances.md (fuel) and projects/*/README.md (descriptions). Project ids are stable slugs so seed.mjs can be re-run safely. Costs are the grant-listed retail estimates; real costs run lower via hookups (camp/finances.md).",
+  "projects": [
+    {
+      "id": "logistics", "emoji": "🚚", "name": "Logistics", "required": true,
+      "description": "Getting everything to Virginia Key and back. Box truck for build week, trailer for the Speeder and oversize pieces, pallet delivery, fuel. Not glamorous, not optional — this comes off the top of the budget before any art is funded.\n\nSource: applications/art/grant-budget-v2.md section D (fuel from camp/finances.md — real cost, not grantable).",
+      "items": [
+        {"name": "16-ft box truck rental (build week, 5 days + mileage)", "cost": 650, "qty": 1},
+        {"name": "Trailer rental/fees (Speeder + oversize)", "cost": 180, "qty": 1},
+        {"name": "Pallet local delivery (Miami)", "cost": 120, "qty": 1},
+        {"name": "Fuel (real cost, not grantable)", "cost": 250, "qty": 1}
+      ]
+    },
+    {
+      "id": "camp-infrastructure", "emoji": "🏕️", "name": "Camp Infrastructure", "required": true,
+      "description": "The dues-funded basics that make the camp run: power safety, the kitchen food-call bell/clock, consumables, and a contingency cushion. Also hosts the now-playing screens and event bus (hardware already owned by Ben, so $0 here).\n\nSource: applications/art/grant-budget-v2.md 'Camp-funded (dues, NOT in grant)'; projects/kitchen-clock/README.md; projects/now-playing-screens/README.md.",
+      "items": [
+        {"name": "GFCI adapters", "cost": 15, "qty": 4},
+        {"name": "Kitchen clock + food-call bell (bell, solenoid, button, ESP32/PSU)", "cost": 80, "qty": 1},
+        {"name": "Consumables: fog fluid, gaff, zip ties, velcro", "cost": 120, "qty": 1},
+        {"name": "Contingency", "cost": 300, "qty": 1},
+        {"name": "Now-playing screens + event bus (Pi, touchscreen, router — owned by Ben)", "cost": 0, "qty": 1}
+      ]
+    },
+    {
+      "id": "projection-cube", "emoji": "🎥", "name": "Projection Cube Green Room",
+      "description": "The anchor build: an insulated freestanding ~12x16 room whose exterior walls are a projection-mapped video canvas (mapped from inside the tent), while the interior is the performers' prep and decompression space — the Green Room. Art on the outside, function on the inside: mirrors, makeup-grade lighting, greenery, rugs and cushions, a mending nook.\n\nSource: applications/art/grant-budget-v2.md section A; projects/green-room/README.md; applications/art/green-room-draft.md.",
+      "items": [
+        {"name": "1/2\" plywood sheathing", "cost": 38, "qty": 24},
+        {"name": "2x4x8' framing studs", "cost": 5.5, "qty": 40},
+        {"name": "Radiant barrier insulation (500 sqft)", "cost": 180, "qty": 1},
+        {"name": "Roof sheathing + sealant", "cost": 180, "qty": 1},
+        {"name": "Reusable plastic pallets (floor, 12x16)", "cost": 75, "qty": 10},
+        {"name": "Door hardware (hinges, latch, pulls)", "cost": 80, "qty": 1},
+        {"name": "Structural screws + fasteners", "cost": 120, "qty": 1},
+        {"name": "Ratchet straps + 4 heavy lag ground anchors", "cost": 110, "qty": 1},
+        {"name": "Paint: projection-surface exterior + interior", "cost": 160, "qty": 1},
+        {"name": "Shatter-resistant mirrors (full-length + vanity)", "cost": 90, "qty": 1},
+        {"name": "Prep lighting strips (makeup-grade)", "cost": 110, "qty": 1},
+        {"name": "Greenery/ivy/decor interior ('green' room)", "cost": 140, "qty": 1},
+        {"name": "Rugs + floor cushions (interior)", "cost": 170, "qty": 1}
+      ]
+    },
+    {
+      "id": "dance-floor", "emoji": "🕺", "name": "Pallet Dance Floor",
+      "description": "Rain-proof raised pallet floor for the dance area and performance ground (16x20), Burning Man standard. Pallets purchased (rentals aren't grantable) and delivered locally; plywood topper, carpets, edge ramps.\n\nSource: applications/art/grant-budget-v2.md section B.",
+      "items": [
+        {"name": "Reusable plastic pallets (16x20 dance area)", "cost": 75, "qty": 20},
+        {"name": "3/4\" plywood topper sheets", "cost": 48, "qty": 12},
+        {"name": "Carpets/floor covering", "cost": 250, "qty": 1},
+        {"name": "Screws, seam hardware, edge ramps", "cost": 120, "qty": 1}
+      ]
+    },
+    {
+      "id": "instrument-garden", "emoji": "🎼", "name": "Interactive Instrument Garden",
+      "description": "All the capacitive/sensor art bundled as one interconnected installation — the SHOWTIME band and its companions. Touch, motion and sound feed a shared camp event bus so the pieces talk to each other: a staff cast ripples the crystals, a painting touch surges the tunnel, an altar crescendo lights everything. The shared electronics, LEDs and finish materials live here; each piece is a sub-project with its own vote.\n\nSource: applications/art/grant-budget-v2.md section C.",
+      "items": [
+        {"name": "Sensor/LED controllers, boards, wiring, PSUs (all pieces)", "cost": 520, "qty": 1},
+        {"name": "LED strips/rings/pixels (all pieces)", "cost": 340, "qty": 1},
+        {"name": "Paint, deco, finish materials across all pieces", "cost": 260, "qty": 1}
+      ]
+    },
+    {
+      "id": "showtime-band", "parentId": "instrument-garden", "emoji": "🎺", "name": "SHOWTIME Band (touch instruments)",
+      "description": "The playable instruments of the garden: water-cylinder chord tubes, a mancala drum-sequencer board, a conductor's podium, and a mushroom drum kit — capacitive and piezo sensors on a Pi/ESP32 driving sound and light. Instruments on pedestals people can walk up and play together.\n\nSource: grant-budget-v2 section C; projects/touch-sound-light/README.md.",
+      "items": [
+        {"name": "Instrument pedestals + housings (lumber, ply, paint)", "cost": 420, "qty": 1},
+        {"name": "Water-cylinder chord tubes (acrylic tubes, basins, seals, LED bases)", "cost": 180, "qty": 1},
+        {"name": "Mancala drum-sequencer board (hardwood, sensor bed)", "cost": 160, "qty": 1},
+        {"name": "Conductor podium build (lumber, panel, knob plate)", "cost": 140, "qty": 1},
+        {"name": "Mushroom drum kit (sculpt foam, coating, piezo triggers)", "cost": 190, "qty": 1}
+      ]
+    },
+    {
+      "id": "magic-crystals", "parentId": "instrument-garden", "emoji": "💎", "name": "Magic Crystals ×40",
+      "description": "Cheap, scatterable glowing crystals that are networked effect nodes — they listen for commands from the other art (staff casts, audio-bus beats, altar crescendos, puzzle wins) and respond with light. No network? They fall back to a self-contained auto mode and just be pretty. Resin/PETG shells, ESP32-C3, LED rings, cells and chargers.\n\nSource: grant-budget-v2 section C; projects/magic-crystals/README.md.",
+      "items": [
+        {"name": "Magic crystal (resin, PETG shell, ESP32-C3, LEDs, cell, charger)", "cost": 7.75, "qty": 40}
+      ]
+    },
+    {
+      "id": "intentions-altar", "parentId": "instrument-garden", "emoji": "🕯️", "name": "Intentions Altar",
+      "description": "An altar of stones and light. Take a stone, speak your intention, place the stone on the altar — the altar responds with light. Optionally a microphone hears the intention and the response matches its mood; stones placed back-to-back build escalating intensity. Sculpted structure, stones, fog burst, DMX wash finale.\n\nSource: grant-budget-v2 section C; projects/intentions-altar/README.md.",
+      "items": [
+        {"name": "Intentions altar (structure lumber, sculpt, stones, finish)", "cost": 360, "qty": 1}
+      ]
+    },
+    {
+      "id": "flow-toys", "parentId": "instrument-garden", "emoji": "🌀", "name": "Flow Toys: Magic Staff, Gada, Nunchucks, Hoops",
+      "description": "Carryable props with motion sensors (IMU) driving their own lights and sounds — swing it, spin it, slam it, and it responds. Stretch goal: the staff casts at camp installations — gestures trigger effects on the tunnel, altar and crystals over the camp network. Polycarb tubes, printed cores, 18650 packs.\n\nSource: grant-budget-v2 section C; projects/magic-staff/README.md.",
+      "items": [
+        {"name": "Flow toy cores + hoops (polycarb, tubing, fasteners, electronics)", "cost": 220, "qty": 1}
+      ]
+    },
+    {
+      "id": "touch-paintings", "parentId": "instrument-garden", "emoji": "🖼️", "name": "Capacitive Touch Paintings ×6",
+      "description": "Actual paintings that are secretly controllers. Conductive paint worked into the artwork creates touch zones — touch the moon in the painting and something happens: sound, light, the crystals ripple, the tunnel surges. Art you're supposed to touch.\n\nSource: grant-budget-v2 section C; projects/touch-paintings/README.md.",
+      "items": [
+        {"name": "Touch painting (conductive paint, canvas, sealant, ESP32)", "cost": 25, "qty": 6}
+      ]
+    },
+    {
+      "id": "smirkle-lounge", "parentId": "instrument-garden", "emoji": "🛋️", "name": "Smirkle Furniture (bass-shaker lounge)",
+      "description": "Flat-pack plywood lounge furniture with bass-shaker transducers built in — you feel the music through the seat. A camp member's 4 shakers + Dayton amp cover half the transducers in-kind.\n\nSource: grant-budget-v2 section C; camp/finances.md ledger.",
+      "items": [
+        {"name": "Smirkle furniture: flat-pack plywood lounge builds", "cost": 380, "qty": 1},
+        {"name": "Bass shaker transducer (into furniture)", "cost": 60, "qty": 8}
+      ]
+    },
+    {
+      "id": "shadow-lamps", "parentId": "instrument-garden", "emoji": "🔮", "name": "Spinning Shadow-Lamp Polyhedra",
+      "description": "Motorised polyhedral lamps on slip rings throwing moving geometric shadows across the camp — RGBW inside, cut-out plastics outside. Trim-ladder candidate (prototype-only saves ~$200).\n\nSource: grant-budget-v2 section C.",
+      "items": [
+        {"name": "Shadow-lamp polyhedra (slip rings, mounts, plastics, RGBW)", "cost": 290, "qty": 1}
+      ]
+    },
+    {
+      "id": "aerial-swing", "parentId": "instrument-garden", "emoji": "🎪", "name": "Aerial Swing",
+      "description": "A rig-hung swing for participants between aerial performances — the rig earns its keep all day. Rigger has veto on everything that touches the load path.\n\nSource: grant-budget-v2 section C; safety rules in projects/aerial-rig-motion/README.md.",
+      "items": [
+        {"name": "Aerial swing build (rig-hung)", "cost": 130, "qty": 1}
+      ]
+    },
+    {
+      "id": "speeder-lighting", "parentId": "instrument-garden", "emoji": "🚗", "name": "Speeder Art Car Lighting Refresh",
+      "description": "New strips, wiring and a topper for the Speeder art car so it reads as part of the SHOWTIME camp at night. Trim-ladder candidate (self-fund saves $270).\n\nSource: grant-budget-v2 section C.",
+      "items": [
+        {"name": "Speeder lighting refresh (strips, wiring, topper)", "cost": 270, "qty": 1}
+      ]
+    },
+    {
+      "id": "aerial-shadow-play", "emoji": "🌗", "name": "Aerial Shadow Play",
+      "description": "Three colored lights on a sliding motorised track behind the aerialist, casting overlapping shadows onto a backdrop. Converge the lights → one crisp silhouette. Diverge them → the performer splits into three colored shadows that drift, mix and blend. Not in the grant v2 ask — vote decides whether it happens.\n\nSource: applications/art/itemized-budget.md; projects/aerial-shadow-play/README.md.",
+      "items": [
+        {"name": "COB LED spots", "cost": 32, "qty": 3},
+        {"name": "2m V-slot rail", "cost": 35, "qty": 2},
+        {"name": "Steppers + drivers", "cost": 18, "qty": 3},
+        {"name": "GT2 belts, pulleys, idlers", "cost": 38, "qty": 1},
+        {"name": "ESP32 + PSU", "cost": 30, "qty": 1},
+        {"name": "Muslin backdrop 12x20", "cost": 60, "qty": 1},
+        {"name": "Grommets + tension line", "cost": 22, "qty": 1},
+        {"name": "EMT conduit backdrop frame", "cost": 80, "qty": 1}
+      ]
+    },
+    {
+      "id": "aerial-rig-motion", "emoji": "🎠", "name": "Motion-Sensing Aerial Rig",
+      "description": "An IMU on the aerial apparatus (and/or the performer) so movement drives the show — spins become color sweeps, swings push waves of light, a big drop hits like a bass note. Clamp-on only, nothing enters the load path, rigger has veto. Plus uplighting for the rig itself. Not in the grant v2 ask.\n\nSource: applications/art/itemized-budget.md; projects/aerial-rig-motion/README.md.",
+      "items": [
+        {"name": "Sensor node (ESP32 + BNO085 + LiPo + case)", "cost": 40, "qty": 2},
+        {"name": "Uplights", "cost": 45, "qty": 4},
+        {"name": "Mounts", "cost": 25, "qty": 1}
+      ]
+    },
+    {
+      "id": "auto-reset-puzzles", "emoji": "🧩", "name": "Auto-Resetting Puzzles ×3",
+      "description": "Physical puzzles that reset themselves — no camp member needed to re-arm them. Walk up, solve, get a satisfying payoff (light, sound, a crystal ripple), and it's instantly ready for the next person. RFID/NFC readers, ESP32, printed parts. Not in the grant v2 ask.\n\nSource: applications/art/itemized-budget.md; projects/auto-reset-puzzles/README.md.",
+      "items": [
+        {"name": "Puzzle unit (RC522 readers ×4, ESP32, LEDs, DFPlayer + speaker, NFC tags, filament)", "cost": 60, "qty": 3}
+      ]
+    },
+    {
+      "id": "frontage-marquee", "emoji": "💡", "name": "Frontage Marquee Sign",
+      "description": "The camp name in cabaret bulbs across the frontage — SHOWTIME literalism, pure curb appeal. Plywood letters, S14 LED bulb strings, a dimmer. Not in the grant v2 ask.\n\nSource: applications/art/itemized-budget.md; applications/art/budget.md Scenario B.",
+      "items": [
+        {"name": "S14 LED cabaret bulb strings", "cost": 35, "qty": 4},
+        {"name": "Plywood letters + paint", "cost": 90, "qty": 1},
+        {"name": "Dimmer/controller", "cost": 35, "qty": 1},
+        {"name": "Frame lumber", "cost": 60, "qty": 1},
+        {"name": "Wiring/sockets", "cost": 25, "qty": 1}
+      ]
+    },
+    {
+      "id": "space-hallway", "emoji": "🚀", "name": "Space Hallway LED Re-skin",
+      "description": "The LED tunnel (Pixelblaze-driven) returns for 2027 as in-kind art regardless. This project is the optional full re-skin: all strips new, diffusers, a spare controller — plus the planned upgrades (setup markings, 3D LED mapping, AI-assisted effect workflow) that cost labor, not money. Not in the grant v2 ask.\n\nSource: applications/art/itemized-budget.md; projects/space-hallway/README.md.",
+      "items": [
+        {"name": "IP65 addressable LED strip (5m)", "cost": 28, "qty": 20},
+        {"name": "Mean Well 350W 5V PSU", "cost": 45, "qty": 2},
+        {"name": "Connector/pigtail kit", "cost": 45, "qty": 1},
+        {"name": "12ga power wire (100ft)", "cost": 40, "qty": 1},
+        {"name": "Aluminum channel + diffuser (1m)", "cost": 12, "qty": 10},
+        {"name": "Spare PixelBlaze v3", "cost": 45, "qty": 1}
+      ]
+    },
+    {
+      "id": "cnc-projection-art", "emoji": "🪵", "name": "CNC Projection Art",
+      "description": "Layered CNC-cut plywood pieces hung in a tent corner and projection-mapped — dimensional surfaces the projectors paint. A camp member designs and cuts them on a CNC. Final form still open: corner piece, backlit obelisk, or sound-system facade totems. Projectors are in-kind. Approved in the 9/14 grant-bundle discussion; not in the grant v2 ask.\n\nSource: applications/art/itemized-budget.md 'Projection surfaces'; projects/cnc-projection-art/README.md.",
+      "items": [
+        {"name": "Ply/foam panels", "cost": 120, "qty": 1},
+        {"name": "Paint", "cost": 60, "qty": 1},
+        {"name": "Mounts", "cost": 45, "qty": 1},
+        {"name": "CNC bits", "cost": 25, "qty": 1}
+      ]
+    },
+    {
+      "id": "input-toys", "emoji": "🕹️", "name": "Input Toys ×5",
+      "description": "Small, sturdy, irresistible physical inputs scattered around camp — big buttons, cranks, sliders, levers — that do nothing locally except feel great, and publish everything they sense to the camp event bus. What each toy controls is a mapping decision, changeable any time. Not in the grant v2 ask.\n\nSource: applications/art/itemized-budget.md; projects/input-toys/README.md.",
+      "items": [
+        {"name": "Input toy (arcade button / encoder crank / lever + ESP32 + enclosure)", "cost": 20, "qty": 5}
+      ]
+    }
+  ]
+}

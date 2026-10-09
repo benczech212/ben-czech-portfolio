@@ -1,0 +1,1358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Virtual Camp</title>
+<!-- Visual simulators of the OUTPUT devices. Each one subscribes to exactly what the real
+     device will and runs a pixel-level effect engine the firmware can mirror 1:1:
+       crystals  : 6 crystals x 2 RGB LEDs diffusing into one glow. Near-dark when nothing is
+                   happening; casts light them; in show mode they follow the music.
+       hallway   : 5 hexagonal frames (16' x 12' x 8'), LED strip along every edge, each pixel at a
+                   real (x,y,z) like a Pixelblaze 3D map. z = long axis.
+       display   : entrance screen  - booth/dj + display/banner + display/mode, last-known on disconnect
+       resolume  : projector output - cmd/resolume/clip
+       kitchen   : bell             - cmd/kitchen/bell
+     Camp map: drag nodes + the staff; casts ripple outward (origin + speed_mps).
+     Talks to the broker's WebSocket listener (ws://<this host>:9001). -->
+<script src="vendor/mqtt.min.js"></script>
+<script src="shared.js"></script>
+<link rel="stylesheet" href="ui.css">
+<style>
+  :root { --bg:#0b0f12; --panel:#131a1f; --panel2:#1a1a20; --ink:#e6edf1; --dim:#7d8f9a; --ok:#4dffa6; --bad:#ff5252; --acc:#4de0ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font: 14px/1.4 system-ui, sans-serif; }
+  header { display:flex; gap:12px; align-items:center; padding:8px 16px; background:var(--panel); border-bottom:1px solid #222; flex-wrap:wrap; }
+  header h1 { font-size:15px; margin:0 8px 0 0; }
+  header a { color:var(--dim); font-size:12px; text-decoration:none; }
+  header input[type=text] { background:#000; color:var(--ink); border:1px solid #333; padding:4px 8px; border-radius:4px; width:200px; }
+  .btn { background:#26262e; color:var(--ink); border:1px solid #363640; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:13px; }
+  .btn:hover { background:#34343e; }
+  .btn.on { background:#2f3f60; border-color:var(--acc); }
+  .btn.big { font-size:15px; padding:10px 16px; font-weight:600; }
+  #conn { font-size:12px; color:var(--dim); }
+  #conn.ok { color:var(--ok); } #conn.bad { color:var(--bad); }
+  main { display:grid; grid-template-columns: 300px 1fr; gap:12px; padding:12px 16px; align-items:start; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .col { display:flex; flex-direction:column; gap:12px; }
+  section, details { background:var(--panel); border:1px solid #222; border-radius:10px; padding:10px 12px; }
+ details > summary { cursor:pointer; list-style:none; font-size:13px; letter-spacing:-.005em; color:var(--dim); }
+  details > summary::after { content:' +'; } details[open] > summary::after { content:' -'; }
+  details > .body { margin-top:10px; }
+ h2 { font-size:13px; letter-spacing:-.005em; color:var(--dim); margin:0 0 8px; display:flex; justify-content:space-between; align-items:center; }
+  h2 small { text-transform:none; letter-spacing:0; font-weight:400; }
+  canvas { width:100%; display:block; background:#000; border-radius:6px; user-select:none; -webkit-user-select:none; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:8px 0; }
+  .row label, .g { color:var(--dim); font-size:12px; }
+  .row input[type=text] { background:#000; color:var(--ink); border:1px solid #333; padding:5px 8px; border-radius:4px; width:130px; }
+  .row input[type=range] { flex:1; min-width:120px; accent-color: var(--acc); }
+  /* staff panel */
+  .swatches { display:grid; grid-template-columns: repeat(6, 1fr); gap:6px; margin:6px 0; }
+  .sw { height:34px; border-radius:6px; border:2px solid transparent; cursor:pointer; }
+  .sw.on { border-color:#fff; box-shadow:0 0 0 1px #000 inset; }
+  #staffprev { width:100%; height:10px; border-radius:5px; margin:6px 0 2px; background:#ff4000; }
+  .val { min-width:34px; text-align:right; font-variant-numeric: tabular-nums; }
+  .gest { display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; }
+  /* other devices */
+  #tv { background:#000; border:6px solid #1c1c22; border-radius:8px; aspect-ratio: 16/9; position:relative; overflow:hidden; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; }
+  #tv .np { font-size:12px; letter-spacing:.3em; color:#9aa; }
+  #tv .artist { font-size:30px; font-weight:700; margin:6px 0; }
+  #tv .meta { font-size:12px; color:#889; }
+  #tv .brand { position:absolute; bottom:8px; right:12px; font-size:11px; color:#556; letter-spacing:.2em; }
+  #tv .mode { position:absolute; top:8px; left:12px; font-size:10px; color:#556; }
+  #tv .banner { position:absolute; inset:0; background:#ffb454; color:#000; display:none; align-items:center; justify-content:center; font-size:26px; font-weight:800; text-align:center; padding:20px; }
+  #tv.takeover .banner { display:flex; }
+  #tv .stale { position:absolute; top:8px; right:12px; font-size:10px; color:var(--bad); display:none; }
+  #tv.stale .stale { display:block; }
+  #proj { background:#000; border:2px dashed #333; border-radius:6px; aspect-ratio:16/9; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; }
+  #proj .clip { font-size:30px; font-weight:800; letter-spacing:.05em; color:#fff; text-shadow:0 0 30px currentColor; transition: transform .15s; }
+  #proj .clip.fallback { color:#8fd3ff; font-size:22px; }
+  #proj .tag { position:absolute; bottom:6px; left:10px; font-size:11px; color:#556; }
+  #proj.hit .clip { transform: scale(1.08); }
+  #bell { font-size:56px; text-align:center; padding:6px 0 0; transform-origin: 50% 10%; display:inline-block; width:100%; }
+  #bell.ring { animation: ring .9s ease-out; }
+  #bell.soft { animation: ring-soft .9s ease-out; }
+  @keyframes ring { 0%{transform:rotate(0)} 15%{transform:rotate(28deg)} 35%{transform:rotate(-24deg)} 55%{transform:rotate(16deg)} 75%{transform:rotate(-8deg)} 100%{transform:rotate(0)} }
+  @keyframes ring-soft { 0%{transform:rotate(0)} 30%{transform:rotate(8deg)} 60%{transform:rotate(-6deg)} 100%{transform:rotate(0)} }
+  #bellmsg { text-align:center; color:var(--dim); font-size:12px; min-height:1.4em; }
+  .devgrid { display:grid; grid-template-columns: 3fr 2fr; gap:12px; align-items:start; }
+  @media (max-width: 1100px) { .devgrid { grid-template-columns: 1fr; } }
+  /* game on the entrance display */
+  #tvgame { position:absolute; inset:0; display:none; flex-direction:column; justify-content:center; align-items:center; padding:14px; background:#000; }
+  #tv.game #tvgame { display:flex; }
+  #tvgame .t { font-size:12px; letter-spacing:.3em; color:#9aa; }
+  #tvgame .h { font-size:24px; font-weight:800; margin:4px 0 8px; }
+  #tvgame .p { width:100%; max-width:360px; display:grid; grid-template-columns: 16px 1fr auto; gap:6px 8px; align-items:center; font-size:13px; text-align:left; }
+  #tvgame .p .chip { width:14px; height:14px; border-radius:3px; }
+  #tvgame .p .bar { height:10px; background:#222; border-radius:5px; overflow:hidden; }
+  #tvgame .p .bar > div { height:100%; }
+  #tvgame .big { font-size:44px; font-weight:900; letter-spacing:.05em; }
+  #tvgame .sub { font-size:12px; color:#bbc; margin-top:6px; }
+  .stat { font-size:11px; color:var(--dim); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Virtual Camp</h1>
+  <nav id="campnav"></nav>
+  <input id="url" type="text" value="" spellcheck="false">
+  <button class="btn" id="connect">Connect</button>
+  <span id="conn">disconnected</span>
+  <span class="stat" id="audiostat" style="margin-left:auto"></span>
+  <label class="stat">clip <input id="reclen" type="number" min="5" max="600" value="60" style="width:52px;background:#000;color:var(--ink);border:1px solid #333;border-radius:4px;padding:2px 4px"> s</label>
+  <button class="btn" id="record" title="records crystals + map + hallway + entrance display to a WebM video (downloads when done)">Record clip</button>
+</header>
+
+<main>
+  <!-- ------------------------------------------------ controls -->
+  <div class="col">
+    <section>
+      <h2>Props <small>prop/&lt;prop_id&gt;</small></h2>
+      <div class="row" id="proptabs">
+        <button class="btn on" data-prop="staff">Staff</button>
+        <button class="btn" data-prop="wand">Wand</button>
+        <button class="btn" data-prop="drum">Drum</button>
+        <button class="btn" data-prop="whip">Whip</button>
+        <button class="btn" id="demo" style="margin-left:auto" title="walk the props around and fire them: random casts, timed combos, a drum rhythm">Test props</button>
+      </div>
+      <div class="stat" id="demostat"></div>
+      <div class="swatches" id="swatches"></div>
+      <div class="row"><label>custom</label><input id="staffcolor" type="color" value="#ff4000"><div id="staffprev" style="flex:1;height:10px"></div></div>
+      <div class="row"><label>intensity</label><input id="intensity" type="range" min="0" max="1" step="0.05" value="0.8"><span class="val" id="intensityv">0.80</span></div>
+      <div class="stat" id="perfect">1.00 = perfect cast: reaches every node at full strength. Below that, the effect fades gently with distance (down to 40% at 60 m).</div>
+      <div class="row" id="headingrow"><label>heading</label><input id="heading" type="range" min="0" max="359" step="1" value="0"><span class="val" id="headingv">0&deg; N</span></div>
+      <div class="gest" id="gestures"></div>
+      <div class="row" id="spinrow"><label>spin</label><button class="btn on" data-spin="1">clockwise</button><button class="btn" data-spin="-1">counter-clockwise</button></div>
+      <div class="row"><label title="untick to cast without a position (no propagation)"><input type="checkbox" id="gpsfix" checked> GPS fix</label><span class="g" id="staffwhere"></span></div>
+      <div class="stat" id="propinfo"></div>
+      <div class="stat">Keys: 1/2/3 cast the active prop's gestures, Q/E turn it 15&deg;, Tab cycles props. <b>Combo:</b> two different props landing on a crystal within 0.5 s play a two-colour animation.</div>
+    </section>
+
+    <section>
+      <h2>Camp mode <small>camp/mode</small></h2>
+      <div class="row">
+        <button class="btn" data-mode="idle">idle</button>
+        <button class="btn" data-mode="show">show</button>
+        <button class="btn" data-mode="quiet">quiet</button>
+      </div>
+      <div class="stat">idle = no music, no BPM; devices rest near-dark and only casts light them. show = simulated music (fake beats at 124 BPM). quiet = quiet hours, everything dim.</div>
+      <div class="row"><span class="g">Vibe</span>
+        <button class="btn" data-pub="mode:dial_a_vibe:cozy" data-vibe="cozy">cozy</button>
+        <button class="btn on" data-pub="mode:dial_a_vibe:party" data-vibe="party">party</button>
+        <button class="btn" data-pub="mode:dial_a_vibe:chaos" data-vibe="chaos">chaos</button>
+        <button class="btn" data-pub="mode:dial_a_vibe:wave" data-vibe="wave" title="a brightness wave rolls across camp north to south, using every node's position">wave</button>
+        <button class="btn" data-pub="mode:dial_a_vibe:jumping" data-vibe="jumping" title="a spark hops from crystal to crystal (nearest ones), on the beat when synced, and sometimes through the hallway">jumping</button>
+        <button class="btn" data-pub="mode:dial_a_vibe:ethereal" data-vibe="ethereal" title="slow colour mixes from Perlin noise over each node's position">ethereal</button>
+        <button class="btn" data-pub="mode:dial_a_vibe:snake" data-vibe="snake" title="a chain of 7 crystals slithers across camp, head brightest">snake</button>
+        <button class="btn" data-pub="mode:dial_a_vibe:twinkle" data-vibe="twinkle" title="random crystals sparkle over a dim base">twinkle</button>
+        <button class="btn" data-pub="mode:dial_a_vibe:heartbeat" data-vibe="heartbeat" title="a double thump across everything, on the beat when synced">heartbeat</button>
+        <button class="btn" data-pub="mode:dial_a_vibe:aurora" data-vibe="aurora" title="green/purple curtains drifting north in slow bands">aurora</button>
+        <button class="btn" data-pub="mode:dial_a_vibe:meteor" data-vibe="meteor" title="streaks cross camp every few seconds, lighting whatever they pass">meteor</button>
+      </div>
+      <div class="row"><label title="cycle rates (hops, waves, thumps, steps) follow the BPM"><input type="checkbox" id="bpmsync" checked> BPM sync (rates)</label><label title="flash on beats and follow the bass; off = steady brightness from smoothed loudness"><input type="checkbox" id="pulse" checked> Pulse to beat</label></div>
+      <details id="vibeset"><summary>Vibe settings</summary><div class="body" id="vibeparams"></div><div class="row"><button class="btn" id="vibereset" style="padding:2px 8px;font-size:11px">reset this vibe</button><span class="g">shared over the bus (vibe/params)</span></div></details>
+    </section>
+
+    <section>
+      <h2>Game: Paint the Camp <small>game/state</small></h2>
+      <div class="row">
+        <button class="btn big" id="gamestart">Start game</button>
+        <button class="btn" id="gamestop">Stop</button>
+        <label>play <input id="gamelen" type="number" min="10" max="600" value="45" style="width:56px;background:#000;color:var(--ink);border:1px solid #333;border-radius:4px;padding:2px 4px"> s</label>
+      </div>
+      <div class="row"><label title="start Test props with the game and stop it when the game ends"><input type="checkbox" id="gameauto" checked> auto-run test props during the game</label></div>
+      <div id="gamestat" class="stat">idle. Each prop claims a colour in the lobby (first to cast a colour keeps it), then everyone paints crystals with casts. Crystals fade between the players' colours with a duty cycle proportional to the energy each player put in. When time runs out the crystals lock into their leading colour one at a time, contested ones last, and then the winner's colour takes every crystal for 20 s in synchrony.</div>
+      <div id="gamescores" class="row"></div>
+    </section>
+
+    <details>
+      <summary>Other inputs</summary>
+      <div class="body">
+        <div class="row"><span class="g">Toys</span>
+          <button class="btn" data-pub="press:big_red_button">Big Red Button</button>
+          <button class="btn" data-pub="hold:big_red_button:2.5">Hold 2.5 s</button>
+          <button class="btn" data-pub="pull:lever">Lever</button>
+        </div>
+        <div class="row"><span class="g">Crank</span><input id="crank" type="range" min="-5" max="5" step="0.1" value="0"><span class="val" id="crankv">0.0</span></div>
+        <div class="row"><span class="g">DJ</span><input id="artist" type="text" value="SideQuest">
+          <button class="btn" id="checkin">Check in</button>
+          <button class="btn" data-pub="checkout">Check out</button>
+        </div>
+        <div class="row"><span class="g">Kitchen</span>
+          <button class="btn" data-pub="foodcall:dinner">Food call</button>
+          <button class="btn" data-pub="foodcall:midnight snack:soft">soft</button>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <!-- ------------------------------------------------ devices -->
+  <div class="col">
+    <section>
+      <h2>Crystals <small><label class="g">count <input id="ncry" type="number" min="1" max="60" value="20" style="width:52px;background:#000;color:var(--ink);border:1px solid #333;border-radius:4px;padding:2px 4px"></label> &middot; 2 RGB LEDs each, diffused &middot; cmd/crystals/#, cmd/crystal_NN/#, cmd/all/#, audio/beat</small></h2>
+      <canvas id="crystals" width="900" height="300"></canvas>
+    </section>
+    <div class="devgrid">
+    <section>
+      <h2>Camp map <small>drag nodes and the props &nbsp;<button class="btn" id="resetlayout" style="padding:1px 8px;font-size:11px">reset layout</button></small></h2>
+      <canvas id="map" width="900" height="480" style="cursor:grab;touch-action:none"></canvas>
+    </section>
+      <div class="col">
+        <section id="others"><h2>Space hallway <small id="hallstat"></small></h2><canvas id="hall" width="720" height="440"></canvas></section>
+        <section><h2>Entrance display <small>booth/dj, display/#, game/#</small></h2>
+          <div id="tv">
+            <div class="mode" id="tvmode">mode: nowplaying</div>
+            <div class="stale">OFFLINE - last known state</div>
+            <div class="np">NOW PLAYING</div>
+            <div class="artist" id="tvartist">(booth empty)</div>
+            <div class="meta" id="tvmeta"></div>
+            <div class="brand">AWETISTS - SHOWTIME</div>
+            <div class="banner" id="tvbanner"></div>
+            <div id="tvgame"></div>
+          </div></section>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+  // Bus data is untrusted: anything on the LAN can publish. Escape it before it goes into
+  // innerHTML, and only let well-formed colours into style attributes.
+  const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const safeColor = (c, dflt = '#888888') => (typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c) ? c : dflt);
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const now = () => performance.now() / 1000;
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+
+  // ------------------------------------------------------------ colour helpers
+  function hsv(h, s, v) {
+    const i = Math.floor(h * 6), f = h * 6 - i, p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+    const c = [[v, t, p], [q, v, p], [p, v, t], [p, q, v], [t, p, v], [v, p, q]][((i % 6) + 6) % 6];
+    return [c[0] * 255, c[1] * 255, c[2] * 255];
+  }
+  function hex(c) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(c || '');
+    if (!m) return [255, 255, 255];
+    const n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  const scale = (c, k) => [c[0] * k, c[1] * k, c[2] * k];
+  const add = (a, b) => [Math.min(255, a[0] + b[0]), Math.min(255, a[1] + b[1]), Math.min(255, a[2] + b[2])];
+  const css = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+  const WHITE = [255, 255, 255];
+
+  // Palettes by mode (dial-a-vibe). Same table goes into the firmware.
+  const PALETTES = {
+    cozy:  { hues: [0.06, 0.09, 0.12], sat: 0.85, drift: 0.02 },
+    party: { hues: [0.85, 0.55, 0.70], sat: 0.95, drift: 0.08 },
+    chaos: { hues: [0.0, 0.33, 0.66], sat: 1.0, drift: 0.6 },
+    wave:  { hues: [0.52, 0.6, 0.7], sat: 0.9, drift: 0.05, wave: true },
+    jumping:  { hues: [0.12, 0.08, 0.16], sat: 0.95, drift: 0.1, jump: true },
+    ethereal: { hues: [0.6, 0.75, 0.9], sat: 0.8, drift: 0.02, ether: true },
+    snake:    { hues: [0.3, 0.38, 0.45], sat: 0.9, drift: 0.05, snake: true },
+    twinkle:  { hues: [0.62, 0.66, 0.7], sat: 0.7, drift: 0.02, twinkle: true },
+    heartbeat:{ hues: [0.98, 0.0, 0.02], sat: 0.95, drift: 0.01, heart: true },
+    aurora:   { hues: [0.35, 0.45, 0.78], sat: 0.85, drift: 0.02, aurora: true },
+    meteor:   { hues: [0.55, 0.6, 0.65], sat: 0.6, drift: 0.02, meteor: true },
+  };
+  // Vibe parameters: [default, min, max, step, label]. Live-editable in the panel, persisted, shared on vibe/params.
+  const VIBE_DEFS = {
+    cozy:  { drift: [0.02, 0, 0.3, 0.005, 'hue drift'], sat: [0.85, 0, 1, 0.05, 'saturation'] },
+    party: { drift: [0.08, 0, 0.3, 0.005, 'hue drift'], sat: [0.95, 0, 1, 0.05, 'saturation'] },
+    chaos: { drift: [0.6, 0, 1.5, 0.01, 'hue drift'], sat: [1, 0, 1, 0.05, 'saturation'] },
+    wave:  { wavelength: [40, 5, 150, 1, 'wavelength (m)'], period: [4, 0.5, 20, 0.1, 'period s (unsynced)'], bars: [1, 0.25, 8, 0.25, 'bars per wave (synced)'], floor: [0.15, 0, 1, 0.05, 'min brightness'] },
+    jumping: { sparks: [3, 1, 6, 1, 'sparks'], hop: [0.45, 0.1, 2, 0.05, 'hop s (unsynced)'], beats: [1, 0.25, 4, 0.25, 'beats per hop (synced)'], trail: [2.2, 0.3, 8, 0.1, 'trail decay'], collide: [6, 0, 20, 0.5, 'collide within (m)'], hall: [0.08, 0, 0.5, 0.01, 'hallway leap chance'] },
+    ethereal: { speed: [0.05, 0.005, 0.5, 0.005, 'drift speed'], scale: [0.03, 0.005, 0.15, 0.005, 'spatial scale'], span: [0.35, 0, 0.5, 0.01, 'hue span'] },
+    snake: { length: [7, 2, 20, 1, 'length'], step: [0.35, 0.1, 2, 0.05, 'step s (unsynced)'], beats: [0.5, 0.25, 4, 0.25, 'beats per step (synced)'] },
+    twinkle: { rate: [0.35, 0.02, 3, 0.02, 'sparkles per LED per s'], dur: [0.7, 0.1, 3, 0.1, 'sparkle length (s)'] },
+    heartbeat: { period: [1.2, 0.3, 4, 0.05, 'period s (unsynced)'], beats: [1, 0.5, 4, 0.5, 'beats per thump (synced)'], decay: [7, 2, 20, 0.5, 'decay'], dub: [0.6, 0, 1, 0.05, 'second thump'] },
+    aurora: { speed: [0.12, 0.01, 0.5, 0.01, 'drift speed'], scale: [0.05, 0.01, 0.2, 0.005, 'band scale'], bright: [0.6, 0.1, 1, 0.05, 'brightness'] },
+    meteor: { every: [4, 1, 15, 0.5, 'seconds between (avg)'], speed: [38, 10, 90, 1, 'speed (m/s)'], radius: [5, 1, 15, 0.5, 'hit radius (m)'] },
+  };
+  const VP = Object.fromEntries(Object.entries(VIBE_DEFS).map(([k, d]) => [k, Object.fromEntries(Object.entries(d).map(([n, v]) => [n, v[0]]))]));
+  const VPLS = 'campbus.sim.vibeparams.v1';
+  try { const saved = JSON.parse(localStorage.getItem(VPLS) || 'null'); if (saved) for (const k of Object.keys(VP)) Object.assign(VP[k], saved[k] || {}); } catch (e) {}
+  function applyPaletteParams() { for (const k of ['cozy', 'party', 'chaos']) { PALETTES[k].drift = VP[k].drift; PALETTES[k].sat = VP[k].sat; } }
+  applyPaletteParams();
+  let vpPubTimer = null;
+  function vpChanged(publish = true) {
+    applyPaletteParams(); try { localStorage.setItem(VPLS, JSON.stringify(VP)); } catch (e) {}
+    if (publish) { clearTimeout(vpPubTimer); vpPubTimer = setTimeout(() => pub('vibe/params', { params: VP }, true), 250); }
+  }
+  function renderVibeParams() {
+    const k = VIBE.cur, d = VIBE_DEFS[k] || {}, el = $('vibeparams'); el.innerHTML = '';
+    for (const [n, [dflt, lo, hi, st, label]] of Object.entries(d)) {
+      const row = document.createElement('div'); row.className = 'row';
+      row.innerHTML = `<label style="width:150px">${label || n}</label><input type="range" min="${lo}" max="${hi}" step="${st}" value="${VP[k][n]}"><span class="val">${VP[k][n]}</span>`;
+      const inp = row.querySelector('input'), val = row.querySelector('.val');
+      inp.addEventListener('input', () => { VP[k][n] = +inp.value; val.textContent = inp.value; vpChanged(); });
+      el.appendChild(row);
+    }
+    $('vibeset').querySelector('summary').textContent = `Vibe settings: ${k}`;
+  }
+  $('vibereset').addEventListener('click', () => { const k = VIBE.cur; for (const [n, v] of Object.entries(VIBE_DEFS[k] || {})) VP[k][n] = v[0]; vpChanged(); renderVibeParams(); });
+
+  // Vibe crossfade: the previous vibe keeps rendering and blends into the new one over VIBE_FADE_S.
+  const VIBE_FADE_S = 2.0;
+  const VIBE = { cur: 'party', prev: null, t0: -10 };
+  const fadeK = (t) => VIBE.prev ? clamp((t - VIBE.t0) / VIBE_FADE_S, 0, 1) : 1;
+  function setVibe(name) { if (!PALETTES[name] || name === VIBE.cur) return; VIBE.prev = VIBE.cur; VIBE.cur = name; VIBE.t0 = now(); S.mode = name; document.querySelectorAll('[data-vibe]').forEach((b) => b.classList.toggle('on', b.dataset.vibe === name)); renderVibeParams(); }
+  // classic 3D Perlin noise (Ken Perlin's improved noise), -1..1
+  const PERM = (() => { const p = []; for (let i = 0; i < 256; i++) p[i] = i; let seed = 1337; for (let i = 255; i > 0; i--) { seed = (seed * 16807) % 2147483647; const j = seed % (i + 1); [p[i], p[j]] = [p[j], p[i]]; } return p.concat(p); })();
+  const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10), lerp = (a, b, t) => a + t * (b - a);
+  const grad = (h, x, y, z) => { const u = h < 8 ? x : y, v = h < 4 ? y : (h === 12 || h === 14 ? x : z); return ((h & 1) ? -u : u) + ((h & 2) ? -v : v); };
+  function noise3(x, y, z) {
+    const X = Math.floor(x) & 255, Y = Math.floor(y) & 255, Z = Math.floor(z) & 255; x -= Math.floor(x); y -= Math.floor(y); z -= Math.floor(z);
+    const u = fade(x), v = fade(y), w = fade(z), A = PERM[X] + Y, AA = PERM[A] + Z, AB = PERM[A + 1] + Z, B = PERM[X + 1] + Y, BA = PERM[B] + Z, BB = PERM[B + 1] + Z;
+    return lerp(lerp(lerp(grad(PERM[AA] & 15, x, y, z), grad(PERM[BA] & 15, x - 1, y, z), u), lerp(grad(PERM[AB] & 15, x, y - 1, z), grad(PERM[BB] & 15, x - 1, y - 1, z), u), v),
+                lerp(lerp(grad(PERM[AA + 1] & 15, x, y, z - 1), grad(PERM[BA + 1] & 15, x - 1, y, z - 1), u), lerp(grad(PERM[AB + 1] & 15, x, y - 1, z - 1), grad(PERM[BB + 1] & 15, x - 1, y - 1, z - 1), u), v), w);
+  }
+
+  // ------------------------------------------------------------ shared state
+  const S = { bass: 0, mid: 0, high: 0, loud: 0, bpm: 0, beatAt: -10, beatN: 0, mode: 'party', lastAudio: 0, camp: 'idle', bpmSync: true, pulse: true };
+  // wave vibe: a brightness wave rolling north->south across camp (40 m wavelength); one bar per wave when BPM-synced
+  const synced = (t) => S.bpmSync && audioAlive(t) && S.bpm > 0;
+  const wavePhase = (northing, t) => { const per = synced(t) ? 240 / S.bpm * VP.wave.bars : VP.wave.period; return 0.5 + 0.5 * Math.sin(2 * Math.PI * (northing / VP.wave.wavelength + t / per)); };
+  const isWave = () => !!(PALETTES[VIBE.cur] && PALETTES[VIBE.cur].wave);
+  // Camp mode (camp/mode, retained): idle = no music, rest near-dark; show = audio-reactive; quiet = quiet hours, dim.
+  const CAMP_GAIN = { idle: 1.0, show: 1.0, quiet: 0.35 };
+  let gainNow = 1;                                                 // eased toward the camp mode's gain (2 s)
+  const campGain = () => gainNow;
+  const paletteHueOf = (p, t, k) => {
+    const base = p.hues[Math.floor((t * p.drift + k) % 1 * p.hues.length) % p.hues.length];
+    return (base + Math.sin(t * p.drift * 6.28 + k * 6.28) * 0.04 + 1) % 1;
+  };
+  const paletteHue = (t, k) => paletteHueOf(PALETTES[VIBE.cur] || PALETTES.party, t, k);
+  const paletteSat = () => (PALETTES[VIBE.cur] || PALETTES.party).sat;
+  // Colour mixing rule (SCHEMA.md): mix the payload colour into the current pixel with weight = intensity.
+  const inten = (m) => clamp(m.intensity == null ? 1 : +m.intensity, 0, 1);
+  const colOf = (m, dflt) => m.color ? hex(m.color) : dflt;
+  const beatEnv = (t) => S.pulse ? Math.exp(-(t - S.beatAt) * 9) * (S.beatN % 4 === 0 ? 1 : 0.6) : 0;
+  const audioAlive = (t) => t - S.lastAudio < 2;
+
+  // ------------------------------------------------------------ effect engine (mirrors the firmware)
+  class Device {
+    constructor(pixels) { this.px = pixels; this.effects = []; }
+    fire(dur, fn) { this.effects.push({ start: now(), dur, fn }); }
+    render(t, idle, noFx = false) {
+      for (const p of this.px) p.c = idle(p, t);
+      this.effects = this.effects.filter((e) => t - e.start < e.dur);
+      if (!noFx) for (const e of this.effects) e.fn(this.px, t, (t - e.start) / e.dur);
+      const g = campGain(); if (g !== 1) for (const p of this.px) p.c = scale(p.c, g);
+    }
+  }
+  const FX = {
+    flash: (d, m) => { const col = colOf(m, WHITE), w = inten(m); d.fire((m.ms || 300) / 1000, (px, t, a) => { const k = w * Math.pow(1 - a, 2); for (const p of px) p.c = mix(p.c, col, k); }); },
+    pulse: (d, m) => { const col = colOf(m, WHITE), w = inten(m), sec = m.seconds || 2; d.fire(sec, (px, t, a) => { const k = 0.5 + 0.5 * Math.sin(a * 6.28 * Math.max(1, sec)); for (const p of px) p.c = mix(p.c, col, w * 0.8 * k * (1 - a)); }); },
+    color: (d, m) => { const col = colOf(m, WHITE), w = inten(m), sec = m.seconds || 2.5; d.fire(sec, (px, t, a) => { for (const p of px) p.c = mix(p.c, col, w * (1 - a * a)); }); },
+    mode: (d, m) => setVibe(m.mode),
+  };
+
+  // ------------------------------------------------------------ CRYSTALS: 2 RGB LEDs diffusing together
+  // Resting state is near-dark: a faint slow breath so you can tell it's alive. Casts light it.
+  // In show mode (music playing) it follows the bass and flashes on beats.
+  const crystals = [];                                                   // built by setCrystalCount()
+  const cryId = (i) => `crystal_${String(i + 1).padStart(2, '0')}`;
+  function makeCrystal(i, n) {
+    const d = new Device([{ x: -1, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }]);   // LED A, LED B
+    return { id: cryId(i), dev: d, phase: (i * 0.618) % 1, charge: 0, chargeAt: -10, chargeColor: WHITE };
+  }
+  // one vibe's take on a crystal LED: returns { col, v }
+  function vibeCrystal(name, c, i, t) {
+    const p = PALETTES[name] || PALETTES.party, pos = LAYOUT[c.id] || [0, 0];
+    const breath = 0.03 + 0.03 * (0.5 + 0.5 * Math.sin(t * 0.7 + c.phase * 6.28 + i * 1.7));   // near-dark rest
+    // BPM sync on: follow the bass and flash on beats. Off: a steady level from smoothed loudness - no pulsing.
+    const music = audioAlive(t) ? (S.pulse ? 0.12 + 0.45 * S.bass + 0.5 * beatEnv(t) : 0.18 + 0.4 * (S.loudSmooth || 0)) : 0;
+    let v = clamp(Math.max(breath, music), 0, 1);
+    if (p.ether) {                                                   // slow Perlin colour mixes over position + time
+      const sc = VP.ethereal.scale, sp = VP.ethereal.speed;
+      const n1 = noise3(pos[0] * sc + i * 0.4, pos[1] * sc, t * sp), n2 = noise3(pos[0] * sc * 0.7 + 11, pos[1] * sc * 0.7 + 5, t * sp * 0.8);
+      const hue = (0.55 + VP.ethereal.span * n1 + 1) % 1, bright = (audioAlive(t) ? 0.25 + 0.35 * (S.pulse ? S.bass : (S.loudSmooth || 0)) : 0.14) + 0.3 * (0.5 + 0.5 * n2);
+      return { col: hsv(hue, 0.8 + 0.15 * n2, clamp(bright, 0, 1)), v: clamp(bright, 0, 1) };
+    }
+    if (p.jump) {                                                    // three sparks: bright where they are, short trails, white when two meet
+      let best = 0.03, hue = paletteHueOf(p, t, c.phase);
+      for (const h of (c.jumpHits || [])) { const e = Math.exp(-(t - h.t) * VP.jumping.trail); if (e > best) { best = e; hue = h.hue; } }
+      const flash = Math.exp(-(t - (c.jumpFlash == null ? -10 : c.jumpFlash)) * 6);
+      v = clamp(best * (i === 0 ? 1 : 0.85), 0, 1);
+      return { col: mix(hsv(hue, p.sat, v), WHITE, clamp(flash, 0, 1)), v: Math.max(v, flash) };
+    }
+    if (p.snake) {                                                   // a chain: head brightest, tail fading; hue shifts along the body
+      const idx = snake.body.indexOf(c.id);
+      if (idx < 0) { const e = Math.exp(-(t - (c.snakeLeft == null ? -10 : c.snakeLeft)) * 2.5) * 0.3; v = clamp(Math.max(0.03, e), 0, 1); return { col: hsv(paletteHueOf(p, t, 0.5), p.sat, v), v }; }
+      v = clamp(1 - idx / VP.snake.length * 0.85, 0, 1);
+      return { col: hsv((paletteHueOf(p, t, 0) + idx * 0.035) % 1, p.sat, v), v };
+    }
+    if (p.twinkle) {                                                 // dim base, random sparkles (each LED on its own)
+      const at = (c.twinkleAt || [-10, -10])[i], a = t - at, D = VP.twinkle.dur, spark = a >= 0 && a < D ? Math.sin(Math.PI * a / D) : 0;
+      v = clamp(0.05 + 0.03 * (0.5 + 0.5 * Math.sin(t * 0.5 + c.phase * 6.28)) + spark, 0, 1);
+      return { col: mix(hsv(paletteHueOf(p, t, c.phase), p.sat, v), WHITE, spark * 0.85), v };
+    }
+    if (p.heart) {                                                   // lub-dub, every beat when synced, else 1.2 s
+      const per = synced(t) ? 60 / S.bpm * VP.heartbeat.beats : VP.heartbeat.period, u = ((synced(t) ? (t - S.beatAt) : t % per) + per) % per;
+      const env = Math.exp(-u * VP.heartbeat.decay) + VP.heartbeat.dub * (u > per * 0.22 ? Math.exp(-(u - per * 0.22) * VP.heartbeat.decay) : 0);
+      v = clamp(0.08 + 0.9 * env, 0, 1);
+      return { col: hsv(paletteHueOf(p, t, 0.1 + i * 0.02), p.sat, v), v };
+    }
+    if (p.aurora) {                                                  // curtains: banded by northing, drifting north, green to purple
+      const A = VP.aurora; const n1 = noise3(pos[1] * A.scale - t * A.speed, pos[0] * 0.012, 0.5), n2 = noise3(pos[1] * A.scale * 1.6 - t * A.speed * 0.85 + 7, pos[0] * 0.02, 3.1);
+      const hue = 0.33 + 0.47 * clamp(0.5 + 0.6 * n1, 0, 1), bright = 0.1 + A.bright * clamp(0.5 + 0.9 * n2, 0, 1);
+      return { col: hsv(hue, 0.85, bright), v: bright };
+    }
+    if (p.meteor) {                                                  // dark sky; a streak lights what it passes, then it fades
+      const lit = c.meteorLit == null ? -10 : c.meteorLit, e = Math.exp(-(t - lit) * 3);
+      v = clamp(0.04 + e, 0, 1);
+      return { col: mix(hsv(paletteHueOf(p, t, c.phase), p.sat, v), WHITE, Math.min(1, e) * 0.7), v };
+    }
+    if (p.wave) v *= VP.wave.floor + (1 - VP.wave.floor) * wavePhase(pos[1], t);
+    return { col: hsv(paletteHueOf(p, t, c.phase + i * 0.12), p.sat, v), v };
+  }
+  function crystalIdle(c) {
+    return (p, t) => {
+      const i = p.x > 0 ? 1 : 0;
+      const a = vibeCrystal(VIBE.cur, c, i, t), k = fadeK(t), b = k < 1 ? vibeCrystal(VIBE.prev, c, i, t) : a;
+      let v = b.v + (a.v - b.v) * k, idleCol = mix(b.col, a.col, k);
+      // stain: the last prop colours that hit this crystal linger in its idle colour (half-life ~60 s)
+      if (c.stain && c.stain.w > 0.02) idleCol = mix(idleCol, scale(c.stain.color, v), c.stain.w);
+      // charge: the crystal glows in the charging colour, brighter the more charge it holds
+      const chargeCol = scale(c.chargeColor, clamp(v + c.charge, 0, 1));
+      let out = mix(idleCol, chargeCol, c.charge);
+      const g = gameColor(c, i, t); if (g) return g;                 // the game owns the crystal's base colour while it runs
+      // rhythm: pulse in the prop's colour on every predicted beat, fading out over the last 2 s of the hold
+      if (c.rhythm && t < c.rhythm.until) {
+        const per = 60 / c.rhythm.bpm, ph = (((t - c.rhythm.phase) % per) + per) % per;
+        const env = Math.exp(-ph * 7) * Math.min(1, (c.rhythm.until - t) / 2);
+        out = mix(out, c.rhythm.color, 0.9 * env);
+      }
+      return out;
+    };
+  }
+  const CRYSTAL_FX = { ...FX,
+    charge: (c, m) => { const w = inten(m), col = colOf(m, WHITE); c.chargeColor = c.charge < 0.05 ? col : mix(c.chargeColor, col, w); c.charge = clamp(c.charge + w * 0.6, 0, 1); c.chargeAt = now(); },
+  };
+  // Combo rule (SCHEMA): a hit from a different prop within COMBO_MS of the last one -> two-colour animation
+  const COMBO_MS = 500;
+  function combo(c, colA, colB, w) {
+    c.dev.fire(3.0, (px, t, a) => {
+      const swap = Math.sin(t * 2 * Math.PI * 4) > 0, env = w * (1 - a * a), burst = Math.max(0, 1 - a * 12);
+      px[0].c = mix(px[0].c, swap ? colA : colB, env); px[1].c = mix(px[1].c, swap ? colB : colA, env);
+      for (const p of px) p.c = mix(p.c, WHITE, burst * 0.8);
+    });
+    c.combos = (c.combos || 0) + 1;                                // combo heat: +1 per combo, fades (half-life ~12 s)
+  }
+  function crystalCmd(target, effect, m) {
+    for (const c of crystals) {
+      if (target !== 'crystals' && target !== 'all' && target !== c.id) continue;
+      const fn = CRYSTAL_FX[effect]; if (!fn) continue;
+      fn(effect === 'charge' ? c : c.dev, m);
+      if (m.color && effect !== 'mode') {                        // stain the crystal's idle colour with the prop colour
+        const col = hex(m.color), w = clamp(0.35 + 0.65 * inten(m), 0, 1);
+        c.stain = c.stain && c.stain.w > 0.02 ? { color: mix(c.stain.color, col, w), w: clamp(c.stain.w + w * 0.6, 0, 1) } : { color: col, w: w * 0.8 };
+      }
+      if (m.from && m.color && game.phase === 'play' && game.players[m.from]) {   // paint: energy invested by this player
+        c.paint = c.paint || {}; c.paint[m.from] = (c.paint[m.from] || 0) + inten(m) * (m.paint == null ? 1 : +m.paint);
+      }
+      if (m.from && m.color) {                                   // remember the hit; check for a combo with another prop
+        const t = now(), col = hex(m.color);
+        // rhythm rule: the last 4 hits from the same prop evenly spaced (0.25-2 s apart, each within 15%) lock a tempo
+        c.beats = c.beats || {};
+        const arr = (c.beats[m.from] = (c.beats[m.from] || []).filter((x) => t - x < 8).slice(-3)); arr.push(t);
+        if (arr.length >= 4) {
+          const iv = arr.slice(1).map((x, i) => x - arr[i]), mean = iv.reduce((a, b) => a + b, 0) / iv.length;
+          if (mean >= 0.25 && mean <= 2 && iv.every((x) => Math.abs(x - mean) < 0.15 * mean)) {
+            c.rhythm = { bpm: Math.round(60 / mean), color: col, phase: t, until: t + Math.max(6, mean * 8), from: m.from };
+          }
+        }
+        c.hits = (c.hits || []).filter((h) => t - h.t < COMBO_MS / 1000);
+        if (m.combo !== false) {                                   // combo: false = fixed instruments playing together, never a combo
+          const other = c.hits.find((h) => h.from !== m.from);
+          if (other) { combo(c, other.color, col, Math.max(other.w, inten(m))); c.hits = []; }
+          else c.hits.push({ from: m.from, color: col, w: inten(m), t });
+        }
+      }
+    }
+  }
+  const cryCtx = $('crystals').getContext('2d');
+  function gemPath(ctx, cx, cy, rw, rh) {
+    ctx.beginPath(); ctx.moveTo(cx, cy - rh); ctx.quadraticCurveTo(cx + rw * 1.3, cy - rh * 0.1, cx, cy + rh);
+    ctx.quadraticCurveTo(cx - rw * 1.3, cy - rh * 0.1, cx, cy - rh); ctx.closePath();
+  }
+  let lastCryT = now(), dtFrame = 0;
+  function drawCrystals(t) {
+    dtFrame = Math.min(0.1, t - lastCryT); lastCryT = t;
+    // always one row: shrink the gems to fit, drop the labels when there is no room for them
+    const W = 900, N = crystals.length, cols = N, rows = 1;
+    const cellW = W / cols, k = clamp((cellW - 6) / 84, 0.18, 1), rhK = 95 * k, labels = cellW >= 30, detail = cellW >= 60;
+    const cellH = Math.round(2 * rhK + (labels ? 64 : 24)), H = cellH;
+    const cv = $('crystals'); if (cv.height !== H) cv.height = H;
+    const ctx = cryCtx;
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    crystals.forEach((c, n) => {
+      c.charge *= (t - c.chargeAt > 3) ? 0.9985 : 1;               // holds 3 s after the last spin, then bleeds (~8%/s)
+      if (c.stain) c.stain.w *= Math.pow(0.5, dtFrame / 60);          // stain fades with a 60 s half-life
+      if (c.combos) { c.combos *= Math.pow(0.5, dtFrame / 12); if (c.combos < 0.05) c.combos = 0; }   // combo heat fades
+      c.dev.render(t, crystalIdle(c), game.phase === 'victory');   // victory owns the crystals outright: no overlays, perfect synchrony
+      const [A, B] = c.dev.px.map((p) => p.c);
+      const cx = cellW * (n + 0.5), cy = rhK + (labels ? 18 : 12), rw = 32 * k, rh = rhK;
+      ctx.save();
+      gemPath(ctx, cx, cy, rw, rh); ctx.clip();
+      ctx.fillStyle = '#07070a'; ctx.fillRect(cx - 80, cy - 130, 160, 260);
+      ctx.globalCompositeOperation = 'lighter';
+      for (const [col, ox, oy] of [[A, -11 * k, 26 * k], [B, 11 * k, -26 * k]]) {
+        const g = ctx.createRadialGradient(cx + ox, cy + oy, 2, cx + ox, cy + oy, 92 * k);
+        g.addColorStop(0, css(col, 1)); g.addColorStop(0.45, css(col, 0.55)); g.addColorStop(1, css(col, 0));
+        ctx.fillStyle = g; ctx.fillRect(cx - 80, cy - 130, 160, 260);
+      }
+      ctx.restore();
+      const avg = mix(A, B, 0.5), bright = (avg[0] + avg[1] + avg[2]) / 765;
+      if (bright > 0.05) {
+        const glow = ctx.createRadialGradient(cx, cy, 16 * k, cx, cy, 110 * k);
+        glow.addColorStop(0, css(avg, 0.3 * bright)); glow.addColorStop(1, css(avg, 0));
+        ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = glow; ctx.fillRect(cx - 120, cy - 130, 240, 260);
+        ctx.globalCompositeOperation = 'source-over';
+      }
+      ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.lineWidth = 1; gemPath(ctx, cx, cy, rw, rh); ctx.stroke();
+      ctx.fillStyle = css(A); ctx.beginPath(); ctx.arc(cx - 11 * k, cy + 26 * k, 2.5, 0, 6.283); ctx.fill();
+      ctx.fillStyle = css(B); ctx.beginPath(); ctx.arc(cx + 11 * k, cy - 26 * k, 2.5, 0, 6.283); ctx.fill();
+      if (labels) {
+        ctx.font = (detail ? 10 : 9) + 'px system-ui'; ctx.textAlign = 'center';
+        ctx.fillStyle = '#667'; ctx.fillText(c.id.replace('crystal_', '#'), cx, cy + rh + 14);
+        const r = c.rhythm && t < c.rhythm.until;
+        if (r) { ctx.fillStyle = css(c.rhythm.color); ctx.fillText(`\u266a ${c.rhythm.bpm}`, cx, cy + rh + 26); }
+        else if (c.charge > 0.02) { ctx.fillStyle = '#9ab'; ctx.fillText(`${(c.charge * 100) | 0}%`, cx, cy + rh + 26); }
+        if (c.combos >= 0.1) { ctx.fillStyle = css([255, 212, 0], clamp(0.35 + c.combos / 3, 0.35, 1)); ctx.fillText((detail ? 'combo ' : '') + `x${c.combos.toFixed(1)}`, cx, cy - rh - 6); }
+      }
+    });
+  }
+
+  // ------------------------------------------------------------ SPACE HALLWAY: hexagonal frames in 3D
+  const HL = 16, HH = 8, FRAMES = 5, PX_PER_EDGE = 10;
+  const HEX = [[-6, 4], [-3.4, 8], [3.4, 8], [6, 4], [3.4, 0], [-3.4, 0]];
+  const hallPixels = [];
+  for (let f = 0; f < FRAMES; f++) {
+    const z = (f / (FRAMES - 1)) * HL;
+    for (let e = 0; e < 6; e++) {
+      const [x0, y0] = HEX[e], [x1, y1] = HEX[(e + 1) % 6];
+      for (let i = 0; i < PX_PER_EDGE; i++) { const k = (i + 0.5) / PX_PER_EDGE; hallPixels.push({ x: x0 + (x1 - x0) * k, y: y0 + (y1 - y0) * k, z, f, e, c: [0, 0, 0] }); }
+    }
+  }
+  // longitudinal rails: one strip the full length of the tunnel at each of the 6 vertices
+  const RAIL_PX = 32;
+  for (let e = 0; e < 6; e++) {
+    const [x, y] = HEX[e];
+    for (let i = 0; i < RAIL_PX; i++) { const z = (i + 0.5) / RAIL_PX * HL; hallPixels.push({ x, y, z, f: -1, e, rail: true, c: [0, 0, 0] }); }
+  }
+  const hall = { dev: new Device(hallPixels), speed: 1, speedAt: 0 };
+  $('hallstat').textContent = `${FRAMES} frames x 6 edges x ${PX_PER_EDGE} px + 6 rails x ${RAIL_PX} px = ${hallPixels.length} px`;
+  function vibeHall(name, p, t) {
+    const pal = PALETTES[name] || PALETTES.party, k = p.z / HL, ang = Math.atan2(p.y - HH / 2, p.x);
+    if (pal.ether) {
+      const [e, n] = hallWorld(p.x, p.z);
+      const sc = VP.ethereal.scale, sp = VP.ethereal.speed; const n1 = noise3(e * sc, n * sc + p.y * 0.02, t * sp), n2 = noise3(e * sc * 0.7 + 11, n * sc * 0.7 + 5, t * sp * 0.8);
+      const bright = (audioAlive(t) ? 0.22 + 0.3 * S.bass : 0.12) + 0.25 * (0.5 + 0.5 * n2);
+      return hsv((0.55 + VP.ethereal.span * n1 + 1) % 1, 0.8 + 0.15 * n2, clamp(bright, 0, 1));
+    }
+    if (pal.jump || pal.snake || pal.meteor) { const e = Math.exp(-(t - (hall.jumpLit == null ? -10 : hall.jumpLit)) * 2.2); return hsv(paletteHueOf(pal, t, k * 0.5), pal.sat, clamp(Math.max(0.04, e * (1 - k * 0.3)), 0, 1)); }
+    if (pal.twinkle) { const slot = Math.floor(t * 8), h = Math.sin(p.x * 12.9898 + p.z * 78.233 + p.y * 37.7 + slot * 3.1) * 43758.5453, r = h - Math.floor(h); return r < 0.04 ? WHITE : hsv(paletteHueOf(pal, t, k), pal.sat, 0.05); }
+    if (pal.heart) { const H = VP.heartbeat, per = synced(t) ? 60 / S.bpm * H.beats : H.period, u = (((synced(t) ? (t - S.beatAt) : t % per) - k * 0.08) + per) % per; const env = Math.exp(-u * H.decay) + H.dub * (u > per * 0.22 ? Math.exp(-(u - per * 0.22) * H.decay) : 0); return hsv(paletteHueOf(pal, t, 0.1), pal.sat, clamp(0.06 + 0.8 * env, 0, 1)); }
+    if (pal.aurora) { const A = VP.aurora, [e, n] = hallWorld(p.x, p.z); const n1 = noise3(n * A.scale - t * A.speed, e * 0.012, 0.5), n2 = noise3(n * A.scale * 1.6 - t * A.speed * 0.85 + 7, e * 0.02, 3.1); return hsv(0.33 + 0.47 * clamp(0.5 + 0.6 * n1, 0, 1), 0.85, 0.08 + A.bright * 0.85 * clamp(0.5 + 0.9 * n2, 0, 1)); }
+    const band = S.pulse ? (k < 0.34 ? S.bass : k < 0.67 ? S.mid : S.high) : (S.loudSmooth || 0);   // pulse off: steady level
+    const wave = 0.5 + 0.5 * Math.sin(t * 2 * hall.speed - p.z * 0.5 + ang * 2);
+    let v = audioAlive(t) ? 0.2 + 0.55 * band * wave + 0.3 * beatEnv(t) * (1 - k) : 0.05 + 0.08 * wave;   // near-dark at rest
+    if (pal.wave) v = (audioAlive(t) ? 0.45 : 0.3) * (VP.wave.floor + (1 - VP.wave.floor) * wavePhase(hallWorld(p.x, p.z)[1], t));
+    return hsv(paletteHueOf(pal, t, k * 0.5 + (p.y / HH) * 0.15), pal.sat, clamp(v, 0, 1));
+  }
+  function hallIdle(p, t) {
+    const a = vibeHall(VIBE.cur, p, t), k = fadeK(t);
+    return k < 1 ? mix(vibeHall(VIBE.prev, p, t), a, k) : a;
+  }
+  // Hallway world frame. LAYOUT.hallway = the FRONT-centre (the mouth) in metres E/N; HALL_HEAD = the direction
+  // the tunnel runs (0 = north). Calibration in the field marks the 4 corners; here they come from position+heading+size.
+  let HALL_HEAD = 0;
+  const HW = 12;
+  function hallWorld(x, z) {                                    // tunnel-local (x across, z along) -> metres E/N
+    const h = HALL_HEAD * Math.PI / 180, [fe, fn] = LAYOUT.hallway;
+    return [fe + z * Math.sin(h) + x * Math.cos(h), fn + z * Math.cos(h) - x * Math.sin(h)];
+  }
+  const hallCorners = () => ({ FL: hallWorld(-HW / 2, 0), FR: hallWorld(HW / 2, 0), BR: hallWorld(HW / 2, HL), BL: hallWorld(-HW / 2, HL) });
+  const llToXY = (ll) => [(ll.lon - ORIGIN.lon) * M_PER_DEG_LON, (ll.lat - ORIGIN.lat) * M_PER_DEG_LAT];
+  // per-pixel path coordinate: metres travelled from the point where the wavefront first touches the tunnel.
+  // With an origin: world distance from the origin, minus the nearest pixel's distance (so the wave enters from
+  // the nearest face - front, back, left or right - and travels away from the caster). Without: distance from the mouth.
+  function hallPath(m) {
+    const o = m && m.origin && m.origin.lat != null ? llToXY(m.origin) : null;
+    let dmin = Infinity, dmax = 0; const d = new Map();
+    for (const p of hallPixels) {
+      let v;
+      if (o) { const [e, n] = hallWorld(p.x, p.z); v = Math.hypot(e - o[0], n - o[1]); } else v = p.z;
+      d.set(p, v); if (v < dmin) dmin = v; if (v > dmax) dmax = v;
+    }
+    return { s: (p) => d.get(p) - dmin, smax: dmax - dmin };
+  }
+  const HALL_FX = { ...FX,
+    // a band of colour travelling through the tunnel away from the caster
+    sweep: (d, m) => { const col = colOf(m, WHITE), w = inten(m), sp = (m.speed_mps || 6) * (m.speed || 1), path = hallPath(m); d.fire((path.smax + 6) / sp, (px, t, a) => { const r = a * (path.smax + 6) - 3; for (const p of px) { const k = w * Math.max(0, 1 - Math.abs(path.s(p) - r) / 3); p.c = mix(p.c, col, k); } }); },
+    // expanding front from the caster; intensity = size, brightness, how much colour sticks
+    shockwave: (d, m) => { const it = inten(m), col = colOf(m, WHITE), sp = m.speed_mps || 6, path = hallPath(m); d.fire((path.smax + 8) / sp, (px, t, a) => { const r = a * (path.smax + 8); for (const p of px) { const k = Math.max(0, 1 - Math.abs(path.s(p) - r) / (2.5 + it * 3)) * (1 - a) * (0.4 + it * 0.6); p.c = add(mix(p.c, col, k * it), scale(col, k * 0.6)); } }); },
+    // a bright head with a fading tail, through the tunnel away from the caster
+    comet: (d, m) => { const col = colOf(m, WHITE), w = inten(m), sp = (m.speed_mps || 12), path = hallPath(m); d.fire((path.smax + 10) / sp, (px, t, a) => { const r = a * (path.smax + 10) - 2; for (const p of px) { const b = r - path.s(p); const k = b < -0.6 ? 0 : b < 0.6 ? 1 : Math.max(0, 1 - b / 8); p.c = mix(p.c, k > 0.95 ? WHITE : col, w * k); } }); },
+    // frame-by-frame chase away from the caster
+    rings: (d, m) => { const col = colOf(m, WHITE), w = inten(m), path = hallPath(m), n = m.count || 2; d.fire(m.seconds || 2.5, (px, t, a) => { const r = a * (path.smax + 4) * n % (path.smax + 4); for (const p of px) { const k = Math.max(0, 1 - Math.abs(path.s(p) - r) / 1.6); p.c = mix(p.c, col, w * k); } }); },
+    // fill from the entry face to the far end, hold, then release the same way
+    wipe: (d, m) => { const col = colOf(m, WHITE), w = inten(m), path = hallPath(m), sec = m.seconds || 4; d.fire(sec, (px, t, a) => { const fill = clamp(a / 0.4, 0, 1) * (path.smax + 1), rel = clamp((a - 0.6) / 0.4, 0, 1) * (path.smax + 1); for (const p of px) { const sP = path.s(p); const k = sP < fill && sP >= rel ? 1 : 0; p.c = mix(p.c, col, w * k); } }); },
+    // hyperspace: stripes racing along the path, accelerating
+    warp: (d, m) => { const col = colOf(m, WHITE), w = inten(m), path = hallPath(m), sec = m.seconds || 3; d.fire(sec, (px, t, a) => { const v = 6 + 40 * a * a, ph = (a * sec) * v; for (const p of px) { const k = Math.pow(0.5 + 0.5 * Math.sin((path.s(p) - ph) * 1.6), 4) * (1 - Math.pow(a, 3)); p.c = mix(p.c, col, w * k); } }); },
+    // a helix rotating around the tunnel axis while flowing along it
+    spiral: (d, m) => { const col = colOf(m, WHITE), w = inten(m), sec = m.seconds || 3, dir = m.spin_dir === -1 ? -1 : 1; d.fire(sec, (px, t, a) => { for (const p of px) { const ang = Math.atan2(p.y - HH / 2, p.x); const k = Math.pow(0.5 + 0.5 * Math.cos(2 * ang * dir + p.z * 0.8 - a * sec * 8), 3) * (1 - a); p.c = mix(p.c, col, w * k); } }); },
+    // random twinkles in the colour
+    rain: (d, m) => { const col = colOf(m, WHITE), w = inten(m), sec = m.seconds || 4, seed = Math.floor(Math.random() * 1e6); d.fire(sec, (px, t, a) => { const slot = Math.floor(t * 10); px.forEach((p, i) => { const h = Math.sin(seed + i * 12.9898 + slot * 78.233) * 43758.5453; const k = (h - Math.floor(h)) < 0.08 ? 1 : 0; p.c = mix(p.c, k ? WHITE : col, w * (k ? 0.9 : 0.15) * (1 - a)); }); }); },
+    // whole tunnel breathing in the colour
+    breathe: (d, m) => { const col = colOf(m, WHITE), w = inten(m), sec = m.seconds || 3; d.fire(sec, (px, t, a) => { const k = Math.pow(Math.sin(Math.PI * Math.min(1, a * sec / Math.min(sec, 2.5) % 1)), 2) * (1 - a * 0.5); for (const p of px) p.c = mix(p.c, col, w * k); }); },
+    speed: (d, m) => { hall.speed = clamp(1 + (m.value || 0), 0.1, 8); hall.speedAt = now(); },
+  };
+  function hallCmd(effect, m) { const fn = HALL_FX[effect]; if (fn) fn(hall.dev, m); }
+  const hallCornersList = () => Object.values(hallCorners());
+  const hallCtx = $('hall').getContext('2d');
+  const CAM = { x: 0, y: 4.2, z: -9.5, f: 390 };
+  const proj = (p) => { const dz = p.z - CAM.z; return [360 + CAM.f * (p.x - CAM.x) / dz, 232 - CAM.f * (p.y - CAM.y) / dz]; };
+  const edgeAvg = (f, e) => { const ps = hallPixels.filter((p) => p.f === f && p.e === e && !p.rail); return ps.reduce((a, p) => add(a, scale(p.c, 1 / ps.length)), [0, 0, 0]); };
+  function drawHall(t) {
+    const W = 720, H = 440, ctx = hallCtx;
+    if (hall.speedAt && t - hall.speedAt > 3) hall.speed += (1 - hall.speed) * 0.02;
+    hall.dev.render(t, hallIdle);
+    if (!recording && !$('hall').offsetParent) return;           // not on screen: still simulate, skip the drawing
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    for (let f = FRAMES - 2; f >= 0; f--) {
+      const z0 = (f / (FRAMES - 1)) * HL, z1 = ((f + 1) / (FRAMES - 1)) * HL;
+      for (const e of [0, 1, 3, 4]) {
+        const col = mix(edgeAvg(f, e), edgeAvg(f + 1, e), 0.5);
+        const [xa, ya] = HEX[e], [xb, yb] = HEX[(e + 1) % 6];
+        const q = [proj({ x: xa, y: ya, z: z0 }), proj({ x: xb, y: yb, z: z0 }), proj({ x: xb, y: yb, z: z1 }), proj({ x: xa, y: ya, z: z1 })];
+        ctx.fillStyle = css(col, 0.22); ctx.beginPath(); ctx.moveTo(q[0][0], q[0][1]); for (const v of q.slice(1)) ctx.lineTo(v[0], v[1]); ctx.closePath(); ctx.fill();
+      }
+    }
+    // rails: each pixel is a short segment along z at its vertex
+    for (const p of hallPixels) {
+      if (!p.rail) continue;
+      const dz = HL / RAIL_PX / 2, a = proj({ x: p.x, y: p.y, z: p.z - dz }), b = proj({ x: p.x, y: p.y, z: p.z + dz });
+      const lw = Math.max(1, 0.1 * CAM.f / (p.z - CAM.z));
+      ctx.strokeStyle = css(p.c, 0.35); ctx.lineWidth = lw * 3; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+      ctx.strokeStyle = css(p.c); ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    }
+    for (let f = FRAMES - 1; f >= 0; f--) {
+      const zf = (f / (FRAMES - 1)) * HL, sc = CAM.f / (zf - CAM.z), lw = Math.max(1.5, 0.12 * sc);
+      ctx.strokeStyle = 'rgba(160,160,175,0.25)'; ctx.lineWidth = Math.max(2, 0.28 * sc); ctx.lineJoin = 'round';
+      ctx.beginPath(); HEX.forEach(([x, y], i) => { const [sx, sy] = proj({ x, y, z: zf }); i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy); }); ctx.closePath(); ctx.stroke();
+      for (const p of hallPixels) {
+        if (p.f !== f || p.rail) continue;
+        const [x0, y0] = HEX[p.e], [x1, y1] = HEX[(p.e + 1) % 6], dx = (x1 - x0) / PX_PER_EDGE / 2, dy = (y1 - y0) / PX_PER_EDGE / 2;
+        const a = proj({ x: p.x - dx, y: p.y - dy, z: zf }), b = proj({ x: p.x + dx, y: p.y + dy, z: zf });
+        ctx.strokeStyle = css(p.c, 0.35); ctx.lineWidth = lw * 3; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+        ctx.strokeStyle = css(p.c); ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+      }
+    }
+    ctx.fillStyle = '#667'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText(`speed x${hall.speed.toFixed(1)}   palette ${S.mode}   camera at the mouth, tunnel heading ${Math.round(HALL_HEAD)}\u00b0   effects enter from the face nearest the caster`, 10, H - 10);
+  }
+
+  // ------------------------------------------------------------ moving vibes: sparks (jumping), snake, twinkle, meteor
+  const SPARK_HUES = [0.02, 0.35, 0.68];                             // three sparks, three colours, drifting as they collide
+  const jump = { sparks: SPARK_HUES.map((h, i) => ({ at: null, prev: null, hue: h, id: i })), since: -10, beatN: -1, collisions: 0 };
+  const nearestFrom = (here, exclude, n) => crystals.filter((c) => !exclude.includes(c.id)).map((c) => ({ id: c.id, d: Math.hypot(LAYOUT[c.id][0] - here[0], LAYOUT[c.id][1] - here[1]) })).sort((x, y) => x.d - y.d).slice(0, n);
+  // hop timing: synced -> every `beats` beats (fractions = subdivisions, phase-locked to the beat); else every `every` s
+  const hopDue = (t, state, every, beats = 1) => {
+    let due;
+    if (synced(t)) { if (beats >= 1) due = S.beatN - (state.beatN < 0 ? -beats : state.beatN) >= beats; else { const per = 60 / S.bpm * beats; due = t - state.since >= per - 0.01; } }
+    else due = t - state.since >= every;
+    if (due) { state.beatN = S.beatN; state.since = t; } return due;
+  };
+  const hueToHex = (h) => '#' + hsv(h, 1, 1).map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+  function leapThroughHall(t, here, hue) { hall.jumpLit = t; hallCmd('sweep', { color: hueToHex(hue), intensity: 0.9, speed_mps: 40, origin: toLL(here[0], here[1]) }); }
+  function jumpStep(t) {
+    if (!(PALETTES[VIBE.cur] && PALETTES[VIBE.cur].jump) || !crystals.length || !hopDue(t, jump, VP.jumping.hop, VP.jumping.beats)) return;
+    while (jump.sparks.length < VP.jumping.sparks) jump.sparks.push({ at: null, prev: null, hue: (jump.sparks.length * 0.29 + 0.02) % 1, id: jump.sparks.length });
+    if (jump.sparks.length > VP.jumping.sparks) jump.sparks.length = VP.jumping.sparks;
+    for (const sp of jump.sparks) {
+      const here = sp.at && LAYOUT[sp.at] ? LAYOUT[sp.at] : LAYOUT[crystals[Math.floor(Math.random() * crystals.length)].id];
+      const hallD = Math.hypot(LAYOUT.hallway[0] - here[0], LAYOUT.hallway[1] + 8 - here[1]);
+      let next;
+      if (sp.at !== 'hallway' && hallD < 25 && Math.random() < VP.jumping.hall) next = 'hallway';
+      else { const cand = nearestFrom(here, [sp.at, sp.prev], 3); next = (cand[Math.floor(Math.random() * cand.length)] || cand[0] || { id: crystals[0].id }).id; }
+      sp.prev = sp.at; sp.at = next;
+      if (next === 'hallway') leapThroughHall(t, here, sp.hue);
+      else { const c = crystals.find((k) => k.id === next); if (c) { c.jumpHits = ((c.jumpHits || []).concat([{ t, hue: sp.hue }])).slice(-3); } }
+    }
+    // collisions: two sparks on the same crystal (or within 6 m) burn each other's hue: both rotate forward on the
+    // colour wheel and pull a third of the way toward each other; the crystal flashes white
+    for (let i = 0; i < jump.sparks.length; i++) for (let j = i + 1; j < jump.sparks.length; j++) {
+      const a = jump.sparks[i], b = jump.sparks[j]; if (!LAYOUT[a.at] || !LAYOUT[b.at]) continue;
+      const d = Math.hypot(LAYOUT[a.at][0] - LAYOUT[b.at][0], LAYOUT[a.at][1] - LAYOUT[b.at][1]);
+      if (a.at === b.at || d < VP.jumping.collide) {
+        const diff = ((b.hue - a.hue + 1.5) % 1) - 0.5;
+        a.hue = (a.hue + 0.08 + diff / 3 + 1) % 1; b.hue = (b.hue + 0.08 - diff / 3 + 1) % 1; jump.collisions++;
+        for (const id of [a.at, b.at]) { const c = crystals.find((k) => k.id === id); if (c) c.jumpFlash = t; }
+      }
+    }
+  }
+  const snake = { body: [], len: 7, since: -10, beatN: -1 };
+  function snakeStep(t) {
+    if (!(PALETTES[VIBE.cur] && PALETTES[VIBE.cur].snake) || !crystals.length || !hopDue(t, snake, VP.snake.step, VP.snake.beats)) return;
+    snake.len = VP.snake.length;
+    const head = snake.body[0], here = head && LAYOUT[head] ? LAYOUT[head] : LAYOUT[crystals[0].id];
+    let cand = nearestFrom(here, snake.body, 3); if (!cand.length) cand = nearestFrom(here, [head], 3);
+    const next = cand[Math.floor(Math.random() * cand.length)].id;
+    snake.body.unshift(next);
+    while (snake.body.length > snake.len) { const gone = snake.body.pop(); const c = crystals.find((k) => k.id === gone); if (c) c.snakeLeft = t; }
+    const hallD = Math.hypot(LAYOUT.hallway[0] - LAYOUT[next][0], LAYOUT.hallway[1] + 8 - LAYOUT[next][1]);
+    if (hallD < 14 && Math.random() < 0.3) leapThroughHall(t, LAYOUT[next], paletteHueOf(PALETTES.snake, t, 0));
+  }
+  function twinkleStep(t, dt) {
+    if (!(PALETTES[VIBE.cur] && PALETTES[VIBE.cur].twinkle)) return;
+    for (const c of crystals) { c.twinkleAt = c.twinkleAt || [-10, -10]; for (let i = 0; i < 2; i++) if (Math.random() < dt * VP.twinkle.rate) c.twinkleAt[i] = t; }
+  }
+  const meteor = { active: null, next: 0 };
+  function meteorStep(t, dt) {
+    if (!(PALETTES[VIBE.cur] && PALETTES[VIBE.cur].meteor)) return;
+    if (!meteor.active && t >= meteor.next) {                       // spawn from a random edge, heading across camp
+      const ang = Math.random() * 2 * Math.PI, cx = 0, cy = 14, R = 45;
+      const x0 = cx + R * Math.cos(ang), y0 = cy + R * Math.sin(ang), aim = ang + Math.PI + (Math.random() - 0.5) * 0.8;
+      meteor.active = { x: x0, y: y0, dx: Math.cos(aim), dy: Math.sin(aim), speed: VP.meteor.speed * (0.8 + Math.random() * 0.4), t0: t, hallHit: false };
+    }
+    const m = meteor.active; if (!m) return;
+    m.x += m.dx * m.speed * dt; m.y += m.dy * m.speed * dt;
+    for (const c of crystals) { const p = LAYOUT[c.id]; if (Math.hypot(p[0] - m.x, p[1] - m.y) < VP.meteor.radius) c.meteorLit = t; }
+    if (!m.hallHit && Math.hypot(LAYOUT.hallway[0] - m.x, LAYOUT.hallway[1] + 8 - m.y) < 12) { m.hallHit = true; leapThroughHall(t, [m.x, m.y], 0.58); }
+    if (t - m.t0 > 6 || Math.hypot(m.x, m.y - 14) > 60) { meteor.active = null; meteor.next = t + VP.meteor.every * (0.5 + Math.random()); }
+  }
+  function vibeStep(t, dt) { jumpStep(t); snakeStep(t); twinkleStep(t, dt); meteorStep(t, dt); }
+
+  // ------------------------------------------------------------ CAMP MAP + PROPAGATION (interactive)
+  // Camp origin: where this metre grid sits in the world. The default is Virginia Key;
+  // retained `config/origin` (set from the GPS page, standing in camp with a real fix)
+  // overrides it. Only the anchor moves - every node keeps its metres, so the camp layout
+  // is unchanged and simply lands somewhere real.
+  const DEFAULT_ORIGIN = { lat: 25.7367, lon: -80.1548 };
+  let ORIGIN = { ...DEFAULT_ORIGIN };
+  const M_PER_DEG_LAT = 111320;
+  let M_PER_DEG_LON = 111320 * Math.cos(ORIGIN.lat * Math.PI / 180);
+  function setOrigin(o) {
+    if (typeof o?.lat !== 'number' || typeof o?.lon !== 'number') return;
+    ORIGIN = { lat: o.lat, lon: o.lon };
+    M_PER_DEG_LON = 111320 * Math.cos(ORIGIN.lat * Math.PI / 180);
+  }
+  const toLL = (e, n) => ({ lat: ORIGIN.lat + n / M_PER_DEG_LAT, lon: ORIGIN.lon + e / M_PER_DEG_LON });
+  const distM = (a, b) => Math.hypot((b.lon - a.lon) * M_PER_DEG_LON, (b.lat - a.lat) * M_PER_DEG_LAT);
+  const DEFAULT_LAYOUT = { hallway: [0, 0], kitchen_bell: [-16, 10], display_entrance: [-4, -3], resolume: [4, 22], mycelium_01: [20, -4], geode_01: [27, 6], plant_01: [14, -12], tubes_01: [24, -14] };
+  const INST_ICON = { mycelium_01: '\u{1F344}', geode_01: '\u{1F48E}', plant_01: '\u{1F33F}', tubes_01: '\u{1F4A7}' };   // fixed instruments: their map position is what their hits carry as origin
+  const DEFAULT_COUNT = 20;
+  // Handheld props. Each has a position, heading (IMU compass), colour and intensity; gestures come from mappings.yaml.
+  const PROP_DEFS = {
+    staff: { id: 'staff_01',   label: 'Staff', color: '#ff4000', pos: [-14, 12], heading: 45,  gestures: [['slam', 'circle: shockwave + flash'], ['spin', 'spiral: charge sweeps around'], ['swing', 'cone 70\u00b0: tint']], cone: 70, spin: true, main: ['slam', 6] },
+    wand:  { id: 'wand_01',  label: 'Wand',  color: '#00c8ff', pos: [12, 8],   heading: 300, gestures: [['flick', 'bolt: cone 25\u00b0, fast, far'], ['circle', 'orb: pulse within 18 m']], cone: 25, spin: false, main: ['flick', 14] },
+    whip:  { id: 'whip_01',  label: 'Whip',  color: '#ff2d95', pos: [-22, 26], heading: 120, gestures: [['crack', 'needle: cone 12\u00b0 at 30 m/s, far'], ['lash', 'arc: cone 140\u00b0 within 25 m']], cone: 12, spin: false, main: ['crack', 30] },
+    drum:  { id: 'drum_01',  label: 'Drum',  color: '#ffd400', pos: [0, 30],   heading: 180, gestures: [['hit', 'heavy wave: 4 m/s, 90 m'], ['roll', 'steady charge within 40 m']], cone: 0, spin: false, main: ['hit', 4] },
+  };
+  const defaultProps = () => Object.fromEntries(Object.entries(PROP_DEFS).map(([k, d]) => [k, { pos: d.pos.slice(), heading: d.heading, color: d.color, intensity: 0.8, spin: 1 }]));
+  let PROPS = defaultProps();
+  let ACTIVE = 'staff';
+  const active = () => PROPS[ACTIVE];
+  // default crystal positions: a golden-angle spiral around the middle of camp, so any count spreads out evenly
+  const defaultCrystalPos = (i) => { const a = i * 2.39996, r = 7 + 5.2 * Math.sqrt(i); return [Math.round(r * Math.cos(a) * 2) / 2, Math.round((14 + r * Math.sin(a)) * 2) / 2]; };
+  const LS = 'campbus.sim.layout.v3';
+  let LAYOUT, STAFF;
+  function loadLayout() {
+    try { const d = JSON.parse(localStorage.getItem(LS) || 'null'); if (d && d.nodes && d.props) { LAYOUT = { ...JSON.parse(JSON.stringify(DEFAULT_LAYOUT)), ...d.nodes }; PROPS = { ...defaultProps(), ...d.props }; if (d.hallHeading != null) HALL_HEAD = d.hallHeading; return d.count || DEFAULT_COUNT; } } catch (e) {}
+    LAYOUT = JSON.parse(JSON.stringify(DEFAULT_LAYOUT)); PROPS = defaultProps(); return DEFAULT_COUNT;
+  }
+  function saveLayout() { try { localStorage.setItem(LS, JSON.stringify({ nodes: LAYOUT, props: PROPS, count: crystals.length, hallHeading: HALL_HEAD })); } catch (e) {} }
+  function setCrystalCount(n) {
+    n = clamp(Math.round(n) || 1, 1, 60);
+    while (crystals.length > n) { delete LAYOUT[crystals.pop().id]; }
+    while (crystals.length < n) { const i = crystals.length; crystals.push(makeCrystal(i, n)); if (!LAYOUT[cryId(i)]) LAYOUT[cryId(i)] = defaultCrystalPos(i); }
+    $('ncry').value = n; saveLayout();
+  }
+  setCrystalCount(loadLayout());
+  $('ncry').addEventListener('change', (e) => setCrystalCount(+e.target.value));
+  $('resetlayout').addEventListener('click', () => { LAYOUT = JSON.parse(JSON.stringify(DEFAULT_LAYOUT)); PROPS = defaultProps(); HALL_HEAD = 0; const n = crystals.length; crystals.length = 0; setCrystalCount(n); syncPanel(); });
+  const posOf = (id) => LAYOUT[id] ? toLL(LAYOUT[id][0], LAYOUT[id][1]) : null;
+  // fixed instruments learn their position from the bus (map/<node_id>, retained) - the sim map stands in for calibration
+  const pubMap = (id) => { const ll = posOf(id); if (ll) pub(`map/${id}`, { lat: ll.lat, lon: ll.lon, acc_m: 2 }, true); };
+  const propLL = (p) => toLL(p.pos[0], p.pos[1]);
+  const DEFAULT_SPEED = 6;
+  let lastSpeed = DEFAULT_SPEED;
+  const casts = [];
+  const DEFAULT_RANGE = 60, DEFAULT_CONE = 70, DEFAULT_TURN_S = 2;
+  const bearingDeg = (a, b) => (Math.atan2((b.lon - a.lon) * M_PER_DEG_LON, (b.lat - a.lat) * M_PER_DEG_LAT) * 180 / Math.PI + 360) % 360;
+  const wrap180 = (d) => ((d + 540) % 360) - 180;
+  const shapeOf = (m) => m.shape || 'circle';
+  function delayFor(id, m) {
+    const o = m.origin, p = posOf(id); if (!o || o.lat == null || o.lon == null || !p) return 0;
+    if (id === 'hallway' && shapeOf(m) !== 'spiral') { const oxy = llToXY(o); const dmin = Math.min(...hallCornersList().map(([e, n]) => Math.hypot(e - oxy[0], n - oxy[1]))); return dmin / (m.speed_mps || DEFAULT_SPEED); }
+    if (shapeOf(m) === 'spiral' && m.heading != null) {          // radar sweep: rotation only, no distance term
+      const a = wrap180(bearingDeg(o, p) - m.heading), dir = m.spin_dir === -1 ? -1 : 1;
+      return (((dir * a) % 360) + 360) % 360 / 360 * (m.turn_s || DEFAULT_TURN_S);
+    }
+    return distM(o, p) / (m.speed_mps || DEFAULT_SPEED);
+  }
+  // falloff: intensity fades linearly to 0 at range_m, unless the cast is perfect (intensity >= 1)
+  function falloff(d, m) { if (inten(m) >= 1 || m.falloff === 'none') return 1; return 1 - 0.6 * Math.min(1, d / (m.range_m || DEFAULT_RANGE)); }   // gentle: 40% floor
+  function angular(o, p, m) {                                     // cast-shape factor for a node, 0 = untouched
+    if (shapeOf(m) !== 'cone' || m.heading == null) return 1;
+    const half = (m.cone_deg || DEFAULT_CONE) / 2, a = wrap180(bearingDeg(o, p) - m.heading);
+    if (Math.abs(a) > half) return 0;
+    return 0.3 + 0.7 * Math.cos(Math.PI / 2 * a / half);
+  }
+  // Extended nodes (the hallway) are tested against their whole footprint - corners, centre and the centre
+  // line - not a single point, so a narrow cone aimed through the middle of the tunnel still counts.
+  function hallSamples() {
+    const pts = [];
+    for (let z = 0; z <= HL; z += HL / 4) for (const x of [-HW / 2, 0, HW / 2]) pts.push(hallWorld(x, z));
+    return pts.map(([e, n]) => toLL(e, n));
+  }
+  function atNode(id, m) {
+    const o = m.origin; if (!o || o.lat == null || o.lon == null) return m;
+    const pts = id === 'hallway' ? hallSamples() : (posOf(id) ? [posOf(id)] : []); if (!pts.length) return m;
+    let best = 0;
+    for (const p of pts) {
+      const dist = distM(o, p); if (m.cutoff_m && dist > +m.cutoff_m) continue;      // hard cutoff (local effects)
+      best = Math.max(best, falloff(dist, m) * angular(o, p, m));
+    }
+    if (best <= 0.02) return null;                                                     // out of range / outside the cone everywhere
+    return { ...m, intensity: inten(m) * best };
+  }
+  function noteCast(m, hits) {
+    if (!(m.origin && m.origin.lat != null)) return;
+    if (casts.length > 200) casts.splice(0, casts.length - 200);        // a hidden tab draws no frames to retire them
+    if (m.instant) { casts.push({ origin: m.origin, start: now(), instant: true, color: colOf(m, WHITE), hits: hits || [], range: hits && hits.length ? Math.max(...hits.map((p) => distM(m.origin, p))) : 6 }); return; }
+    { lastSpeed = m.speed_mps || DEFAULT_SPEED; casts.push({ origin: m.origin, start: now(), speed: lastSpeed, color: colOf(m, WHITE), perfect: inten(m) >= 1, range: m.range_m || DEFAULT_RANGE, shape: shapeOf(m), heading: m.heading, cone: m.cone_deg || DEFAULT_CONE, dir: m.spin_dir === -1 ? -1 : 1, turn: m.turn_s || DEFAULT_TURN_S }); } }
+
+  const MW = 900, MH = 480, SC = 8, MCX = 440, MCY = 400;
+  const mToPx = (e, n) => [MCX + e * SC, MCY - n * SC];
+  const pxToM = (x, y) => [(x - MCX) / SC, (MCY - y) / SC];
+  const llToPx = (ll) => mToPx((ll.lon - ORIGIN.lon) * M_PER_DEG_LON, (ll.lat - ORIGIN.lat) * M_PER_DEG_LAT);
+  const mapCtx = $('map').getContext('2d');
+  function drawMap(t) {
+    const ctx = mapCtx;
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, MW, MH);
+    ctx.strokeStyle = '#1a1a22'; ctx.lineWidth = 1;
+    for (let g = -50; g <= 60; g += 10) { const [x, y] = mToPx(g, g); ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MH); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MW, y); ctx.stroke(); }
+    for (let i = casts.length - 1; i >= 0; i--) {
+      const c = casts[i], age = t - c.start;
+      if (c.instant) {                                              // no ripple: a flash at the origin with spokes to the crystals it hit, fading fast
+        if (age > 0.6) { casts.splice(i, 1); continue; }
+        const [x, y] = llToPx(c.origin), a = 1 - age / 0.6; ctx.strokeStyle = css(c.color, a * 0.9); ctx.lineWidth = 2;
+        for (const p of c.hits) { const [hx, hy] = llToPx(p); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(hx, hy); ctx.stroke(); }
+        ctx.fillStyle = css(c.color, a * 0.25); ctx.beginPath(); ctx.arc(x, y, (c.range + 2) * SC, 0, 6.283); ctx.fill();
+        continue;
+      }
+      const r = age * c.speed, lim = c.perfect || c.shape === 'spiral' ? 70 : c.range; if (c.shape === 'spiral' ? age > c.turn : r > lim) { casts.splice(i, 1); continue; }
+      const [x, y] = llToPx(c.origin), alpha = Math.max(0, 1 - r / (lim * 1.3)); ctx.strokeStyle = css(c.color, alpha); ctx.lineWidth = c.perfect ? 3 : 2;
+      const rad = (deg) => (deg - 90) * Math.PI / 180;                 // canvas angle: 0 = east; our heading: 0 = north (up)
+      if (c.shape === 'cone' && c.heading != null) {
+        const h = c.cone / 2; ctx.beginPath(); ctx.arc(x, y, r * SC, rad(c.heading - h), rad(c.heading + h)); ctx.stroke();
+        ctx.fillStyle = css(c.color, alpha * 0.12); ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, r * SC, rad(c.heading - h), rad(c.heading + h)); ctx.closePath(); ctx.fill();
+      } else if (c.shape === 'spiral' && c.heading != null) {
+        const sweep = c.heading + c.dir * 360 * (age / c.turn);
+        ctx.strokeStyle = css(c.color, 0.9); ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(rad(sweep)) * lim * SC, y + Math.sin(rad(sweep)) * lim * SC); ctx.stroke();
+      } else { ctx.beginPath(); ctx.arc(x, y, r * SC, 0, 6.283); ctx.stroke(); }
+    }
+    { const C = hallCorners(), col = edgeAvg(0, 0), pts = ['FL', 'FR', 'BR', 'BL'].map((k) => mToPx(...C[k]));
+      ctx.fillStyle = css(col, 0.25); ctx.strokeStyle = css(col, 0.9); ctx.lineWidth = 2;
+      ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); ctx.fill(); ctx.stroke();
+      // front face highlighted, corner labels (what calibration marks), rotate handle at the back
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(...pts[0]); ctx.lineTo(...pts[1]); ctx.stroke();
+      ctx.fillStyle = '#9ab'; ctx.font = '9px system-ui'; ctx.textAlign = 'center';
+      ['FL', 'FR', 'BR', 'BL'].forEach((k, i) => { ctx.beginPath(); ctx.arc(pts[i][0], pts[i][1], 3, 0, 6.283); ctx.fill(); ctx.fillText(k, pts[i][0], pts[i][1] - 6); });
+      const fm = mToPx(...hallWorld(0, 0)), bm = mToPx(...hallWorld(0, HL));
+      ctx.fillStyle = '#eef'; ctx.font = 'bold 9px system-ui'; ctx.fillText('FRONT', fm[0], fm[1] + 12);
+      ctx.fillStyle = '#ffd400'; ctx.beginPath(); ctx.arc(bm[0], bm[1], 6, 0, 6.283); ctx.fill(); ctx.fillStyle = '#332'; ctx.fillText('\u21bb', bm[0], bm[1] + 3);
+      ctx.fillStyle = '#889'; ctx.font = '9px system-ui'; ctx.fillText(`heading ${Math.round(HALL_HEAD)}\u00b0 - drag the yellow handle to rotate`, bm[0], bm[1] - 10); }
+    const colourOf = (id) => { const c = crystals.find((k) => k.id === id); if (c) return mix(c.dev.px[0].c, c.dev.px[1].c, 0.5); if (id === 'hallway') return edgeAvg(0, 0); return [120, 120, 140]; };
+    const gps = $('gpsfix').checked, sll = propLL(active());
+    for (const id of Object.keys(LAYOUT)) {
+      const [x, y] = mToPx(...LAYOUT[id]), col = colourOf(id), big = id === 'hallway', isCry = id.startsWith('crystal_');
+      ctx.fillStyle = css(col, 0.35); ctx.beginPath(); ctx.arc(x, y, big ? 14 : isCry ? 13 : 9, 0, 6.283); ctx.fill();
+      ctx.fillStyle = isCry ? css(mix(col, [40, 40, 50], 0.0)) : css(col); ctx.beginPath(); ctx.arc(x, y, big ? 6 : isCry ? 6 : 4, 0, 6.283); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, big ? 6 : isCry ? 6 : 4, 0, 6.283); ctx.stroke();
+      if (INST_ICON[id]) { ctx.font = '16px system-ui'; ctx.textAlign = 'center'; ctx.fillText(INST_ICON[id], x, y + 6); }
+      ctx.fillStyle = '#aab'; ctx.font = '10px system-ui'; ctx.textAlign = 'center'; ctx.fillText(isCry ? id.replace('crystal_', '#') : INST_ICON[id] ? id.replace('_01', '') : id, x, y + 22);
+      if (gps && !isCry) { const d = distM(sll, posOf(id)), iv = +$('intensity').value, eff = iv >= 1 ? 1 : iv * (1 - 0.6 * Math.min(1, d / DEFAULT_RANGE)); ctx.fillStyle = '#667'; ctx.fillText(`${d.toFixed(0)} m / ${(d / lastSpeed).toFixed(1)} s / ${(eff * 100).toFixed(0)}%`, x, y + 33); }
+    }
+    // meteor streak
+    if (meteor.active) { const m = meteor.active, [x, y] = mToPx(m.x, m.y), [x2, y2] = mToPx(m.x - m.dx * 8, m.y - m.dy * 8); const g = ctx.createLinearGradient(x, y, x2, y2); g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(1, 'rgba(120,160,255,0)'); ctx.strokeStyle = g; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x2, y2); ctx.stroke(); }
+    for (const [k, p] of Object.entries(PROPS)) {
+      const d = PROP_DEFS[k], isA = k === ACTIVE, [x, y] = mToPx(...p.pos), th = (p.heading - 90) * Math.PI / 180, pc = hex(p.color);
+      if (isA && d.cone) {                                     // cone preview for the active prop
+        ctx.fillStyle = css(pc, 0.07); ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, DEFAULT_RANGE * SC, th - d.cone / 2 * Math.PI / 180, th + d.cone / 2 * Math.PI / 180); ctx.closePath(); ctx.fill();
+      }
+      ctx.strokeStyle = css(pc, isA ? 0.7 : 0.35); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(th) * 26, y + Math.sin(th) * 26); ctx.stroke();
+      ctx.save(); ctx.translate(x, y); ctx.rotate(th + Math.PI / 2); ctx.fillStyle = gps || !isA ? p.color : '#444';
+      if (k === 'drum') { ctx.beginPath(); ctx.arc(0, 0, 9, 0, 6.283); ctx.fill(); }
+      else if (k === 'whip') { ctx.lineWidth = 3; ctx.strokeStyle = p.color; ctx.beginPath(); ctx.moveTo(-6, 8); ctx.quadraticCurveTo(8, 4, -2, -4); ctx.quadraticCurveTo(-8, -9, 2, -12); ctx.stroke(); ctx.beginPath(); ctx.arc(-6, 8, 3, 0, 6.283); ctx.fill(); }
+      else if (k === 'wand') { ctx.beginPath(); ctx.moveTo(0, -11); ctx.lineTo(5, 6); ctx.lineTo(-5, 6); ctx.closePath(); ctx.fill(); }
+      else { ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(10, 8); ctx.lineTo(0, 4); ctx.lineTo(-10, 8); ctx.closePath(); ctx.fill(); }
+      ctx.strokeStyle = isA ? '#fff' : '#888'; ctx.lineWidth = isA ? 1.5 : 1; ctx.stroke(); ctx.restore();
+      ctx.fillStyle = isA ? '#eef' : '#99a'; ctx.font = (isA ? 'bold ' : '') + '10px system-ui'; ctx.textAlign = 'center';
+      ctx.fillText(`${d.label.toLowerCase()} ${Math.round(p.heading)}\u00b0`, x, y - 17);
+    }
+    ctx.fillStyle = '#667'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText(`10 m grid, north up. Drag anything. Ripple ${lastSpeed} m/s.`, 10, MH - 8);
+    $('staffwhere').textContent = gps ? `at ${active().pos[0].toFixed(0)} E, ${active().pos[1].toFixed(0)} N` : 'no position';
+  }
+  { const cv = $('map'); let drag = null;
+    const canvasXY = (ev) => { const r = cv.getBoundingClientRect(); return [(ev.clientX - r.left) * MW / r.width, (ev.clientY - r.top) * MH / r.height]; };
+    const hit = (x, y) => {
+      { const [bx, by] = mToPx(...hallWorld(0, HL)); if (Math.hypot(x - bx, y - by) < 12) return 'hallrot'; }
+      for (const k of Object.keys(PROPS)) { const [sx, sy] = mToPx(...PROPS[k].pos); if (Math.hypot(x - sx, y - sy) < 16) return 'prop:' + k; }
+      for (const id of Object.keys(LAYOUT)) { const [nx, ny] = mToPx(...LAYOUT[id]); if (Math.hypot(x - nx, y - ny) < 16) return id; }
+      return null;
+    };
+    cv.addEventListener('pointerdown', (ev) => { ev.preventDefault(); const [x, y] = canvasXY(ev); drag = hit(x, y); if (drag) { try { cv.setPointerCapture(ev.pointerId); } catch (e) {} cv.style.cursor = 'grabbing'; } });
+    cv.addEventListener('pointermove', (ev) => {
+      const [x, y] = canvasXY(ev);
+      if (!drag) { cv.style.cursor = hit(x, y) ? 'grab' : 'default'; return; }
+      const [e, n] = drag === 'hallrot' ? pxToM(x, y) : pxToM(x, y).map((v) => Math.round(v * 2) / 2);
+      if (drag === 'hallrot') { const [fe, fn] = LAYOUT.hallway; HALL_HEAD = Math.round((Math.atan2(e - fe, n - fn) * 180 / Math.PI + 360) % 360); }
+      else if (drag.startsWith('prop:')) { PROPS[drag.slice(5)].pos = [e, n]; if (drag.slice(5) !== ACTIVE) setActive(drag.slice(5)); } else LAYOUT[drag] = [e, n];
+    });
+    const up = () => { if (drag) { saveLayout(); if (INST_ICON[drag]) pubMap(drag); drag = null; cv.style.cursor = 'grab'; } };
+    cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  }
+
+  // ------------------------------------------------------------ DISPLAY / RESOLUME / BELL
+  function setDJ(m) {
+    $('tvartist').textContent = m.artist || '(booth empty)';
+    $('tvmeta').textContent = m.artist ? `since ${new Date(m.since).toLocaleTimeString()}${m.timer_end ? ' - ends ' + new Date(m.timer_end).toLocaleTimeString() : ''}` : '';
+  }
+  function setBanner(m) {
+    const tv = $('tv'); clearTimeout(setBanner.timer);
+    if (m.text) { $('tvbanner').textContent = m.text; tv.classList.add('takeover'); setBanner.timer = setTimeout(() => tv.classList.remove('takeover'), m.until ? Math.max(0, m.until - Date.now()) : 45000); }
+    else tv.classList.remove('takeover');
+  }
+  // ---- the entrance display follows the game over the bus (game/state + game/score), like the real screen will
+  const tvg = { state: null, score: null };
+  function tvGame() {
+    const st = tvg.state, sc = tvg.score, tv = $('tv'), g = $('tvgame');
+    if (!st || st.phase === 'idle') { tv.classList.remove('game'); tv.style.background = ''; return; }
+    tv.classList.add('game'); tv.style.background = '';
+    const players = Object.entries(st.players || {});
+    const rows = (fn) => players.map(([id, col]) => `<div class="chip" style="background:${safeColor(col)}"></div><div>${esc(fn(id, col))}</div>`).join('');
+    if (st.phase === 'lobby') {
+      g.style.background = '#000';
+      g.innerHTML = `<div class="t">PAINT THE CAMP</div><div class="h">Cast to claim your colour</div><div class="p" style="grid-template-columns:16px 1fr">${players.length ? rows((id) => id) : '<div></div><div style="color:#889">waiting for players...</div>'}</div><div class="sub">${st.ends ? Math.max(0, Math.round((st.ends - Date.now()) / 1000)) + ' s' : ''}</div>`;
+    } else if (st.phase === 'play' || st.phase === 'climax') {
+      const cov = (sc && sc.coverage) || {}, left = st.phase === 'play' && st.ends ? Math.max(0, Math.round((st.ends - Date.now()) / 1000)) : null;
+      g.style.background = '#000';
+      g.innerHTML = `<div class="t">PAINT THE CAMP</div><div class="h">${st.phase === 'play' ? (left != null ? left + ' s' : 'PLAY') : 'LOCKING IN'}</div><div class="p">` +
+        players.map(([id, col]) => { const pct = Math.round((cov[id] || 0) * 100); return `<div class="chip" style="background:${safeColor(col)}"></div><div class="bar"><div style="width:${pct}%;background:${safeColor(col)}"></div></div><div>${pct}%</div>`; }).join('') +
+        `</div><div class="sub">${sc && sc.n ? 'share of ' + esc(sc.n) + ' crystals' : ''}</div>`;
+    } else if (st.phase === 'victory') {
+      const wc = st.winner ? safeColor((st.players || {})[st.winner], null) : null;
+      g.style.background = wc || '#111'; const dark = wc ? (hex(wc).reduce((a, b) => a + b, 0) < 380) : true;
+      g.innerHTML = `<div class="t" style="color:${dark ? '#eee' : '#111'}">PAINT THE CAMP</div><div class="big" style="color:${dark ? '#fff' : '#111'}">${st.winner ? 'WINNER' : 'DRAW'}</div><div class="h" style="color:${dark ? '#fff' : '#111'}">${esc(st.winner || '')}</div>`;
+    }
+  }
+  setInterval(tvGame, 500);
+
+  // ------------------------------------------------------------ MQTT
+  let client = null;
+  const nodeId = 'sim_visual_' + Math.random().toString(36).slice(2, 8);
+  $('url').value = `ws://${location.hostname || 'localhost'}:9001`;
+  function setConn(text, cls) { const c = $('conn'); c.textContent = text; c.className = cls || ''; $('tv').classList.toggle('stale', cls !== 'ok'); }
+  function setCampMode(mode) { S.camp = mode || 'idle'; document.querySelectorAll('[data-mode]').forEach((b) => b.classList.toggle('on', b.dataset.mode === S.camp)); }
+  setCampMode('idle');
+  function connect() {
+    if (client) { try { client.end(true); } catch (e) {} }
+    const url = $('url').value.trim();
+    setConn('connecting ' + url + ' ...');
+    client = mqtt.connect(url, { clientId: nodeId, clean: true, keepalive: 20, reconnectPeriod: 2000,
+      will: { topic: `node/${nodeId}/status`, payload: JSON.stringify({ online: false, ts: 0 }), retain: true } });
+    client.on('connect', () => {
+      setConn('connected ' + url, 'ok');
+      pub(`node/${nodeId}/status`, { online: true, ip: 'browser', fw: 'sim-visual-0.3', uptime: 0 }, true);
+      Object.keys(INST_ICON).forEach(pubMap);
+      client.subscribe(['audio/#', 'booth/dj', 'display/#', 'cmd/#', 'camp/mode', 'camp/sync', 'vibe/params', 'game/#', 'config/origin']);
+    });
+    client.on('close', () => setConn('disconnected - devices keep their last state', 'bad'));
+    client.on('error', (e) => setConn('error: ' + e.message, 'bad'));
+    client.on('message', (topic, buf) => {
+      let m; try { m = JSON.parse(buf.toString()); } catch (e) { return; }
+      const t = now();
+      if (topic === 'audio/energy') { S.bass = m.bass || 0; S.mid = m.mid || 0; S.high = m.high || 0; S.loud = m.loud || 0; S.loudSmooth = (S.loudSmooth || 0) + ((m.loud || 0) - (S.loudSmooth || 0)) * 0.012; S.lastAudio = t; return; }
+      if (topic === 'audio/beat') { S.beatAt = t; S.beatN = m.n || 0; S.bpm = m.bpm || 0; S.lastAudio = t; return; }
+      if (topic === 'audio/bpm') return;
+      if (topic === 'config/origin') { setOrigin(m); return; }
+      if (topic === 'camp/mode') return setCampMode(m.mode);
+      if (topic === 'camp/sync') { S.bpmSync = m.bpm_sync !== false; S.pulse = m.pulse !== false; $('bpmsync').checked = S.bpmSync; $('pulse').checked = S.pulse; return; }
+      if (topic === 'vibe/params') { if (m.params) { for (const k of Object.keys(VP)) Object.assign(VP[k], m.params[k] || {}); vpChanged(false); renderVibeParams(); } return; }
+      if (topic === 'game/state') { tvg.state = m; tvGame(); return; }
+      if (topic === 'game/score') { tvg.score = m; return; }
+      if (topic === 'booth/dj') return setDJ(m);
+      if (topic === 'display/banner') return setBanner(m);
+      if (topic === 'display/mode') { $('tvmode').textContent = 'mode: ' + (m.mode || '?'); return; }
+      const c = /^cmd\/([^/]+)\/([^/]+)$/.exec(topic);
+      if (!c) return;
+      const [, target, effect] = c;
+      // propagation: delay by distance / speed, intensity by falloff (none for a perfect cast).
+      // `nearest: N` = only the N crystals closest to the origin react (full intensity, no falloff) - fixed instruments
+      // light their neighbours; `instant: true` = no propagation delay at all (the hallway still enters from the nearest face).
+      const hasO = m.origin && m.origin.lat != null && m.origin.lon != null;
+      let list = crystals.filter((k) => target === 'crystals' || target === 'all' || target === k.id);
+      if (m.nearest && hasO && list.length) list = [...list].sort((a, b) => distM(m.origin, posOf(a.id)) - distM(m.origin, posOf(b.id))).slice(0, Math.max(1, +m.nearest));
+      noteCast(m, m.nearest && hasO ? list.map((k) => posOf(k.id)) : null);
+      const mIn = m.nearest ? { ...m, falloff: 'none', cutoff_m: undefined } : m;
+      for (const k of list) { const mm = atNode(k.id, mIn); if (mm) setTimeout(() => crystalCmd(k.id, effect, mm), m.instant ? 0 : delayFor(k.id, m) * 1000); }
+      if (target === 'hallway' || target === 'all') { const mm = atNode('hallway', m); if (mm) setTimeout(() => hallCmd(effect, mm), m.instant ? 0 : delayFor('hallway', m) * 1000); }
+    });
+  }
+  function pub(topic, payload, retain = false) {
+    if (!client || !client.connected) return;
+    if (!('ts' in payload)) payload.ts = Date.now();
+    client.publish(topic, JSON.stringify(payload), { retain, qos: 0 });
+  }
+
+  // ------------------------------------------------------------ PROPS panel
+  const SWATCHES = ['#ff4000', '#ffd400', '#3ddc84', '#00c8ff', '#7a5cff', '#ff2d95'];
+  const sw = $('swatches');
+  SWATCHES.forEach((c) => { const b = document.createElement('button'); b.className = 'sw'; b.style.background = c; b.title = c; b.dataset.color = c; b.addEventListener('click', () => setColor(c)); sw.appendChild(b); });
+  function setColor(c) { active().color = c; $('staffcolor').value = c; $('staffprev').style.background = c; document.querySelectorAll('.sw').forEach((b) => b.classList.toggle('on', b.dataset.color === c)); saveLayout(); }
+  $('staffcolor').addEventListener('input', (e) => setColor(e.target.value));
+  $('intensity').addEventListener('input', (e) => { const v = +e.target.value; active().intensity = v; $('intensityv').textContent = v.toFixed(2); $('perfect').style.color = v >= 1 ? '#ffd400' : ''; saveLayout(); });
+  const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  function setHeading(h) { h = ((Math.round(h) % 360) + 360) % 360; active().heading = h; $('heading').value = h; $('headingv').textContent = `${h}\u00b0 ${COMPASS[Math.round(h / 45) % 8]}`; saveLayout(); }
+  $('heading').addEventListener('input', (e) => setHeading(+e.target.value));
+  document.querySelectorAll('[data-spin]').forEach((b) => b.addEventListener('click', () => { active().spin = +b.dataset.spin; syncPanel(); }));
+  function setActive(k) { ACTIVE = k; syncPanel(); }
+  function syncPanel() {
+    const p = active(), d = PROP_DEFS[ACTIVE];
+    document.querySelectorAll('[data-prop]').forEach((b) => b.classList.toggle('on', b.dataset.prop === ACTIVE));
+    $('staffcolor').value = p.color; $('staffprev').style.background = p.color; document.querySelectorAll('.sw').forEach((b) => b.classList.toggle('on', b.dataset.color === p.color));
+    $('intensity').value = p.intensity; $('intensityv').textContent = p.intensity.toFixed(2); $('perfect').style.color = p.intensity >= 1 ? '#ffd400' : '';
+    $('heading').value = Math.round(p.heading); $('headingv').textContent = `${Math.round(p.heading)}\u00b0 ${COMPASS[Math.round(p.heading / 45) % 8]}`;
+    $('headingrow').style.display = d.cone || d.spin ? '' : 'none';
+    $('spinrow').style.display = d.spin ? '' : 'none';
+    document.querySelectorAll('[data-spin]').forEach((b) => b.classList.toggle('on', +b.dataset.spin === p.spin));
+    const g = $('gestures'); g.innerHTML = ''; g.style.gridTemplateColumns = `repeat(${d.gestures.length}, 1fr)`;
+    d.gestures.forEach(([name, desc], i) => { const b = document.createElement('button'); b.className = 'btn big'; b.textContent = name[0].toUpperCase() + name.slice(1); b.title = `${desc} (key ${i + 1})`; b.addEventListener('click', () => cast(name)); g.appendChild(b); });
+    $('propinfo').innerHTML = `<b>${d.label}</b> (${d.id}): ` + d.gestures.map(([n, ds]) => `${n} = ${ds}`).join(' &middot; ');
+  }
+  document.querySelectorAll('[data-prop]').forEach((b) => b.addEventListener('click', () => setActive(b.dataset.prop)));
+  function cast(gesture, k = ACTIVE) {
+    const p = PROPS[k], d = PROP_DEFS[k], ll = $('gpsfix').checked ? propLL(p) : null;
+    gameClaim(k, p.color);
+    pub(`prop/${d.id}`, { prop: k, prop_id: d.id, gesture, intensity: p.intensity, color: p.color,
+      heading: p.heading, spin_dir: gesture === 'spin' ? p.spin : null,
+      lat: ll ? ll.lat : null, lon: ll ? ll.lon : null, acc_m: ll ? 3 : null, via: 'browser', rssi: -50 });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    const d = PROP_DEFS[ACTIVE], i = +e.key - 1; if (i >= 0 && i < d.gestures.length) cast(d.gestures[i][0]);
+    if (e.key === 'q' || e.key === 'Q') setHeading(active().heading - 15); if (e.key === 'e' || e.key === 'E') setHeading(active().heading + 15);
+    if (e.key === 'Tab') { e.preventDefault(); const ks = Object.keys(PROPS); setActive(ks[(ks.indexOf(ACTIVE) + 1) % ks.length]); }
+  });
+  syncPanel();
+
+  // ------------------------------------------------------------ GAME: Paint the Camp
+  // Phases: lobby (props claim colours by casting; first to cast a colour keeps it) -> play (casts invest
+  // energy = effective intensity at each crystal; crystals fade between players' colours with a duty cycle
+  // proportional to each player's share) -> climax (pulses accelerate, then a flash) -> victory (the winner's
+  // colour sweeps across camp from the winner's position, sparkles) -> idle (everything resets).
+  // The booth publishes game/state (retained); each crystal keeps its own paint ledger from what reaches it.
+  const game = { phase: 'idle', players: {}, t0: 0, tEnd: 0, tPhase: 0, winner: null, origin: null, lobbyS: 10, climaxS: 12, victoryS: 20, lockAt: {} };
+  const PLAYER_ORDER = () => Object.keys(game.players).sort();
+  function gameSay(msg) { $('gamestat').textContent = msg; }
+  function gamePublish() {
+    pub('game/state', { game: 'paint', phase: game.phase, players: game.players, started: game.t0 ? Math.round(Date.now() - (now() - game.t0) * 1000) : null,
+      ends: game.phase === 'lobby' ? Math.round(Date.now() + (game.lobbyS - (now() - game.tPhase)) * 1000) : game.tEnd ? Math.round(Date.now() + (game.tEnd - now()) * 1000) : null, winner: game.winner, origin: game.origin }, true);
+  }
+  function gameSet(phase) { game.phase = phase; game.tPhase = now(); gamePublish(); if (phase === 'idle') pub('game/score', { phase: 'idle' }, true); }
+  function gameStart() {
+    if ($('gameauto').checked && !demo.on) { toggleDemo(); demo.auto = true; }   // auto-run the test props for the game
+    for (const c of crystals) { c.paint = {}; c.rhythm = null; }
+    game.players = {}; game.winner = null; game.origin = null; game.t0 = now();
+    gameSet('lobby');
+  }
+  function gameStop() { for (const c of crystals) c.paint = {}; game.players = {}; game.winner = null; gameSet('idle'); gameSay('stopped.'); $('gamescores').innerHTML = ''; demoAutoStop(); }
+  function demoAutoStop() { if (demo.auto && demo.on) toggleDemo(); demo.auto = false; }
+  // lobby: a cast claims that colour for the prop; if taken, the prop gets the next free swatch
+  function gameClaim(propKey, color) {
+    if (game.phase !== 'lobby') return;
+    const id = PROP_DEFS[propKey].id, taken = Object.entries(game.players).filter(([k]) => k !== id).map(([, v]) => v);
+    let col = color; if (taken.includes(col)) col = SWATCHES.find((sw) => !taken.includes(sw)) || col;
+    game.players[id] = col; PROPS[propKey].color = col; if (propKey === ACTIVE) syncPanel();
+    gamePublish();
+  }
+  function gameScores() {                                          // energy per player + crystals they lead
+    const energy = {}, lead = {};
+    for (const c of crystals) {
+      let best = null, bestE = 0;
+      for (const [id, e] of Object.entries(c.paint || {})) { energy[id] = (energy[id] || 0) + e; if (e > bestE) { best = id; bestE = e; } }
+      if (best) lead[best] = (lead[best] || 0) + 1;
+    }
+    return { energy, lead };
+  }
+  let lastScorePub = 0;
+  function gameTick(t) {
+    if (game.phase === 'idle') return;
+    const { energy, lead } = gameScores();
+    if (t - lastScorePub >= 0.5) {                                // the booth's scoreboard feed for the displays
+      lastScorePub = t; const n = crystals.length || 1;
+      pub('game/score', { phase: game.phase, energy: Object.fromEntries(Object.entries(energy).map(([k, v]) => [k, +v.toFixed(2)])), lead, n: crystals.length, coverage: Object.fromEntries(Object.keys(game.players).map((id) => [id, +((lead[id] || 0) / n).toFixed(3)])) }, true);
+    }
+    if (game.phase === 'lobby' && t - game.tPhase >= game.lobbyS) {
+      if (Object.keys(game.players).length === 0) { gameSet('idle'); gameSay('nobody joined - cast during the lobby to claim a colour.'); demoAutoStop(); return; }
+      game.t0 = t; game.tEnd = t + (+$('gamelen').value || 45); gameSet('play');
+    } else if (game.phase === 'play' && t >= game.tEnd) {
+      // lock-in order: the most decided crystals commit first, the contested ones last
+      const margin = (c) => { const v = Object.values(c.paint || {}).sort((a, b) => b - a); return v.length ? (v[0] - (v[1] || 0)) / (v.reduce((a, b) => a + b, 0) || 1) : -1; };
+      const order = crystals.slice().sort((a, b) => margin(b) - margin(a));
+      game.climaxS = clamp(crystals.length * 0.6, 6, 20);
+      game.lockAt = {}; order.forEach((c, i) => { game.lockAt[c.id] = t + (i + 0.5) / order.length * game.climaxS; });
+      gameSet('climax');
+    } else if (game.phase === 'climax' && t - game.tPhase >= game.climaxS) {
+      const best = Object.entries(energy).sort((a, b) => b[1] - a[1])[0];
+      game.winner = best ? best[0] : null;
+      const wk = Object.keys(PROP_DEFS).find((k) => PROP_DEFS[k].id === game.winner);
+      game.origin = wk ? propLL(PROPS[wk]) : null;
+      gameSet('victory');
+    } else if (game.phase === 'victory' && t - game.tPhase >= game.victoryS) {
+      for (const c of crystals) c.paint = {};
+      gameSet('idle'); gameSay('game over. Start again?'); demoAutoStop();
+    }
+    if (game.phase === 'lobby' && t - lastScorePub < 0.01) gamePublish();
+    // status + scores
+    const left = game.phase === 'play' ? Math.max(0, game.tEnd - t) : game.phase === 'lobby' ? Math.max(0, game.lobbyS - (t - game.tPhase)) : 0;
+    const locked = game.phase === 'climax' ? crystals.filter((c) => t >= (game.lockAt[c.id] || 0)).length : 0;
+    const names = { lobby: `LOBBY ${left.toFixed(0)} s - cast to claim your colour`, play: `PLAY ${left.toFixed(0)} s - paint the crystals!`, climax: `LOCKING IN - ${locked}/${crystals.length} crystals have committed`, victory: game.winner ? `WINNER: ${game.winner} - ${Math.max(0, game.victoryS - (t - game.tPhase)).toFixed(0)} s` : 'DRAW - nobody painted anything' };
+    gameSay(names[game.phase] || game.phase);
+    $('gamescores').innerHTML = PLAYER_ORDER().map((id) => `<span style="display:inline-flex;align-items:center;gap:6px;margin-right:10px"><span style="width:14px;height:14px;border-radius:3px;background:${safeColor(game.players[id])};display:inline-block"></span>${esc(id)}: ${(energy[id] || 0).toFixed(1)} energy, ${lead[id] || 0} crystals</span>`).join('');
+  }
+  // what colour a crystal shows during the game (null = not playing)
+  function gameColor(c, ledIndex, t) {
+    if (game.phase === 'idle' || game.phase === 'lobby') return null;
+    const paint = c.paint || {}, ids = PLAYER_ORDER(), total = ids.reduce((a, id) => a + (paint[id] || 0), 0);
+    if (game.phase === 'victory') {
+      // the winner's colour on every crystal, all breathing together (same phase everywhere), fading out at the end
+      if (!game.winner) return [8, 8, 10];
+      const age = t - game.tPhase, wc = hex(game.players[game.winner]);
+      const rise = clamp(age / 1.5, 0, 1), fade = clamp((game.victoryS - age) / 3, 0, 1);
+      const breathe = 0.55 + 0.45 * Math.sin(age * 2 * Math.PI / 2.5 - Math.PI / 2);
+      return scale(wc, rise * fade * breathe);
+    }
+    if (game.phase === 'climax' && t >= (game.lockAt[c.id] || 0)) {
+      // locked: solid in the leading colour (dark if nobody painted it), with a short pop at the moment of locking
+      if (total < 0.05) return [6, 6, 8];
+      const lc = lastPaintColor(c, ids, paint, t), since = t - game.lockAt[c.id];
+      const pop = Math.max(0, 1 - since / 0.4);
+      return mix(scale(lc, 0.35 + 0.65 * Math.min(1, total / 2.5)), WHITE, 0.5 * pop);
+    }
+    // play (and not-yet-locked climax): duty cycle between players' colours by share; brightness by energy invested
+    if (total < 0.05) return [6, 6, 8];
+    const period = 2.0;
+    const u = (((t - game.t0) % period) + period) % period / period;
+    let acc = 0;
+    for (const id of ids) {
+      const share = (paint[id] || 0) / total; if (share <= 0) continue;
+      if (u < acc + share || id === ids[ids.length - 1]) {
+        const lu = clamp((u - acc) / share, 0, 1), env = Math.sin(Math.PI * lu);
+        const bright = 0.08 + 0.92 * env * Math.min(1, total / 2.5);
+        return scale(hex(game.players[id]), bright);
+      }
+      acc += share;
+    }
+    return [6, 6, 8];
+  }
+  function lastPaintColor(c, ids, paint, t) { const best = ids.reduce((b, id) => (paint[id] || 0) > (paint[b] || 0) ? id : b, ids[0]); return hex(game.players[best]); }
+  $('gamestart').addEventListener('click', gameStart);
+  $('gamestop').addEventListener('click', gameStop);
+
+  // ------------------------------------------------------------ TEST PROPS: automated demo
+  // Walks the props around the map (3 m/s, turning smoothly), fires random gestures, and every so often
+  // sets up something deliberate: a combo (staff slam + wand bolt timed to land on one crystal together)
+  // or a rhythm (drum hits at 120 BPM so the crystals lock a tempo).
+  const demo = { on: false, targets: {}, queue: [], nextFire: 0, nextCombo: 0, nextRhythm: 0, hold: {}, status: '' };
+  const randomSpot = () => [Math.round((Math.random() * 60 - 30) * 2) / 2, Math.round((Math.random() * 44 - 6) * 2) / 2];
+  const bearingTo = (from, to) => (Math.atan2(to[0] - from[0], to[1] - from[1]) * 180 / Math.PI + 360) % 360;
+  const turnToward = (h, target, maxStep) => (h + clamp(wrap180(target - h), -maxStep, maxStep) + 360) % 360;
+  const distXY = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  function demoSay(msg) { demo.status = msg; $('demostat').textContent = msg; }
+  function toggleDemo() {
+    demo.on = !demo.on; $('demo').classList.toggle('on', demo.on); $('demo').textContent = demo.on ? 'Stop test' : 'Test props';
+    const t = now(); demo.queue = []; demo.hold = {}; demo.nextFire = t + 1; demo.nextCombo = t + 3; demo.nextRhythm = t + 9;
+    for (const k of Object.keys(PROPS)) demo.targets[k] = randomSpot();
+    demoSay(demo.on ? 'test running: props wander and cast; combos and a rhythm are set up on purpose' : '');
+    if (!demo.on) saveLayout();
+  }
+  $('demo').addEventListener('click', () => { demo.auto = false; toggleDemo(); });
+  function demoStep(t, dt) {
+    for (const [k, p] of Object.entries(PROPS)) {
+      const tg = demo.targets[k], d = distXY(p.pos, tg);
+      const holding = demo.hold[k] && t < demo.hold[k].until;
+      if (holding) demo.targets[k] = p.pos.slice();                 // busy aiming/drumming: stand still
+      else if (d < 0.5) { if (Math.random() < dt / 3) demo.targets[k] = randomSpot(); }
+      else { const step = Math.min(d, 3 * dt); p.pos = [p.pos[0] + (tg[0] - p.pos[0]) / d * step, p.pos[1] + (tg[1] - p.pos[1]) / d * step]; }
+      const hold = demo.hold[k];                                     // aiming at something? hold that heading
+      p.heading = turnToward(p.heading, holding ? hold.heading : (d < 0.5 ? p.heading : bearingTo(p.pos, tg)), 120 * dt);
+    }
+    // game lobby: each prop picks a random colour nobody has, claims it with one cast, then waits for play
+    if (game.phase === 'lobby') {
+      for (const k of Object.keys(PROPS)) {
+        if (game.players[PROP_DEFS[k].id] || Math.random() > dt * 1.5) continue;
+        const taken = Object.values(game.players), free = SWATCHES.filter((c) => !taken.includes(c));
+        PROPS[k].color = (free.length ? free : SWATCHES)[Math.floor(Math.random() * (free.length ? free.length : SWATCHES.length))]; if (k === ACTIVE) syncPanel();
+        cast(PROP_DEFS[k].gestures[0][0], k);
+      }
+      demo.queue = []; return;                                       // nothing else until the game starts
+    }
+    if (game.phase === 'victory') { demo.queue = []; return; }        // game over: stand down and watch
+    // scheduled casts
+    demo.queue = demo.queue.filter((q) => { if (t < q.at) return true; cast(q.gesture, q.prop); return false; });
+    // random casts, avoiding props that are busy aiming
+    if (t >= demo.nextFire) {
+      const free = Object.keys(PROPS).filter((k) => !(demo.hold[k] && t < demo.hold[k].until));
+      if (free.length) { const k = free[Math.floor(Math.random() * free.length)], g = PROP_DEFS[k].gestures; const gesture = g[Math.floor(Math.random() * g.length)][0]; cast(gesture, k); demoSay(`${k} ${gesture}`); }
+      demo.nextFire = t + 1.2 + Math.random() * 2.5;
+    }
+    // deliberate combo: staff slam (circle, 6 m/s) + wand bolt (cone, 14 m/s) timed to land on one crystal together
+    if (t >= demo.nextCombo && crystals.length) {
+      const c = crystals[Math.floor(Math.random() * crystals.length)], xy = LAYOUT[c.id];
+      const ks = Object.keys(PROPS).sort(() => Math.random() - 0.5).slice(0, 2);   // two random props, so nobody is favoured
+      const [a, b] = ks, da = distXY(PROPS[a].pos, xy) / PROP_DEFS[a].main[1], db = distXY(PROPS[b].pos, xy) / PROP_DEFS[b].main[1];
+      for (const k of ks) demo.hold[k] = { heading: bearingTo(PROPS[k].pos, xy), until: t + 3 };
+      const lead = 1.2;                                                // let them turn first
+      demo.queue.push({ at: t + lead + Math.max(0, db - da), prop: a, gesture: PROP_DEFS[a].main[0] });
+      demo.queue.push({ at: t + lead + Math.max(0, da - db), prop: b, gesture: PROP_DEFS[b].main[0] });
+      demoSay(`combo on ${c.id.replace('crystal_', '#')}: ${a} ${PROP_DEFS[a].main[0]} + ${b} ${PROP_DEFS[b].main[0]} timed to land together`);
+      demo.nextCombo = t + 9 + Math.random() * 5;
+    }
+    // deliberate rhythm: six drum hits at 120 BPM
+    if (t >= demo.nextRhythm) {
+      const ks = Object.keys(PROPS), k = ks[Math.floor(Math.random() * ks.length)], c = crystals[Math.floor(Math.random() * crystals.length)];
+      for (let i = 0; i < 6; i++) demo.queue.push({ at: t + 0.3 + i * 0.5, prop: k, gesture: PROP_DEFS[k].main[0] });
+      demo.hold[k] = { heading: c ? bearingTo(PROPS[k].pos, LAYOUT[c.id]) : PROPS[k].heading, until: t + 4 };   // stand still + aim: a walking caster Doppler-shifts the tempo
+      demoSay(`rhythm: ${k} ${PROP_DEFS[k].main[0]} x6 at 120 BPM - crystals should lock the tempo`);
+      demo.nextRhythm = t + 22 + Math.random() * 8;
+    }
+    // keep the panel honest for the active prop
+    const p = active(); $('heading').value = p.heading; $('headingv').textContent = `${Math.round(p.heading)}\u00b0 ${COMPASS[Math.round(p.heading / 45) % 8]}`;
+  }
+
+  // ------------------------------------------------------------ other inputs (same messages as sim/inputs.py)
+  const toy = (t, event, value) => pub(`toy/${t}`, { toy: t, event, value });
+  const inputs = {
+    press: (t) => toy(t, 'press', 1), hold: (t, s) => toy(t, 'hold', parseFloat(s)), pull: (t) => toy(t, 'pull', 1),
+    mode: (t, m) => toy(t, 'mode', m),
+    checkout: () => pub('booth/dj', { artist: null, since: Date.now() }, true),
+    foodcall: (meal, soft) => pub('kitchen/foodcall', { meal, soft: soft === 'soft' }),
+  };
+  document.querySelectorAll('[data-pub]').forEach((b) => b.addEventListener('click', () => { const [k, ...a] = b.dataset.pub.split(':'); inputs[k](...a); }));
+  document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => pub('camp/mode', { mode: b.dataset.mode, since: Date.now() }, true)));
+  const pubSync = () => pub('camp/sync', { bpm_sync: $('bpmsync').checked, pulse: $('pulse').checked }, true);
+  $('bpmsync').addEventListener('change', pubSync); $('pulse').addEventListener('change', pubSync);
+  renderVibeParams();
+  $('checkin').addEventListener('click', () => pub('booth/dj', { artist: $('artist').value.trim() || 'Unknown DJ', slot: null, since: Date.now(), timer_end: Date.now() + 45 * 60000, logo: null }, true));
+  let crankTimer = null;
+  $('crank').addEventListener('input', (e) => { $('crankv').textContent = (+e.target.value).toFixed(1); clearTimeout(crankTimer); crankTimer = setTimeout(() => toy('crank', 'rate', parseFloat(e.target.value)), 60); });
+  $('connect').addEventListener('click', connect);
+
+  // ------------------------------------------------------------ RECORD CLIP: composite the sim into a WebM video
+  // Draws the crystals, map, hallway and entrance display into one 1280x720 canvas every frame and records it
+  // with MediaRecorder (30 fps). The file downloads when the time is up. Also usable from the hook:
+  //   __sim.recordClip(seconds, 'name')
+  function drawTVInto(cx, x, y, w, h) {
+    cx.fillStyle = '#000'; cx.fillRect(x, y, w, h); cx.strokeStyle = '#1c1c22'; cx.lineWidth = 6; cx.strokeRect(x + 3, y + 3, w - 6, h - 6);
+    const st = tvg.state, sc = tvg.score; cx.textAlign = 'center';
+    if (!st || st.phase === 'idle') {
+      const dj = $('tvartist').textContent, banner = $('tv').classList.contains('takeover') ? $('tvbanner').textContent : '';
+      if (banner) { cx.fillStyle = '#ffb454'; cx.fillRect(x + 6, y + 6, w - 12, h - 12); cx.fillStyle = '#000'; cx.font = 'bold 26px system-ui'; cx.fillText(banner, x + w / 2, y + h / 2 + 9); return; }
+      cx.fillStyle = '#9aa'; cx.font = '12px system-ui'; cx.fillText('N O W   P L A Y I N G', x + w / 2, y + h / 2 - 26);
+      cx.fillStyle = '#fff'; cx.font = 'bold 30px system-ui'; cx.fillText(dj, x + w / 2, y + h / 2 + 14);
+      cx.fillStyle = '#556'; cx.font = '11px system-ui'; cx.fillText('AWETISTS - SHOWTIME', x + w - 70, y + h - 12); return;
+    }
+    const players = Object.entries(st.players || {});
+    if (st.phase === 'victory') {
+      const wc = st.winner ? st.players[st.winner] : '#111', dark = st.winner ? hex(wc).reduce((a, b) => a + b, 0) < 380 : true;
+      cx.fillStyle = wc; cx.fillRect(x + 6, y + 6, w - 12, h - 12); cx.fillStyle = dark ? '#fff' : '#111';
+      cx.font = '12px system-ui'; cx.fillText('P A I N T   T H E   C A M P', x + w / 2, y + 40);
+      cx.font = 'bold 44px system-ui'; cx.fillText(st.winner ? 'WINNER' : 'DRAW', x + w / 2, y + h / 2 + 8);
+      cx.font = 'bold 22px system-ui'; cx.fillText(st.winner || '', x + w / 2, y + h / 2 + 44); return;
+    }
+    cx.fillStyle = '#9aa'; cx.font = '12px system-ui'; cx.fillText('P A I N T   T H E   C A M P', x + w / 2, y + 30);
+    cx.fillStyle = '#fff'; cx.font = 'bold 22px system-ui';
+    const left = st.ends ? Math.max(0, Math.round((st.ends - Date.now()) / 1000)) : null;
+    cx.fillText(st.phase === 'lobby' ? 'Cast to claim your colour' : st.phase === 'play' ? `${left != null ? left + ' s' : 'PLAY'}` : 'LOCKING IN', x + w / 2, y + 60);
+    const cov = (sc && sc.coverage) || {}; let yy = y + 86;
+    for (const [id, col] of players) {
+      cx.fillStyle = col; cx.fillRect(x + 30, yy - 10, 14, 14); cx.textAlign = 'left'; cx.fillStyle = '#ddd'; cx.font = '13px system-ui';
+      if (st.phase === 'lobby') cx.fillText(id, x + 52, yy + 2);
+      else { const pct = Math.round((cov[id] || 0) * 100); cx.fillStyle = '#222'; cx.fillRect(x + 52, yy - 8, w - 130, 10); cx.fillStyle = col; cx.fillRect(x + 52, yy - 8, (w - 130) * pct / 100, 10); cx.fillStyle = '#ddd'; cx.fillText(pct + '%', x + w - 70, yy + 2); }
+      cx.textAlign = 'center'; yy += 26;
+    }
+  }
+  let recording = false;
+  async function recordClip(seconds, name = 'campbus-clip') {
+    recording = true;
+    const W = 1280, H = 720, cv = document.createElement('canvas'); cv.width = W; cv.height = H; const cx = cv.getContext('2d');
+    const stream = cv.captureStream(30);
+    const mime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find((m) => MediaRecorder.isTypeSupported(m));
+    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8e6 }), chunks = [];
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    let on = true; const t0 = now();
+    $('record').textContent = 'Recording...'; $('record').classList.add('on');
+    const draw = () => {
+      if (!on) return;
+      cx.fillStyle = '#0a0a0c'; cx.fillRect(0, 0, W, H);
+      if (window.__focus === 'hallway') {                          // hallway-first layout for tunnel demos
+        cx.drawImage($('hall'), 16, 16, 920, 920 * 440 / 720);
+        cx.drawImage($('map'), 952, 16, 312, 312 * 480 / 900);
+        const cry = $('crystals'); cx.drawImage(cry, 952, 16 + 312 * 480 / 900 + 10, 312, 312 * cry.height / 900);
+        drawTVInto(cx, 952, 16 + 312 * 480 / 900 + 10 + 312 * cry.height / 900 + 10, 312, 150);
+      } else {
+      const cry = $('crystals'), ch = 760 * cry.height / 900;
+      cx.drawImage(cry, 16, 16, 760, ch);
+      cx.drawImage($('map'), 16, 16 + ch + 10, 760, 760 * 480 / 900);
+      const hh = 472 * 440 / 720; cx.drawImage($('hall'), 792, 16, 472, hh);
+      drawTVInto(cx, 792, 16 + hh + 10, 472, 265);
+      }
+      cx.fillStyle = '#9aa'; cx.font = '13px system-ui'; cx.textAlign = 'left';
+      const cap = window.__caption || (game.phase !== 'idle' ? $('gamestat').textContent : (demo.on ? 'test props: ' + demo.status : `camp mode ${S.camp}`));
+      cx.fillText(cap.slice(0, 150), 16, H - 12);
+      cx.textAlign = 'right'; cx.fillStyle = '#556'; cx.fillText(`Awetists camp bus - virtual camp - ${(now() - t0).toFixed(0)} s`, W - 16, H - 12);
+      requestAnimationFrame(draw);
+    };
+    rec.start(250); draw();
+    await new Promise((r) => setTimeout(r, seconds * 1000));
+    const done = new Promise((r) => { rec.onstop = r; }); rec.stop(); on = false; await done;
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    // save straight to the repo via the clip server (served next to this page); fall back to a browser download
+    let saved = null;
+    try { const r = await fetch(`clips/${name}.webm`, { method: 'PUT', body: blob }); if (r.ok) saved = await r.json(); } catch (e) {}
+    if (!saved) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${name}.webm`; document.body.appendChild(a); a.click(); a.remove(); }
+    $('record').title = saved ? `saved clips/${saved.saved}` : 'downloaded (no clip server)';
+    $('record').textContent = 'Record clip'; $('record').classList.remove('on'); recording = false;
+    return { file: `${name}.webm`, bytes: blob.size, seconds, saved: !!saved };
+  }
+  $('record').addEventListener('click', () => recordClip(+$('reclen').value || 60, 'campbus-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)));
+
+  // ------------------------------------------------------------ main loop
+  let lastT = now();
+  function frame() {
+    const t = now(), dt = Math.min(0.1, t - lastT); lastT = t;
+    if (demo.on) demoStep(t, dt);
+    { const target = CAMP_GAIN[S.camp] == null ? 1 : CAMP_GAIN[S.camp]; gainNow += (target - gainNow) * Math.min(1, dt / 2 * 3); }   // camp mode crossfade
+    vibeStep(t, dt);
+    gameTick(t);
+    drawCrystals(t); drawHall(t); drawMap(t);
+    $('audiostat').textContent = `camp: ${S.camp}  |  vibe ${S.mode}${S.bpmSync ? '' : '  |  sync off'}${S.pulse ? '' : '  |  pulse off'}` + (audioAlive(t) ? `  |  ${S.bpm} bpm  bass ${S.bass.toFixed(2)}` : '  |  no music');
+    requestAnimationFrame(frame);
+  }
+  connect();
+  requestAnimationFrame(frame);
+  window.__sim = { S, crystals, hall, casts, demo, game, gameStart, gameStop, gameScores, recordClip, VIBE, setVibe, VP, VIBE_DEFS, vpChanged, renderVibeParams, jump, snake, meteor, noise3, hallCorners, hallPath, hallCmd, get hallHeading() { return HALL_HEAD; }, set hallHeading(v) { HALL_HEAD = v; }, get layout() { return LAYOUT; }, get props() { return PROPS; }, get active() { return ACTIVE; }, atNode, delayFor, cast, setActive, setCrystalCount, setHeading, bearingDeg, crystalCmd, COMBO_MS };
+})();
+</script>
+</body>
+</html>

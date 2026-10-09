@@ -1,0 +1,90 @@
+# Kopia backup server on the NAS (Docker compose project "kopia").
+#
+#  kopia          web UI on https://<host>:51515 over TLS: schedules, history, restores. Holds the one backup store
+#                 (repository) in ${DOCKER_DIR}/kopia/repository; the PC's KopiaUI can write to the same store over
+#                 the network share (\\<nas>\docker\kopia\repository). Also backs up folders that only exist on the
+#                 NAS (mounted read-only under /data).
+#  kopia-offsite  every night at 01:30 copies the backup store to Google Drive ("Kopia Backups") with the NAS's
+#                 rclone setup (your own Google client ID). Store files Kopia removes during clean-up are kept on
+#                 Drive in "Kopia Backups (removed)/<date>" instead of being deleted, as a safety net.
+#
+# Settings: an env file next to this compose file (create it yourself; never commit it) with
+#   KOPIA_VERSION, RCLONE_VERSION   image tags: pin to the version you've tested (required, no "latest")
+#   KOPIA_UI_USER, KOPIA_UI_PASSWORD   the web UI login
+#   KOPIA_BIND_ADDR    where the web UI listens on the NAS. Default 127.0.0.1: reachable only from the NAS itself
+#                      (use an SSH tunnel: ssh -L 51515:127.0.0.1:51515 <nas>). Set it to the NAS's LAN address to
+#                      reach it from the home network; it is then exposed to every device on the LAN, protected by
+#                      TLS and the login above. Never forward this port to the internet.
+#   DOCKER_DIR         the NAS's docker share (default /volume1/docker)
+#   NAS_DATA_DIR       NAS-only folders to back up, mounted read-only (default /volume1/data)
+#   RCLONE_CONFIG_DIR  folder holding rclone.conf, e.g. /home/<user>/.config/rclone (required)
+#   PUID, PGID         the NAS user/group that owns that rclone.conf (default 1000:10)
+#   TZ                 time zone for the 01:30 schedule (default Etc/UTC)
+#
+# TLS: put a certificate and key in ${DOCKER_DIR}/kopia/tls/ as kopia.crt and kopia.key before the first start, e.g.
+#   openssl req -x509 -newkey rsa:4096 -sha256 -days 825 -nodes -subj "/CN=kopia" \
+#     -keyout kopia.key -out kopia.crt
+# Clients that connect to this server (KopiaUI, `kopia repository connect server`) need the certificate's SHA-256
+# fingerprint (--server-cert-fingerprint):  openssl x509 -in kopia.crt -noout -fingerprint -sha256  (remove the colons)
+#
+# The backup store's own password is chosen in the web UI when the store is created and kept only in this
+# container's config; write it down somewhere safe - without it the backups can't be opened.
+services:
+  kopia:
+    image: kopia/kopia:${KOPIA_VERSION:?pin to the version you've tested}   # pin to the version you've tested
+    container_name: kopia
+    hostname: ${KOPIA_HOSTNAME:-nas}
+    restart: unless-stopped
+    ports:
+      - "${KOPIA_BIND_ADDR:-127.0.0.1}:51515:51515"
+    command:
+      - server
+      - start
+      - --tls-cert-file=/app/tls/kopia.crt
+      - --tls-key-file=/app/tls/kopia.key
+      - --address=0.0.0.0:51515          # inside the container; what the NAS exposes is set by "ports" above
+      - --server-username=${KOPIA_UI_USER:?set KOPIA_UI_USER}
+      - --server-password=${KOPIA_UI_PASSWORD:?set KOPIA_UI_PASSWORD}
+    environment:
+      - USER=backup
+      - TZ=${TZ:-Etc/UTC}
+    volumes:
+      - ${DOCKER_DIR:-/volume1/docker}/kopia/config:/app/config
+      - ${DOCKER_DIR:-/volume1/docker}/kopia/cache:/app/cache
+      - ${DOCKER_DIR:-/volume1/docker}/kopia/logs:/app/logs
+      - ${DOCKER_DIR:-/volume1/docker}/kopia/tls:/app/tls:ro
+      - ${DOCKER_DIR:-/volume1/docker}/kopia/repository:/repository
+      - ${DOCKER_DIR:-/volume1/docker}/kopia/tmp:/tmp:shared
+      - "${NAS_DATA_DIR:-/volume1/data}:/data/nas:ro"        # NAS-only folders to back up (read-only)
+
+  kopia-offsite:
+    image: rclone/rclone:${RCLONE_VERSION:?pin to the version you've tested}   # pin to the version you've tested
+    container_name: kopia-offsite
+    restart: unless-stopped
+    user: "${PUID:-1000}:${PGID:-10}"
+    environment:
+      - TZ=${TZ:-Etc/UTC}
+      - HOME=/tmp
+      - RCLONE_CONFIG=/home-rclone/rclone.conf
+    volumes:
+      - ${RCLONE_CONFIG_DIR:?folder holding rclone.conf}:/home-rclone
+      - ${DOCKER_DIR:-/volume1/docker}/kopia/repository:/repository:ro
+      - ${DOCKER_DIR:-/volume1/docker}/kopia/offsite-logs:/logs
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          # seconds until the next 01:30, from hours/minutes only (works with any date command)
+          h=$$(date +%H | sed 's/^0//'); m=$$(date +%M | sed 's/^0//'); s=$$(date +%S | sed 's/^0//')
+          wait=$$(( (5400 - (h * 3600 + m * 60 + s) + 86400) % 86400 ))
+          [ "$$wait" -lt 60 ] && wait=86400
+          sleep $$wait
+          echo "=== sync start $$(date)" >> /logs/offsite.log
+          rclone sync /repository "gdrive:Kopia Backups" \
+            --backup-dir "gdrive:Kopia Backups (removed)/$$(date +%Y-%m-%d)" \
+            --transfers 4 --checkers 8 --drive-chunk-size 64M --drive-stop-on-upload-limit \
+            --retries 5 --low-level-retries 20 --stats 10m --stats-one-line --log-level INFO --log-file /logs/offsite.log
+          rc=$$?
+          echo "=== sync end $$(date) rc=$$rc" >> /logs/offsite.log
+          sleep 60
+        done

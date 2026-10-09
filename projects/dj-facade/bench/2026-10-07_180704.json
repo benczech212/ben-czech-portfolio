@@ -1,0 +1,97 @@
+{
+ "vibe:cozy": {
+  "min": 12.6,
+  "avg": 12.6,
+  "vmerr": 0
+ },
+ "vibe:party": {
+  "min": 23.9,
+  "avg": 25.3,
+  "vmerr": 0
+ },
+ "vibe:chaos": {
+  "min": 18.5,
+  "avg": 18.5,
+  "vmerr": 0
+ },
+ "vibe:wave": {
+  "min": 20.5,
+  "avg": 20.6,
+  "vmerr": 0
+ },
+ "vibe:jumping": {
+  "min": 15.2,
+  "avg": 15.4,
+  "vmerr": 0
+ },
+ "vibe:ethereal": {
+  "min": 13.8,
+  "avg": 13.8,
+  "vmerr": 0
+ },
+ "vibe:snake": {
+  "min": 16.7,
+  "avg": 16.8,
+  "vmerr": 0
+ },
+ "vibe:twinkle": {
+  "min": 18.9,
+  "avg": 19.5,
+  "vmerr": 0
+ },
+ "vibe:heartbeat": {
+  "min": 20.5,
+  "avg": 20.5,
+  "vmerr": 0
+ },
+ "vibe:aurora": {
+  "min": 18.5,
+  "avg": 18.5,
+  "vmerr": 0
+ },
+ "vibe:meteor": {
+  "min": 13.0,
+  "avg": 14.0,
+  "vmerr": 0
+ },
+ "vibe:bloom": {
+  "min": 18.9,
+  "avg": 18.9,
+  "vmerr": 0
+ },
+ "vibe:kaleido": {
+  "min": 16.9,
+  "avg": 16.9,
+  "vmerr": 0
+ },
+ "vibe:lotus": {
+  "min": 16.5,
+  "avg": 16.8,
+  "vmerr": 0
+ },
+ "vibe:spectrum": {
+  "min": 18.0,
+  "avg": 18.0,
+  "vmerr": 0
+ },
+ "vibe:fireflies": {
+  "min": 22.3,
+  "avg": 22.3,
+  "vmerr": 0
+ },
+ "vibe:cascade": {
+  "min": 15.5,
+  "avg": 15.7,
+  "vmerr": 0
+ },
+ "vibe:mycelium": {
+  "min": 17.6,
+  "avg": 17.6,
+  "vmerr": 0
+ },
+ "vibe:butterfly": {
+  "min": 16.8,
+  "avg": 16.8,
+  "vmerr": 0
+ }
+}

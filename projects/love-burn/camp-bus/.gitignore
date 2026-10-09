@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+clips/
+nodes/matrix_portal/settings.toml

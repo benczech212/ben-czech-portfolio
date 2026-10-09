@@ -1,0 +1,8 @@
+.secrets/
+data/
+content/
+infra/wordpress/.env
+infra/discord/server.json
+docs/discord/
+__pycache__/
+*.pyc

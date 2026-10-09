@@ -1,0 +1,38 @@
+# Copy to settings.toml on CIRCUITPY and fill in. CircuitPython reads this at boot;
+# code.py picks it up through os.getenv().
+#
+# The Matrix Portal M4 has no native WiFi - it talks to an ESP32 co-processor - so
+# these are our own keys, not the CIRCUITPY_WIFI_* ones the native-WiFi boards use.
+
+# Optional: if these are left out, code.py falls back to the `secrets.py` that older
+# Adafruit projects on this board already use, so the password need not be duplicated.
+WIFI_SSID = "your-network"
+WIFI_PASSWORD = "your-password"
+
+# The machine running mosquitto. On the prototype that is Ben's PC; at camp it becomes
+# the booth Pi, and this is the only line that changes.
+CAMPBUS_HOST = "campbus.local"
+CAMPBUS_PORT = 1883
+
+# Unique on the bus: it is the MQTT client id as well as the node id, so two panels
+# sharing one would kick each other off the broker.
+NODE_ID = "matrix_01"
+
+# The cmd/<target>/ this panel answers, alongside cmd/all/.
+TARGET = "matrix"
+
+PANEL_WIDTH = 64
+PANEL_HEIGHT = 32
+
+# Colour depth. 5 is a good balance; 6 looks better and 4 costs less RAM and refreshes
+# faster. Drop this first if the board runs out of memory.
+PANEL_BIT_DEPTH = 5
+
+# Compass bearing of the panel's own TOP edge, in degrees. Leave it 0 on a bench and
+# headings are read in panel space (0 fills toward the top). Set it once the panel is
+# mounted and bus headings become true compass directions, so a staff pointing north
+# fills the panel northward whichever way the panel happens to face.
+PANEL_NORTH = 0
+
+# 0-100. The panel is very bright in the dark.
+BRIGHTNESS = 70

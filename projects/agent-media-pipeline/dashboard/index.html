@@ -1,0 +1,975 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Control Room</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --ink: #1c2024; --muted: #6b7280; --line: #e3e6ea;
+    --bar: #e9ecf0; --ok: #1f9d55; --run: #2563eb; --warn: #b7791f; --bad: #c53030; --idle: #8a94a3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111418; --card: #1a1f25; --ink: #e6e9ed; --muted: #9aa4b2; --line: #2a313a;
+            --bar: #262d36; --ok: #3ccf7f; --run: #5b9bff; --warn: #e0a84a; --bad: #ff6b6b; --idle: #7d8795; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: baseline; gap: 16px; padding: 18px 24px 8px; flex-wrap: wrap; }
+  h1 { font-size: 20px; margin: 0; }
+  .sub { color: var(--muted); font-size: 12px; }
+  nav { display: flex; gap: 4px; padding: 0 24px; border-bottom: 1px solid var(--line); }
+  nav button { background: none; border: 0; padding: 10px 14px; color: var(--muted); cursor: pointer;
+               font: inherit; border-bottom: 2px solid transparent; }
+  nav button.on { color: var(--ink); border-color: var(--run); }
+  main { padding: 18px 24px 40px; max-width: 1280px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+  .card h2 { font-size: 15px; margin: 0 0 2px; display: flex; justify-content: space-between; align-items: center; }
+  .pill { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; color: #fff; text-transform: uppercase; letter-spacing: .03em; }
+  .running, .in-progress { background: var(--run); } .done, .finished, .approved { background: var(--ok); }
+  .paused, .waiting, .stopped { background: var(--warn); } .todo, .unknown, .not-started { background: var(--idle); }
+  .critical, .blocked { background: var(--bad); }
+  .big { font-size: 26px; font-weight: 650; margin: 10px 0 2px; font-variant-numeric: tabular-nums; }
+  .big small { font-size: 14px; color: var(--muted); font-weight: 400; }
+  .bar { height: 8px; background: var(--bar); border-radius: 99px; overflow: hidden; margin: 8px 0; }
+  .bar > i { display: block; height: 100%; background: var(--run); border-radius: 99px; transition: width .6s; }
+  .bar.ok > i { background: var(--ok); }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: 13px; margin-top: 8px; }
+  .kv dt { color: var(--muted); } .kv dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  td { padding: 4px 0; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  td.r { text-align: right; color: var(--muted); white-space: nowrap; padding-left: 10px; }
+  td .bar { margin: 3px 0 0; height: 5px; }
+  .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .alerts { display: grid; gap: 8px; margin-bottom: 16px; }
+  .alert { border-left: 4px solid var(--idle); background: var(--card); border-radius: 6px; padding: 8px 12px;
+           border-top: 1px solid var(--line); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .alert.critical { border-left-color: var(--bad); background: var(--card); } .alert.warning { border-left-color: var(--warn); }
+  .alert.info { border-left-color: var(--run); }
+  .stage { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px solid var(--line); }
+  .stage .n { font-weight: 550; } .stage .note { color: var(--muted); font-size: 12px; }
+  .err { color: var(--bad); }
+  .empty { color: var(--muted); padding: 30px 0; text-align: center; }
+  .hidden { display: none; }
+  .overall { margin: 8px 0 4px; }
+  .ovtop { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .ovtop .big { margin: 0; }
+  .stack { display: flex; height: 16px; background: var(--bar); border-radius: 99px; overflow: hidden; margin: 8px 0 6px; }
+  .stack i { display: block; height: 100%; transition: width .6s; }
+  .s-done { background: var(--ok); } .s-run { background: var(--run); } .s-fail { background: var(--bad); } .s-left { background: var(--bar); }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; border: 1px solid var(--line); }
+  .ovstats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 10px; }
+  .ovstats div { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+  .ovstats b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
+  .ovstats span { font-size: 12px; color: var(--muted); }
+  .tag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; color: #fff; white-space: nowrap; }
+  .tag.ready { background: var(--ok); } .tag.check { background: var(--warn); } .tag.wait { background: var(--idle); }
+  .tag.dup { background: var(--run); } .tag.taken { background: var(--bad); } .tag.new { background: var(--run); }
+  .nmto { flex: 1 1 360px; min-width: 0; font: 12px ui-monospace, Consolas, monospace; padding: 4px 7px; border-radius: 6px;
+          border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+  a.more { color: var(--run); font-size: 12px; text-decoration: none; }
+  .btns { display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-start; justify-content: flex-end; }
+  .btn { font: inherit; font-size: 12px; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--run);
+         background: var(--run); color: #fff; cursor: pointer; white-space: nowrap; }
+  .btn.ghost { background: transparent; color: var(--run); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 10px 0 4px; }
+  .toolbar input[type=search] { font: inherit; padding: 5px 9px; border-radius: 6px; border: 1px solid var(--line);
+                                background: var(--bg); color: var(--ink); min-width: 220px; flex: 1; max-width: 360px; }
+  .toolbar label { font-size: 13px; color: var(--muted); display: flex; gap: 5px; align-items: center; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg button { font: inherit; font-size: 12px; padding: 5px 10px; border: 0; background: transparent; color: var(--muted); cursor: pointer; white-space: nowrap; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button.on { color: #fff; } .seg button.on.good { background: var(--ok); } .seg button.on.bad { background: var(--bad); }
+  .seg button.on.meh { background: var(--warn); } .seg button.on.tab { background: var(--run); }
+  .seg button.sug { outline: 2px dashed currentColor; outline-offset: -4px; color: var(--ink); }
+  .seg button.sug.good { color: var(--ok); } .seg button.sug.bad { color: var(--bad); }
+  .chips { display: inline-flex; gap: 4px; flex-wrap: wrap; vertical-align: middle; }
+  .chip { font-size: 11px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+  .chip.e { border-color: var(--bad); color: var(--bad); }
+  .fileline { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 3px; }
+  .fileline .mono { flex: 1 1 320px; }
+  .btn.sm { padding: 2px 8px; font-size: 11px; }
+  #pxlist h3 { font-size: 14px; margin: 18px 0 4px; }
+  .plan { margin-top: 6px; padding: 6px 10px; border-left: 3px solid var(--ok); background: var(--bg); border-radius: 4px; font-size: 13px; display: grid; gap: 2px; }
+  .pxrow { display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: start; }
+  .poster { width: 64px; height: 96px; object-fit: cover; border-radius: 4px; background: var(--bar); display: block; }
+  a.title { color: var(--ink); text-decoration: none; border-bottom: 1px dotted var(--muted); }
+  a.title:hover { color: var(--run); border-bottom-color: var(--run); }
+  .save { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; text-align: right; line-height: 1.1; white-space: nowrap; }
+  .save.free { color: var(--bad); } .save.keep { color: var(--ok); } .save.none { color: var(--muted); font-size: 16px; }
+  .save small { display: block; font-size: 11px; font-weight: 400; color: var(--muted); }
+  .save.both { font-size: 15px; font-weight: 600; }
+  .side { display: grid; gap: 6px; justify-items: end; }
+  .conf { font-size: 11px; padding: 1px 6px; border-radius: 99px; border: 1px solid var(--line); color: var(--ink); white-space: nowrap; }
+  .pvgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; margin-top: 8px; }
+  .pvgrid figure { margin: 0; } .pvgrid img { width: 100%; display: block; border-radius: 4px; background: #000; image-rendering: auto; }
+  .pvgrid figcaption { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .selbar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+            display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; max-width: calc(100% - 32px);
+            background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px;
+            box-shadow: 0 6px 24px rgba(0,0,0,.35); z-index: 10; }
+  .pick { width: 18px; height: 18px; margin: 4px 0 0; cursor: pointer; accent-color: var(--run); }
+  .pxrow.sel { background: color-mix(in srgb, var(--run) 10%, transparent); border-radius: 6px; }
+  .pxrow { grid-template-columns: 22px 64px 1fr; }
+  .pxrow.nopick { grid-template-columns: 64px 1fr; }
+  .folderbtns { justify-content: flex-end; align-items: center; }
+  .fsel { max-width: 320px; text-overflow: ellipsis; }
+  .btn.sm.bad { color: var(--bad); border-color: var(--bad); }
+  .nowenc { display: grid; grid-template-columns: minmax(0, 320px) 1fr; gap: 12px; align-items: start; margin-top: 8px; }
+  .encframe { width: 100%; border-radius: 6px; background: #000; display: block; aspect-ratio: 16 / 9; object-fit: contain; }
+  @media (max-width: 560px) { .nowenc { grid-template-columns: 1fr; } }
+  .encbox { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+  #pxlist .row .top > div:first-child { flex: 1 1 420px; min-width: 0; }
+  select.btn { padding: 5px 8px; }
+  .row { padding: 10px 0; border-top: 1px solid var(--line); }
+  .row .top { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+  .row .n { font-weight: 550; overflow-wrap: anywhere; }
+  .thumbs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .thumbs figure { margin: 0; } .thumbs img { width: 100%; border-radius: 6px; background: #000; min-height: 60px; display: block; }
+  .thumbs figcaption { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .pairs { margin: 6px 0 0 14px; }
+  .stats { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; margin-top: 6px; }
+  .stats b { font-variant-numeric: tabular-nums; }
+  .note-warn { color: var(--warn); font-size: 12px; }
+  details summary { cursor: pointer; color: var(--run); font-size: 12px; margin-top: 4px; }
+  @media (max-width: 480px) { header, nav, main { padding-left: 16px; padding-right: 16px; } .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Control Room</h1>
+  <span class="sub" id="updated">connecting…</span>
+</header>
+<nav>
+  <button class="on" data-tab="ops">Overview</button>
+  <button data-tab="queue">Re-encoding</button>
+  <button data-tab="names">Library names</button>
+  <button data-tab="plex">Plex review</button>
+  <button data-tab="plan">Backup plan</button>
+</nav>
+<main>
+  <section id="ops">
+    <div class="alerts" id="alerts"></div>
+    <div class="grid">
+      <div class="card" id="rec"></div>
+      <div class="card" id="nmcard"></div>
+      <div class="card" id="uploads"></div>
+      <div class="card" id="dxvcard"></div>
+      <div class="card" id="sys"></div>
+    </div>
+  </section>
+  <section id="plan" class="hidden"><div class="card" id="stages"></div></section>
+  <section id="names" class="hidden"><div class="card">
+    <h2>Library names <span id="nmpill"></span></h2>
+    <p class="sub">Checks every video in the NAS library's Movies and TV Shows folders (what the NAS Plex shows) against the naming
+      standard: <span class="mono">Movies\Title (Year).mkv</span> and <span class="mono">TV Shows\Show (Year)\Season 01\Show (Year) - s01e01 - Title.mkv</span>.
+      It runs every 6 hours while this dashboard is open, and when you press Scan now. The right name comes from the NAS Plex's own match.
+      A file is renamed automatically only when Plex's match and the file name agree; everything else waits here for you.
+      Subtitles and other files with the same name move along, every rename is logged (dashboard/rename_log.csv) and can be undone below,
+      and files the re-encode queue still needs are left alone.</p>
+    <div class="toolbar">
+      <div class="seg" id="nmauto"><button data-a="1">Fix confident ones automatically</button><button data-a="0">Ask me first</button></div>
+      <button class="btn" id="nmscan">Scan now</button><span class="sub" id="nmlast"></span>
+    </div>
+    <div class="stats" id="nmstats"></div>
+    <div id="nmlist"><p class="empty">loading…</p></div>
+    <h3 style="font-size:14px;margin:18px 0 4px">Recently renamed</h3>
+    <div id="nmrecent"></div>
+  </div></section>
+  <section id="queue" class="hidden"><div class="card">
+    <h2>Re-encoding <span id="qpill"></span></h2>
+    <div id="qoverall"></div>
+    <div id="qwork"></div>
+    <div class="toolbar"><div class="seg" id="qmode"><button data-m="idle">Only when the PC is idle</button><button data-m="always">Run anytime</button></div>
+      <span class="sub" id="qmodehint"></span></div>
+    <div class="toolbar"><div class="seg" id="qfilter"><button class="on tab" data-f="next">Up next</button><button data-f="done">Done</button><button data-f="failed">Failed</button></div>
+      <input type="search" id="qq" placeholder="Filter by title…"></div>
+    <div id="qlist"><p class="empty">loading…</p></div>
+    <p class="sub">Titles you keep that are very large or in a format that doesn't stream well are re-encoded to the standard
+      (HEVC 10-bit in MKV, E-AC3 instead of DTS/TrueHD, at most 1080p and 2.5 GB per hour) and written to their final, properly named
+      place in the NAS library. One title at a time on the GPU (NVENC); each result is checked (length, tracks, a full decode and a VMAF
+      quality score on three samples) before it counts as done. Original sources are never changed by this.</p>
+  </div></section>
+  <section id="plex" class="hidden">
+    <div class="card"><h2>Plex keep / drop</h2>
+      <p class="sub">Every title is marked. Switching a title to Drop takes its waiting jobs off the re-encode queue; its files are deleted
+        only when you ask me to. Ticking or unticking "Re-encode" does the same for one title.</p>
+      <div class="stats" id="pxstats"></div>
+      <div class="toolbar">
+        <div class="seg" id="pxkind"><button class="on tab" data-k="movies">Movies</button><button data-k="shows">TV shows</button><button data-k="collections">Collections</button><button data-k="dupes">Duplicates &amp; fixes</button></div>
+        <input type="search" id="pxq" placeholder="Filter by title, genre, studio…">
+        <select id="pxshow" class="btn ghost" aria-label="Which items to show">
+          <option value="all">All</option><option value="review">Not marked</option>
+          <option value="keep">Suggested keep</option><option value="drop">Suggested drop</option><option value="undecided">No suggestion</option>
+          <option value="done">Already marked</option>
+        </select>
+        <select id="pxsort" class="btn ghost" aria-label="Sort">
+          <option value="size">Largest first</option><option value="title">Title</option><option value="year">Newest</option><option value="watched">Last watched</option>
+        </select>
+        <label><input type="checkbox" id="pxe"> only on the failing drive</label>
+      </div>
+      <div id="pxlist"><p class="empty">loading…</p></div>
+      <div id="pxsel" class="selbar" hidden>
+        <b id="pxseln">0 selected</b>
+        <button class="btn" style="background:var(--ok);border-color:var(--ok)" onclick="applySel('keep')">Keep selected</button>
+        <button class="btn" style="background:var(--bad);border-color:var(--bad)" onclick="applySel('drop')">Drop selected</button>
+        <button class="btn ghost" onclick="selectShown()">Select all shown</button>
+        <button class="btn ghost" onclick="clearSel()">Clear</button>
+      </div>
+    </div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const gb = x => x >= 1000 ? (x / 1000).toFixed(2) + ' TB' : (x ?? 0).toFixed(1) + ' GB';
+const pct = (a, b) => b > 0 ? Math.min(100, 100 * a / b) : 0;
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pill = s => `<span class="pill ${esc(String(s).replace(/\s+/g,'-'))}">${esc(s)}</span>`;
+const bar = (p, ok) => `<div class="bar ${ok ? 'ok' : ''}"><i style="width:${p.toFixed(1)}%"></i></div>`;
+const ago = t => { if (!t) return 'never'; const s = Date.now()/1000 - t;
+  return s < 90 ? Math.round(s)+' s ago' : s < 5400 ? Math.round(s/60)+' min ago' : s < 172800 ? Math.round(s/3600)+' h ago' : Math.round(s/86400)+' days ago'; };
+
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+  ['ops','queue','names','plex','plan'].forEach(t => $(t).classList.toggle('hidden', t !== b.dataset.tab));
+  if (b.dataset.tab === 'plex' && !PX) loadPlex();
+  if (b.dataset.tab === 'queue') loadQueue();
+  if (b.dataset.tab === 'names') loadNames();
+  history.replaceState(null, '', b.dataset.tab === 'ops' ? location.pathname : '#' + b.dataset.tab);
+});
+
+// ---------- shared helpers ----------
+const base = p => (p || '').split('\\').pop(), dir = p => (p || '').split('\\').slice(0, -1).join('\\');
+const mb = b => b == null ? '?' : b >= 1e12 ? (b / 1e12).toFixed(2) + ' TB' : b >= 1e9 ? (b / 1e9).toFixed(b >= 1e11 ? 0 : 1) + ' GB' : (b / 1e6).toFixed(0) + ' MB';
+// every POST carries JSON plus X-Dashboard: 1; the server refuses POSTs without them (see server.py)
+const POST_HEADERS = { 'Content-Type': 'application/json', 'X-Dashboard': '1' };
+const postRaw = (url, body) => fetch(url, { method: 'POST', headers: POST_HEADERS, body: JSON.stringify(body || {}) });
+const post = (url, body) => postRaw(url, body).then(r => r.json());
+const fileAct = (list, i, side, act) => postRaw('/api/file', { list, i, act })
+  .then(r => { if (!r.ok) alertBar(`Couldn't open that file (${r.status}).`); });
+function alertBar(t) { $('updated').textContent = t; }
+async function mark(list, keys, decision) {
+  const r = await postRaw('/api/mark', { list, keys, decision });
+  keys.forEach(k => decision ? PX.decisions[k] = decision : delete PX.decisions[k]);
+  try { const j = await r.json(); if (j.queue && j.queue.length) alertBar(j.queue[0]); } catch (e) {}
+  await refreshQueueMap();
+}
+
+
+// ---------- Plex keep / drop ----------
+let PX = null, pxKind = 'movies', pxShown = 60, QMAP = {};
+const pxKey = it => (it.kind === 'movie' ? 'm:' : 's:') + it.id;
+const PXOPTS = [['keep', 'Keep', 'good'], ['drop', 'Drop', 'bad']];
+async function loadPlex() {
+  PX = await (await fetch('/api/plexlist')).json();
+  PX.byId = {}; PX.movies.forEach(m => PX.byId[m.id] = m);
+  PX.inColl = {}; PX.collections.forEach(c => c.members.forEach(id => (PX.inColl[id] ||= []).push(c.title)));
+  [...PX.movies, ...PX.shows].forEach(it => { it.base_suggest = it.suggest; it.base_reason = it.reason; });
+  buildFolders();
+  learn();
+  await refreshQueueMap();
+  renderPlex();
+}
+const pxDec = it => it.kind === 'collection' ? collState(it) : PX.decisions[pxKey(it)] || null;
+function collState(c) {
+  const ds = c.members.map(id => PX.decisions['m:' + id] || null);
+  return ds.every(d => d && d === ds[0]) ? ds[0] : ds.some(Boolean) ? 'mixed' : null;
+}
+function pxFiltered() {
+  const q = $('pxq').value.toLowerCase(), show = $('pxshow').value, eOnly = $('pxe').checked, sort = $('pxsort').value;
+  const list = PX[pxKind].filter(it => {
+    const d = pxDec(it);
+    if (show === 'review' && d && d !== 'mixed') return false;
+    if (show === 'done' && (!d || d === 'mixed')) return false;
+    if (['keep', 'drop', 'undecided'].includes(show) && (it.suggest !== show || (d && d !== 'mixed'))) return false;
+    if (eOnly && !(it.e_only || it.e_only_bytes > 0 || (it.members || []).some(id => PX.byId[id].e_only))) return false;
+    return !q || [it.title, it.studio, (it.genres || []).join(' '), it.year].join(' ').toLowerCase().includes(q);
+  });
+  const by = { size: (a, b) => b.size - a.size, title: (a, b) => a.title.localeCompare(b.title),
+               year: (a, b) => (b.year || 0) - (a.year || 0), watched: (a, b) => (b.last_viewed || 0) - (a.last_viewed || 0) };
+  return list.sort(by[sort]);
+}
+function pxTotals() {
+  const all = [...PX.movies, ...PX.shows], t = { keep: 0, drop: 0, open: 0, n: { keep: 0, drop: 0, open: 0 } };
+  all.forEach(it => { const d = PX.decisions[pxKey(it)] || 'open'; t[d] += it.size; t.n[d]++; });
+  const sug = all.filter(it => !PX.decisions[pxKey(it)] && it.suggest === 'drop').reduce((a, it) => a + it.size, 0);
+  return { ...t, sug, total: all.reduce((a, it) => a + it.size, 0) };
+}
+// ---- learning from your answers ----
+// After every 10 confirmed marks the suggestions for everything unmarked are recomputed:
+//  1. same series (franchise name or collection folder) as titles you marked -> follow your majority there
+//  2. otherwise the titles most like it (genres, decade, studio, country, movie/show) that you marked vote,
+//     together with my original suggestion
+const confirmedItems = () => [...PX.movies, ...PX.shows].filter(it => PX.decisions[pxKey(it)]);
+function sim(a, b) {
+  const ga = new Set(a.genres || []), gb = new Set(b.genres || []);
+  const inter = [...ga].filter(g => gb.has(g)).length, uni = new Set([...ga, ...gb]).size || 1;
+  return 0.45 * inter / uni + 0.15 * (Math.floor((a.year || 0) / 10) === Math.floor((b.year || 0) / 10) && a.year ? 1 : 0)
+    + 0.15 * (a.studio && a.studio === b.studio ? 1 : 0) + 0.1 * (a.country && a.country === b.country ? 1 : 0)
+    + 0.15 * (a.kind === b.kind ? 1 : 0);
+}
+function learn() {
+  const conf = confirmedItems();
+  PX.learnedFrom = conf.length;
+  const all = [...PX.movies, ...PX.shows];
+  all.forEach(it => { it.suggest = it.base_suggest; it.reason = it.base_reason;
+    const w = it.strength ?? 1; it.score = it.base_suggest === 'keep' ? w : it.base_suggest === 'drop' ? -w : 0; });
+  if (conf.length < 10) return;
+  const series = {};
+  conf.forEach(c => {
+    const keys = [c.franchise, ...(c.kind === 'movie' ? (PX.inColl[c.id] || []).map(x => 'c:' + x) : [])].filter(Boolean);
+    keys.forEach(k => (series[k] ||= []).push(c));
+  });
+  all.forEach(it => {
+    if (PX.decisions[pxKey(it)]) return;
+    const keys = [it.franchise, ...(it.kind === 'movie' ? (PX.inColl[it.id] || []).map(x => 'c:' + x) : [])].filter(Boolean);
+    const rel = keys.flatMap(k => series[k] || []);
+    if (rel.length) {
+      const keep = rel.filter(c => PX.decisions[pxKey(c)] === 'keep');
+      const v = keep.length * 2 >= rel.length ? 'keep' : 'drop', ex = (v === 'keep' ? keep : rel.filter(c => PX.decisions[pxKey(c)] === 'drop'))[0];
+      const w = 1.5 + 0.25 * Math.min(rel.length, 4);
+      it.suggest = v; it.score = v === 'keep' ? w : -w;
+      it.reason = `same series as "${ex.title}", which you ${v === 'keep' ? 'kept' : 'dropped'}`;
+      return;
+    }
+    // only close matches count (shared genres plus era/studio/country), and each counts for less than my first guess
+    const nb = conf.map(c => [sim(it, c), c]).filter(x => x[0] >= 0.55).sort((a, b) => b[0] - a[0]).slice(0, 6);
+    if (nb.length < 2) return;
+    let score = it.score;
+    nb.forEach(([w, c]) => score += 0.6 * w * (PX.decisions[pxKey(c)] === 'keep' ? 1 : -1));
+    const v = score > 0.3 ? 'keep' : score < -0.3 ? 'drop' : 'undecided';
+    const verb = x => x === 'keep' ? 'kept' : 'dropped';
+    const like = x => nb.filter(([, c]) => PX.decisions[pxKey(c)] === x).slice(0, 2).map(([, c]) => `"${c.title}"`).join(' and ');
+    it.score = score;
+    if (v === it.base_suggest) {
+      if (like(v)) it.reason = (it.base_reason ? it.base_reason + '; ' : '') + `you also ${verb(v)} similar titles like ${like(v)}`;
+    } else if (v === 'undecided') {
+      it.suggest = v;
+      it.reason = `I first said ${it.base_suggest}${it.base_reason ? ' (' + it.base_reason + ')' : ''}, but you kept similar titles like ${like('keep') || '—'}` +
+        (like('drop') ? ` and dropped ${like('drop')}` : '');
+    } else {
+      it.suggest = v;
+      it.reason = `you ${verb(v)} similar titles like ${like(v)}` + (it.base_suggest !== 'undecided' ? ` (my first guess was ${it.base_suggest})` : '');
+    }
+  });
+}
+// confidence in the current suggestion, 50-99%: strength of the rule plus how your answers agree
+const confidence = it => it.suggest === 'undecided' ? null : Math.min(99, Math.round(100 / (1 + Math.exp(-1.5 * Math.abs(it.score || 0)))));
+// ---- the plan for a kept title: which copy, and whether it gets re-encoded ----
+async function refreshQueueMap() {
+  try {
+    const q = await (await fetch('/api/queue')).json();
+    QMAP = {}; q.jobs.forEach(j => (QMAP[j.key] ||= []).push(j));
+  } catch (e) {}
+}
+function queueChip(key) {
+  const js = QMAP[key] || [];
+  if (!js.length) return '';
+  const c = s => js.filter(j => j.status === s).length;
+  const run = js.find(j => j.status === 'running');
+  return `<span class="chip">${[run ? `encoding ${Math.round((run.progress || 0) * 100)}%` : '', c('queued') ? `${c('queued')} queued` : '',
+    c('done') ? `${c('done')} done` : '', c('failed') ? `${c('failed')} failed` : ''].filter(Boolean).join(' · ')}</span>`;
+}
+function planHtml(it) {
+  const key = pxKey(it), d = PX.decisions[key];
+  if (d === 'keep' && it.kind === 'movie' && libOf(it) === 'tv') {
+    const show = PX.decisions['showname:' + key] || it.show_name || it.title;
+    const eps = it.versions.filter(v => !['extra', 'wrong', 'same', 'cut', 'other'].includes(v.relation));
+    const n = eps.filter(v => v.ep && v.ep[1]).length, sp = eps.length - n;
+    const enc = eps.filter(v => v.encode).length;
+    return `<div class="plan"><b>Keeping in TV Shows</b> as <input id="sn${it.id}" value="${esc(show)}" style="font:inherit;width:22em;max-width:100%"
+        onchange="setShowName('${key}', this.value)" title="show name; press Enter or click away to save">
+      <div>${n} episode file${n === 1 ? '' : 's'} (numbers from the file names)${sp ? ` + ${sp} special${sp > 1 ? 's' : ''} (Season 00, e.g. the film itself)` : ''}
+        · ${enc} need re-encoding ${queueChip(key)}</div>
+      <div class="mono">→ ${esc(PX.media_root)}\\TV Shows\\${esc(show)}\\Season NN\\${esc(show)} - sNNeNN - Title.mkv</div></div>`;
+  }
+  if (d === 'keep' && it.kind === 'show' && libOf(it) === 'movies') {
+    const t = it.title + (it.year ? ` (${it.year})` : '');
+    return `<div class="plan"><b>Keeping in Movies</b>: ${it.episodes === 1 ? `→ <span class="mono">${esc(PX.media_root)}\\Movies\\${esc(t)}.mkv</span>`
+      : `each of the ${it.episodes} episodes becomes its own film: <span class="mono">${esc(PX.media_root)}\\Movies\\${esc(it.title)} - Episode Title${it.year ? ` (${it.year})` : ''}.mkv</span>`}
+      ${queueChip(key)}</div>`;
+  }
+  if (!(d === 'keep' || (!d && it.suggest === 'keep'))) return '';
+  const encOn = PX.decisions['enc:' + key] !== 'no';
+  const box = (label, dis) => `<label class="encbox"><input type="checkbox" ${encOn ? 'checked' : ''} ${dis ? 'disabled' : ''}
+      onchange="toggleEnc('${key}', this.checked)"> ${label}</label> ${queueChip(key)}`;
+  if (it.kind === 'movie') {
+    const pick = PX.decisions['pick:' + key];
+    const v = (pick && pick !== 'all' && it.versions.find(x => String(x.media) === pick)) || it.versions[0];
+    let h = `<div class="plan"><b>${d ? 'Keeping' : 'If kept'}:</b> ${vDesc(v)}${it.versions.length > 1 ? ' <span class="sub">(best copy; the others go)</span>' : ''}`;
+    if (v.encode) {
+      h += `<div>${box(`Re-encode (${esc(v.encode.kind === 'video' ? 'HEVC video' : v.encode.kind === 'audio' ? 'audio only, video untouched' : 'container only')}):
+        ${mb(v.size)} → ~${mb(v.encode.est_bytes)}`, !it.dest)}</div><div class="sub">${v.encode.reasons.map(esc).join('; ')}</div>`;
+      if (!it.dest) h += `<div class="note-warn">Plex couldn't identify this title, so it has no proper name yet. Fix the match in Plex first.</div>`;
+    } else h += `<div class="sub">Already streams well: it will be moved and renamed as-is.</div>`;
+    if (it.dest) h += `<div class="mono">→ ${esc(it.dest)}</div>`;
+    if (it.looks_like_tv) h += `<div class="note-warn">${it.looks_like_tv} of its files look like TV episodes. "Keep in TV" files them under TV Shows.</div>`;
+    return h + '</div>';
+  }
+  if (it.kind === 'show') {
+    if (!it.encode_eps) return `<div class="plan"><b>${d ? 'Keeping' : 'If kept'}:</b> all ${it.episodes} episodes already stream well.<div class="mono">→ ${esc(it.dest_root)}</div></div>`;
+    return `<div class="plan"><b>${d ? 'Keeping' : 'If kept'}:</b><div>${box(`Re-encode ${it.encode_eps} of ${it.episodes} episodes: ${mb(it.encode_bytes)} → ~${mb(it.encode_est)}`)}</div>
+      <div class="mono">→ ${esc(it.dest_root)}</div></div>`;
+  }
+  return '';
+}
+async function toggleEnc(key, on) { await mark('plex', ['enc:' + key], on ? null : 'no'); renderPlex(); }
+
+const posterImg = id => `<img class="poster" loading="lazy" alt="" src="/api/poster?id=${id}" onerror="this.style.visibility='hidden'">`;
+function imdbUrl(it) {
+  const tt = (it.ids || []).find(x => x.startsWith('imdb://'));
+  return tt ? `https://www.imdb.com/title/${tt.slice(7)}/` : `https://www.imdb.com/find/?q=${encodeURIComponent(it.title + (it.year ? ' ' + it.year : ''))}`;
+}
+const titleLink = it => `<a class="title" href="${imdbUrl(it)}" target="_blank" rel="noopener" title="Open on IMDb">${esc(it.title)}</a>`;
+function chosenVersion(it) {
+  const pick = PX.decisions['pick:' + pxKey(it)];
+  return (pick && pick !== 'all' && it.versions.find(x => String(x.media) === pick)) || it.versions[0];
+}
+function keepSaving(it) {
+  // what keeping still saves: the extra copies that go, plus the re-encode (unless its box is unticked)
+  const encOn = PX.decisions['enc:' + pxKey(it)] !== 'no';
+  if (it.kind === 'movie') {
+    const v = chosenVersion(it), pick = PX.decisions['pick:' + pxKey(it)];
+    const extra = pick === 'all' ? 0 : it.versions.filter(x => x !== v && ['main', 'same', 'cut'].includes(x.relation)).reduce((a, x) => a + x.size, 0);
+    return extra + (encOn && v.encode && it.dest ? Math.max(0, v.size - v.encode.est_bytes) : 0);
+  }
+  if (it.kind === 'show') return (it.dup_bytes || 0) + (encOn ? Math.max(0, (it.encode_bytes || 0) - (it.encode_est || 0)) : 0);
+  return it.members.map(id => PX.byId[id]).reduce((a, m) => a + keepSaving(m), 0);
+}
+function savingHtml(it) {
+  const d = pxDec(it), eff = d && d !== 'mixed' ? d : (it.suggest !== 'undecided' ? it.suggest : null), sure = d && d !== 'mixed';
+  const drop = it.size, keep = keepSaving(it);
+  const gbs = b => (b / 1e9 >= 100 ? (b / 1e9).toFixed(0) : (b / 1e9).toFixed(1)) + ' GB';
+  if (eff === 'drop') return `<div class="save free">−${gbs(drop)}<small>${sure ? 'freed by dropping' : 'if dropped (suggested)'}</small>
+      <small>keeping would save ${gbs(keep)}</small></div>`;
+  if (eff === 'keep') return (keep > 0 ? `<div class="save keep">−${gbs(keep)}<small>${sure ? 'saved while keeping' : 'saved if kept (suggested)'}</small>`
+    : `<div class="save none">0 GB<small>${sure ? 'kept as-is' : 'if kept (suggested)'}</small>`) + `<small>dropping would free ${gbs(drop)}</small></div>`;
+  return `<div class="save both">drop −${gbs(drop)}<small>keep −${gbs(keep)}</small></div>`;
+}
+
+function renderPlex() {
+  const t = pxTotals();
+  $('pxstats').innerHTML = `<span>Library <b>${mb(t.total)}</b></span>
+    <span>Keep <b>${t.n.keep}</b> (${mb(t.keep)})</span><span>Drop <b>${t.n.drop}</b> (${mb(t.drop)})</span>
+    <span>Not marked <b>${t.n.open}</b> (${mb(t.open)}; ${mb(t.sug)} of it suggested drop)</span>
+    <span>After drops: <b>${mb(t.total - t.drop)}</b>${t.sug ? ` · ${mb(t.total - t.drop - t.sug)} if you take every suggested drop` : ''}</span>
+    <span class="sub">watch history since ${esc(PX.history_since)} · built ${esc(PX.built)}</span>`;
+  updateSelBar();
+  const plain = pxKind === 'dupes';
+  ['pxshow', 'pxsort', 'pxe', 'pxq'].forEach(id => $(id).hidden = plain);
+  $('pxe').parentElement.hidden = plain;
+  if (pxKind === 'dupes') { renderPxDupes(); return; }
+  const list = pxFiltered();
+  $('pxlist').innerHTML = !list.length ? '<p class="empty">Nothing left here. Try "All" or another tab.</p>' :
+    list.slice(0, pxShown).map(pxRow).join('') +
+    (list.length > pxShown ? `<p><button class="btn ghost" onclick="pxShown+=60;renderPlex()">Show more (${list.length - pxShown} left)</button></p>` : '');
+}
+const libOf = it => PX.decisions['lib:' + pxKey(it)] || (it.kind === 'movie' ? 'movies' : 'tv');
+function pxSeg(it, onclick) {
+  const d = pxDec(it);
+  const moved = it.kind !== 'collection' && d === 'keep' && libOf(it) !== (it.kind === 'movie' ? 'movies' : 'tv');
+  const other = it.kind === 'movie' ? ['tv', 'Keep in TV'] : it.kind === 'show' ? ['movies', 'Keep in Movies'] : null;
+  const hint = other && ((it.kind === 'movie' && it.looks_like_tv) || (it.kind === 'show' && it.looks_like_movie));
+  return `<div class="seg">${PXOPTS.map(([v, label, cls]) => `<button class="${d === v && !(v === 'keep' && moved) ? 'on ' + cls : (!d && it.suggest === v ? 'sug ' + cls : '')}"
+    onclick="${onclick}('${v}')" title="${!d && it.suggest === v ? 'suggested' : ''}">${label}</button>`).join('')}${other ?
+    `<button class="${moved ? 'on good' : hint && !d ? 'sug good' : ''}" onclick="pxMove('${pxKey(it)}','${other[0]}')"
+      title="keep it, filed under ${other[0] === 'tv' ? 'TV Shows' : 'Movies'}">${other[1]}</button>` : ''}</div>`;
+}
+async function pxMove(key, lib) {
+  const isOn = PX.decisions[key] === 'keep' && PX.decisions['lib:' + key] === lib;
+  if (isOn) { await mark('plex', ['lib:' + key], null); }
+  else { await mark('plex', ['lib:' + key], lib); await mark('plex', [key], 'keep'); }
+  renderPlex();
+}
+async function setShowName(key, name) { await mark('plex', ['showname:' + key], name.trim() || null); renderPlex(); }
+function pxRow(it) {
+  const d = pxDec(it), rid = it.kind[0] + it.id.toString().replace(/[^\w]/g, '_');
+  const when = it.last_viewed ? new Date(it.last_viewed * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short' }) : '';
+  let meta, extra = '';
+  if (it.kind === 'movie') {
+    const nCopies = it.versions.filter(v => ['main', 'same', 'cut'].includes(v.relation)).length, nOther = it.versions.length - nCopies;
+    meta = `${esc(it.best)} · ${mb(it.size)}${nCopies > 1 ? ` · <span class="note-warn">${nCopies} copies (${mb(it.extra_bytes)} in extra copies)</span>` : ''}${nOther ? ` · ${nOther} other file${nOther > 1 ? 's' : ''} attached (trailers, parts or mismatches)` : ''}
+      · ${it.views ? `watched ${it.views}× · ${when}` : 'never watched'}`;
+    if (PX.inColl[it.id]) extra = `<div class="sub">in collection: ${PX.inColl[it.id].map(esc).join(', ')}</div>`;
+    extra += copyLinks(it.versions[0]);
+    if (it.wrong_match || it.name_warning) extra += `<div class="note-warn">${esc(it.wrong_match || it.name_warning)}</div>`;
+    if (it.versions.length > 1) extra += `<details><summary>${it.has_dupes ? 'pick a version' : 'other files Plex attached'} (${it.versions.length} files)</summary>
+      ${it.pick_reason ? `<div class="sub">${esc(it.pick_reason)}</div>` : ''}${versionTable('pick:m:' + it.id, it.versions, 'movie')}</details>`;
+  } else if (it.kind === 'show') {
+    meta = `${it.seasons} season${it.seasons === 1 ? '' : 's'} · ${it.episodes} episodes · ${esc(it.best)} · ${mb(it.size)}
+      · ${it.watched_eps ? `${it.watched_eps} watched · ${when}` : 'never watched'}`;
+    const realDup = it.dup_eps.filter(e => ['duplicate', 'overlap', 'check'].includes(e.status)).length;
+    if (realDup) meta += ` · <span class="note-warn">${realDup} episode${realDup > 1 ? 's have' : ' has'} more than one copy</span>`;
+    const si = PX.shows.indexOf(it);
+    extra = `<details ontoggle="if(this.open)showFiles(${si},this)"><summary>show files (${it.episodes})</summary><div class="pairs">loading…</div></details>`;
+  } else {
+    meta = `${it.members.length} movies · ${mb(it.size)}`;
+    extra = `<details><summary>show movies</summary><div class="pairs">${it.members.map(id => PX.byId[id]).sort((a, b) => (a.year || 0) - (b.year || 0))
+      .map(m => `<div class="row"><div class="top"><div><div class="n">${esc(m.title)} ${m.year ? `(${m.year})` : ''}</div>
+        <div class="sub">${esc(m.best)} · ${mb(m.size)} · ${m.views ? 'watched' : 'never watched'} · suggested ${esc(m.suggest)}${m.reason ? ': ' + esc(m.reason) : ''}</div></div>
+        <div class="btns">${pxSeg(m, `(v=>pxMark('m:${m.id}',v))`)}</div></div></div>`).join('')}</div></details>`;
+  }
+  const eChip = (it.e_only || it.e_only_bytes > 0) ? `<span class="chip e" title="the only copy is on the failing drive (read from its rescued copy)">only on failing drive</span>` : '';
+  const drives = (it.drives || []).map(x => `<span class="chip">${esc(x)}</span>`).join('');
+  const onclick = it.kind === 'collection' ? `(v=>pxColl(${PX.collections.indexOf(it)},v))` : `(v=>pxMark('${pxKey(it)}',v))`;
+  const pid = it.kind === 'collection' ? it.members[0] : it.id;
+  const heading = it.kind === 'collection' ? esc(it.title) : titleLink(it);
+  const sk = selKey(it), on = SEL.has(sk);
+  return `<div class="row pxrow${on ? ' sel' : ''}"><input type="checkbox" class="pick" ${on ? 'checked' : ''} aria-label="select ${esc(it.title)}"
+      onchange="toggleSel('${sk}', this.checked)">${posterImg(pid)}<div class="top"><div>
+      <div class="n">${heading} ${it.year ? `<span class="sub">(${it.year})</span>` : ''} <span class="chips">${drives}${eChip}</span></div>
+      <div class="sub">${[(it.genres || []).slice(0, 3).join(', '), it.studio, it.rating ? `★ ${it.rating}` : ''].filter(Boolean).map(esc).join(' · ')}</div>
+      <div class="note sub">${meta}</div>
+      ${it.reason || it.suggest !== 'undecided' ? `<div class="sub">${d && d !== 'mixed' ? 'I suggested' : 'Suggest'} <b>${esc(it.suggest)}</b>${
+        confidence(it) ? ` <span class="conf" title="how sure the suggestion is">${confidence(it)}% sure</span>` : ''}${it.reason ? ': ' + esc(it.reason) : ''}</div>` : ''}
+      ${d === 'mixed' ? '<div class="note-warn">mixed marks inside this collection</div>' : ''}${planHtml(it)}${extra}
+    </div><div class="side">${savingHtml(it)}<div class="btns">${pxSeg(it, onclick)}</div>${folderButtons(it)}</div></div></div>`;
+}
+const REL = { main: ['best copy', 'good'], same: ['duplicate copy', 'meh'], cut: ['different cut (length differs)', 'meh'],
+  other: ['different file? check', 'bad'], part: ['part / episode, not a full copy', ''], wrong: ['different film? name doesn\'t match', 'bad'],
+  extra: ['trailer / sample / extra', ''] };
+const EPSTATUS = { duplicate: 'same episode twice', overlap: 'double-episode file overlaps', check: 'probably the same episode: check',
+  misfiled: 'different episodes filed under one number', extra: 'episode + commentary/special' };
+function fileLine(i) {
+  return `<div class="fileline"><span class="mono">${esc(PX.files[i])}</span>
+    <button class="btn ghost sm" onclick="fileAct('plex',${i},'','play')">Play</button>
+    <button class="btn ghost sm" onclick="fileAct('plex',${i},'','show')">Show in folder</button></div>`;
+}
+function copyLinks(v) {
+  // the main location first; other identical copies (usually the failing drive's twin) listed as such
+  return v.copies.map((cp, k) => `${k ? '<div class="sub">identical copy:</div>' : ''}${cp.map(fileLine).join('')}`).join('');
+}
+function vDesc(v) {
+  return `${esc(v.res)} ${esc(v.vcodec)}${v.hdr ? ' HDR' : ''} · ${esc(v.acodec)} ${v.ch ? v.ch + 'ch' : ''} · ${mb(v.size)}
+    · ${v.dur ? Math.round(v.dur / 60) + ' min' : '?'} · ${v.kbps ? (v.kbps / 1000).toFixed(1) + ' Mbps' : ''}`;
+}
+function versionTable(key, vs, kind) {
+  const pickable = v => kind !== 'info' && (kind === 'episode' || ['main', 'same', 'cut'].includes(v.relation));
+  const cur = PX.decisions[key];
+  const nPick = vs.filter(pickable).length;
+  return `<div class="pairs">${vs.map((v, k) => {
+    const r = REL[v.relation];
+    const on = cur === String(v.media), sug = !cur && k === 0 && pickable(v);
+    return `<div class="row"><div class="top"><div>
+        <div class="n">${r ? `<span class="chip">${esc(r[0])}</span> ` : ''}${vDesc(v)} ${v.e_only ? '<span class="chip e">only on failing drive</span>' : ''}</div>
+        ${copyLinks(v)}</div>
+      <div class="btns">${pickable(v) && nPick > 1 ? `<div class="seg"><button class="${on ? 'on good' : sug ? 'sug good' : ''}"
+        onclick="pickVersion('${key}','${v.media}')">Keep this one</button></div>` : ''}</div></div></div>`;
+  }).join('')}${nPick > 1 ? `<div class="btns" style="justify-content:flex-start"><div class="seg"><button class="${cur === 'all' ? 'on meh' : ''}"
+      onclick="pickVersion('${key}','all')">Keep all ${nPick}</button></div>
+      ${cur ? `<span class="sub">${cur === 'all' ? 'keeping every copy' : 'the other copies will be removed once you approve the clean-up'}</span>` : ''}</div>` : ''}</div>`;
+}
+async function pickVersion(key, media) {
+  await mark('plex', [key], PX.decisions[key] === media ? null : media);
+  renderPlex();
+}
+function showFiles(si, el) {
+  const s = PX.shows[si];
+  el.querySelector('.pairs').innerHTML = s.files.map(([label, title, fi, size, n]) =>
+    `<div class="row"><div class="n">${esc(label)} ${esc(title || '')} <span class="sub">· ${mb(size)}${n > 1 ? ` · ${n} files` : ''}</span></div>${fileLine(fi)}</div>`).join('');
+}
+function renderPxDupes() {
+  const q = $('pxq').value.toLowerCase(), hit = t => !q || t.toLowerCase().includes(q);
+  const mv = PX.movies.filter(m => m.has_dupes && hit(m.title)).sort((a, b) => b.extra_bytes - a.extra_bytes);
+  const eps = PX.shows.map(s => ({ s, e: s.dup_eps.filter(e => ['duplicate', 'overlap', 'check'].includes(e.status)) }))
+    .filter(x => x.e.length && hit(x.s.title));
+  const mvPicked = mv.filter(m => PX.decisions['pick:m:' + m.id]).length;
+  const epTotal = eps.reduce((a, x) => a + x.e.length, 0), epPicked = eps.reduce((a, x) => a + x.e.filter(e => PX.decisions['pick:e:' + e.ep]).length, 0);
+  const probMovies = PX.movies.filter(m => (m.wrong_match || m.name_warning || m.versions.some(v => ['wrong', 'other'].includes(v.relation))) && hit(m.title));
+  const probEps = PX.shows.map(s => ({ s, e: s.dup_eps.filter(e => ['misfiled', 'extra'].includes(e.status)) })).filter(x => x.e.length && hit(x.s.title));
+  const epRows = (x) => x.e.map(e => `<div class="row"><div class="n">${esc(e.label)} ${esc(e.title || '')} <span class="sub">· Plex's match: ${esc(EPSTATUS[e.status])}</span></div>
+      ${e.note ? `<div class="note-warn">${esc(e.note)}</div>` : ''}${e.pick_reason && e.status !== 'misfiled' ? `<div class="sub">${esc(e.pick_reason)}</div>` : ''}
+      ${versionTable('pick:e:' + e.ep, e.versions, e.status === 'misfiled' || e.status === 'extra' ? 'info' : 'episode')}</div>`).join('');
+  $('pxlist').innerHTML = `
+    <p class="sub">A duplicate here means the same movie or the same episode more than once, checked three ways: Plex's match, the season/episode
+      number and title in the file name, and the running time. Seasons, CD1/CD2 halves, double-episode files and copies of one file on two drives
+      are never counted as duplicates. Pick the copy to keep; nothing is deleted until you approve the clean-up.</p>
+    <h3>Movies with more than one copy <span class="sub">${mv.length} movies · ${mb(mv.reduce((a, m) => a + m.extra_bytes, 0))} in extra copies · ${mvPicked} picked</span></h3>
+    ${mv.map(m => `<div class="row pxrow nopick">${posterImg(m.id)}<div><div class="top"><div><div class="n">${titleLink(m)} ${m.year ? `<span class="sub">(${m.year})</span>` : ''}
+        ${PX.decisions['m:' + m.id] ? pill(PX.decisions['m:' + m.id]) : ''}</div>
+      <div class="sub">${esc(m.pick_reason)}</div></div>
+      <div class="save keep">−${(m.extra_bytes / 1e9).toFixed(1)} GB<small>extra copies removed</small></div></div>
+      ${versionTable('pick:m:' + m.id, m.versions, 'movie')}</div></div>`).join('') || '<p class="empty">none</p>'}
+    <h3>Episodes with more than one copy <span class="sub">${epTotal} episodes in ${eps.length} shows · ${epPicked} picked</span></h3>
+    ${eps.map(x => `<details><summary>${esc(x.s.title)}: ${x.e.length} episode${x.e.length > 1 ? 's' : ''}</summary>${epRows(x)}</details>`).join('') || '<p class="empty">none</p>'}
+    <h3>Plex filing problems (not duplicates) <span class="sub">${probMovies.length} movies · ${probEps.reduce((a, x) => a + x.e.length, 0)} episode groups · ${PX.maybe_dupes.length} other</span></h3>
+    <p class="sub">Files Plex matched to the wrong title or episode number. They are listed so nothing gets deleted by mistake; the renaming step
+      fixes them. Open the files to check.</p>
+    <details><summary>movies</summary>${probMovies.map(m => `<div class="row"><div class="n">${esc(m.title)} ${m.year ? `(${m.year})` : ''}</div>
+      <div class="note-warn">${esc(m.wrong_match || m.name_warning || 'a file attached here looks like a different film')}</div>
+      ${versionTable('info:m:' + m.id, m.versions, 'info')}</div>`).join('')}</details>
+    <details><summary>episodes</summary>${probEps.map(x => `<details><summary>${esc(x.s.title)}: ${x.e.length}</summary>${epRows(x)}</details>`).join('')}</details>
+    <details><summary>other likely matches</summary>${PX.maybe_dupes.map(d => `<div class="row"><div class="sub">${esc(d.why)}</div>
+      ${d.ids.map(id => PX.byId[id]).filter(Boolean).map(m => `<div class="n">${esc(m.title)}</div>${copyLinks(m.versions[0])}`).join('')}</div>`).join('')}</details>`;
+}
+// ---- "all in this folder" ----
+// Every folder below a library root maps to the titles that have a file inside it. For a row we use the nearest
+// folder around its main file that holds 2+ titles, stopping below the library root so one click can't mark a library.
+function buildFolders() {
+  const roots = (PX.roots || []).map(r => r.toLowerCase());
+  PX.folders = {}; PX.folderList = [];
+  const add = (path, key) => {
+    let d = path.slice(0, path.lastIndexOf('\\'));
+    while (d && !roots.includes((d + '\\').toLowerCase()) && d.split('\\').length > 2) {
+      const fk = d.toLowerCase();
+      if (!PX.folders[fk]) { PX.folders[fk] = { id: PX.folderList.length, name: d, keys: new Set() }; PX.folderList.push(PX.folders[fk]); }
+      PX.folders[fk].keys.add(key);
+      d = d.slice(0, d.lastIndexOf('\\'));
+    }
+  };
+  PX.movies.forEach(m => m.versions.forEach(v => v.copies.forEach(cp => add(PX.files[cp[0]], 'm:' + m.id))));
+  PX.shows.forEach(sh => sh.files.forEach(r => add(PX.files[r[2]], 's:' + sh.id)));
+}
+function folderLevels(it) {
+  // the folders around this title, nearest first, up to (not including) the library root
+  if (it.kind === 'collection') return [];
+  const path = it.kind === 'movie' ? PX.files[it.versions[0].copies[0][0]] : (it.files[0] ? PX.files[it.files[0][2]] : '');
+  const out = [];
+  let d = path.slice(0, path.lastIndexOf('\\'));
+  while (d) {
+    const f = PX.folders[d.toLowerCase()];
+    if (!f) break;                 // reached the library root
+    out.push(f);
+    d = d.slice(0, d.lastIndexOf('\\'));
+  }
+  return out;
+}
+const FSEL = {};  // chosen folder level per row (remembered while the page is open)
+async function markFolder(rowKey, v) {
+  const sel = document.getElementById('fs_' + rowKey.replace(':', '_'));
+  const f = PX.folderList[+(sel ? sel.value : -1)];
+  if (!f) return;
+  const keys = [...f.keys];
+  if (!confirm(`${v === 'keep' ? 'Keep' : 'Drop'} all ${keys.length} title${keys.length === 1 ? '' : 's'} in ${f.name}?`)) return;
+  const libs = keys.filter(k => PX.decisions['lib:' + k]).map(k => 'lib:' + k);
+  if (libs.length) await mark('plex', libs, null);
+  await mark('plex', keys, v);
+  learn(); renderPlex();
+}
+function folderButtons(it) {
+  const levels = folderLevels(it);
+  if (!levels.length) return '';
+  const key = pxKey(it), rid = key.replace(':', '_');
+  // default: the nearest level holding 2+ titles, else the item's own folder
+  const def = FSEL[key] ?? (levels.find(f => f.keys.size >= 2) || levels[0]).id;
+  const opts = levels.map((f, i) => `<option value="${f.id}" ${f.id === def ? 'selected' : ''}>${i === 0 ? 'this folder' : `${i} up`}: ${esc(f.name.split('\\').slice(-1)[0])} (${f.keys.size} title${f.keys.size === 1 ? '' : 's'})</option>`).join('');
+  return `<div class="btns folderbtns">
+    <select id="fs_${rid}" class="btn ghost sm fsel" aria-label="folder level" onchange="FSEL['${key}']=+this.value" title="which folder to apply to">${opts}</select>
+    <button class="btn ghost sm" onclick="markFolder('${key}','keep')">Keep all in folder</button>
+    <button class="btn ghost sm bad" onclick="markFolder('${key}','drop')">Drop all in folder</button></div>`;
+}
+
+// ---- multi-select ----
+const SEL = new Set();
+const selKey = it => it.kind === 'collection' ? 'c:' + PX.collections.indexOf(it) : pxKey(it);
+function selItemKeys() {  // collections expand to their movies
+  const keys = new Set();
+  SEL.forEach(k => k.startsWith('c:') ? PX.collections[+k.slice(2)].members.forEach(id => keys.add('m:' + id)) : keys.add(k));
+  return [...keys];
+}
+function updateSelBar() {
+  $('pxsel').hidden = SEL.size === 0;
+  const n = selItemKeys().length;
+  $('pxseln').textContent = `${n} title${n === 1 ? '' : 's'} selected`;
+}
+function toggleSel(k, on) { on ? SEL.add(k) : SEL.delete(k); renderPlex(); }
+function clearSel() { SEL.clear(); renderPlex(); }
+function selectShown() {
+  const shown = pxKind === 'dupes' ? [] : pxFiltered().slice(0, pxShown);
+  shown.forEach(it => SEL.add(selKey(it)));
+  renderPlex();
+}
+async function applySel(v) {
+  const keys = selItemKeys();
+  if (!keys.length) return;
+  if (!confirm(`Mark ${keys.length} title${keys.length === 1 ? '' : 's'} as ${v}?`)) return;
+  // plain Keep/Drop files each title in its own library again
+  const libs = keys.filter(k => PX.decisions['lib:' + k]).map(k => 'lib:' + k);
+  if (libs.length) await mark('plex', libs, null);
+  await mark('plex', keys, v);
+  SEL.clear(); learn(); renderPlex();
+}
+
+async function pxMark(key, v) {
+  if (PX.decisions['lib:' + key]) await mark('plex', ['lib:' + key], null);
+  const before = confirmedItems().length;
+  await mark('plex', [key], PX.decisions[key] === v ? null : v);
+  const after = confirmedItems().length;
+  if (after >= 10 && Math.floor(after / 10) !== Math.floor(before / 10) && pxKind !== 'quick') learn();
+  renderPlex();
+}
+async function pxColl(ci, v) {
+  const c = PX.collections[ci], ks = c.members.map(m => 'm:' + m);
+  await mark('plex', ks, collState(c) === v ? null : v);
+  renderPlex();
+}
+$('pxkind').onclick = e => { const k = e.target.dataset.k; if (!k) return; pxKind = k; pxShown = 60;
+  [...$('pxkind').children].forEach(b => b.className = b.dataset.k === k ? 'on tab' : ''); renderPlex(); };
+$('pxq').oninput = $('pxshow').onchange = $('pxsort').onchange = $('pxe').onchange = () => { pxShown = 60; renderPlex(); };
+// ---------- re-encoding: the whole queue at a glance (queue tab and Overview card) ----------
+const fmtH = h => h == null ? null : h < 1.5 ? `${Math.max(1, Math.round(h * 60))} min` : `${Math.round(h)} h`;
+function workerWord(q) {
+  const w = q.worker || {};
+  return !w.alive ? 'stopped' : w.state === 'paused' ? 'paused' : w.state === 'working' || w.state === 'countdown' ? 'running' : 'waiting';
+}
+function overallHtml(q, compact) {
+  const o = q.overall;
+  if (!o || !o.titles) return '<p class="empty">Nothing queued.</p>';
+  const T = o.total_bytes, left = Math.max(0, T - o.done_bytes - o.current_bytes - o.failed_bytes);
+  const seg = (b, cls, what) => b > 0 ? `<i class="${cls}" style="width:${Math.max(0.4, 100 * b / T).toFixed(2)}%" title="${what}: ${mb(b)}"></i>` : '';
+  const eta = fmtH(o.eta_hours);
+  const etaTxt = !eta ? 'measuring the pace…' : `about ${eta} of encoding left` + (o.eta_hours > 16 ? ` (≈${Math.ceil(o.eta_hours / 8)} nights of 8 idle hours)` : '');
+  const head = `<div class="ovtop"><div class="big">${(o.progress * 100).toFixed(1)}%<small> of the queue done</small></div>
+      <div class="sub"><b>${o.done.toLocaleString()}</b> of ${o.titles.toLocaleString()} titles · ${mb(o.done_bytes + o.current_bytes)} of ${mb(T)}</div></div>
+    <div class="stack" role="img" aria-label="${(o.progress * 100).toFixed(1)}% done">${seg(o.done_bytes, 's-done', 'done')}${seg(o.current_bytes, 's-run', 'encoding now')}${seg(o.failed_bytes, 's-fail', 'failed')}</div>`;
+  if (compact) return head + `<div class="sub">${etaTxt}${o.failed ? ` · <span class="err">${o.failed} failed</span>` : ''}</div>`;
+  return head + `<div class="legend"><span><i class="s-done"></i>done ${o.done.toLocaleString()} · ${mb(o.done_bytes)}</span>
+      <span><i class="s-run"></i>encoding now ${o.running}</span><span><i class="s-fail"></i>failed ${o.failed}</span>
+      <span><i class="s-left"></i>waiting ${o.queued.toLocaleString()} · ${mb(left)}</span></div>
+    <div class="ovstats">
+      <div><b>${eta || '—'}</b><span>${eta ? `encoding left at the pace so far (${mb(o.pace_bytes_h)}/h)` : 'encoding left: measuring the pace'}</span></div>
+      <div><b>${o.eta_hours > 16 ? '≈' + Math.ceil(o.eta_hours / 8) : eta ? '1' : '—'}</b><span>nights, if the PC sits idle ~8 h a night</span></div>
+      <div><b>${mb(o.saved_bytes)}</b><span>saved so far</span></div>
+      <div><b>~${mb(o.final_bytes)}</b><span>these titles' size when all done (now ${mb(T)})</span></div>
+      <div><b>${o.last24_titles}</b><span>titles finished in the last 24 h</span></div>
+    </div>`;
+}
+function nowEncoding(q) {
+  const w = q.worker || {}, run = (q.jobs || []).find(j => j.status === 'running' || j.status === 'verifying');
+  if (!run || !w.alive) return '';
+  const paused = w.state === 'paused';
+  const bust = run.id + '_' + Math.floor(Date.now() / 20000);  // a new frame every 20 s
+  const left = run.speed && run.src_duration ? Math.max(1, Math.round((1 - run.progress) * run.src_duration / run.speed / 60)) : null;
+  const pos = (q.overall ? q.overall.done + q.overall.failed + 1 : 0);
+  return `<div class="nowenc"><img class="encframe" alt="current frame" src="/api/queue/frame?b=${bust}" onerror="this.style.visibility='hidden'">
+    <div><div class="sub">Now${pos ? ` · title ${pos.toLocaleString()} of ${q.overall.titles.toLocaleString()}` : ''}</div>
+      <div class="n">${esc(run.title)} ${pill(paused ? 'paused' : run.status === 'verifying' ? 'checking' : 'running')}</div>
+      <div class="sub">${run.status === 'verifying' ? 'checking the result (decode test and VMAF quality score)' : `${Math.round((run.progress || 0) * 100)}% of this title`}
+        ${run.speed && !paused ? ` · ${run.speed.toFixed(1)}× real time` : ''}${left && !paused ? ` · about ${left} min left` : ''} · ${mb(run.src_bytes)}</div>
+      ${bar((run.progress || 0) * 100, false)}
+      ${paused ? `<div class="sub">${esc(w.reason || 'paused')}</div>` : ''}
+      <div class="btns" style="justify-content:flex-start">${paused
+        ? `<button class="btn" onclick="encControl('resume')">Resume now</button>`
+        : `<button class="btn ghost" onclick="encControl('pause')" title="pauses now; resumes after the next idle countdown">Pause until next idle</button>`}</div></div></div>`;
+}
+function workerLine(q) {
+  const w = q.worker || {}, word = workerWord(q);
+  if (!w.alive) return `<div class="row"><div class="n">Worker ${pill('stopped')}</div>
+      <div class="sub">The worker window isn't running, so nothing is being encoded.</div>
+      <div class="btns" style="justify-content:flex-start;margin-top:6px"><button class="btn" onclick="startWorker(this)">Start the worker</button>
+      <span class="sub">opens its own window; with "Only when the PC is idle" it waits for the next idle stretch</span></div></div>`;
+  return w.state === 'working' || w.state === 'paused' ? '' : `<div class="row"><div class="n">Worker ${pill(word)}</div><div class="sub">${esc(w.reason || '')}</div></div>`;
+}
+async function startWorker(btn) {
+  btn.disabled = true;
+  const r = await post('/api/queue/start');
+  alertBar(r.ok ? 'Starting the re-encode worker in its own window…' : r.error);
+  setTimeout(() => { loadQueue(); refreshEncCard(); }, 4000);
+}
+async function encControl(action) {
+  await post('/api/queue/control', { action });
+  alertBar(action === 'pause' ? 'Pausing the encode… it resumes after the next idle countdown.' : 'Resuming the encode…');
+  setTimeout(() => { loadQueue(); refreshEncCard(); }, 3000);
+}
+function setTitle(q) {
+  const o = q.overall;
+  document.title = o && o.titles ? `${(o.progress * 100).toFixed(1)}% re-encoded · Control Room` : 'Control Room';
+}
+async function refreshEncCard() {
+  let q;
+  try { q = await (await fetch('/api/queue')).json(); } catch (e) { return; }
+  setTitle(q);
+  $('rec').innerHTML = `<h2>Re-encoding ${pill(workerWord(q))}</h2>${overallHtml(q, true)}
+    ${nowEncoding(q) || workerLine(q)}<div style="margin-top:6px"><a class="more" href="#queue" onclick="openTab('queue');return false">Details →</a></div>`;
+}
+function openTab(t) { document.querySelector(`nav button[data-tab="${t}"]`).click(); }
+
+// ---------- Re-encoding tab ----------
+let QT = null, qFilter = 'next', qShown = 60;
+async function loadQueue() {
+  let q;
+  try { q = await (await fetch('/api/queue')).json(); } catch (e) { $('qlist').innerHTML = '<p class="empty">dashboard not reachable</p>'; return; }
+  setTitle(q);
+  const jobs = q.jobs || [], set = q.settings || {};
+  $('qpill').innerHTML = pill(workerWord(q));
+  $('qoverall').innerHTML = overallHtml(q, false);
+  $('qwork').innerHTML = workerLine(q) + nowEncoding(q);
+  [...$('qmode').children].forEach(b => b.className = b.dataset.m === (set.mode || 'idle') ? 'on tab' : '');
+  $('qmodehint').textContent = (set.mode || 'idle') === 'idle'
+    ? `Starts after ${set.idle_minutes || 10} min without mouse/keyboard, with a 60 s beeping countdown; pauses the moment you use the PC.` : 'Runs whenever there are jobs.';
+  const n = s => jobs.filter(j => j.status === s).length;
+  [...$('qfilter').children].forEach(b => {
+    const f = b.dataset.f, c = f === 'next' ? n('queued') + n('running') + n('verifying') : n(f);
+    b.className = f === qFilter ? 'on tab' : ''; b.textContent = `${{ next: 'Up next', done: 'Done', failed: 'Failed' }[f]} (${c.toLocaleString()})`;
+  });
+  const qtext = $('qq').value.toLowerCase();
+  const want = qFilter === 'next' ? ['running', 'verifying', 'queued'] : [qFilter];
+  const order = { running: 0, verifying: 0, queued: 1 };
+  let list = jobs.filter(j => want.includes(j.status) && (!qtext || j.title.toLowerCase().includes(qtext)));
+  list = qFilter === 'done' ? list.sort((a, b) => (b.finished || 0) - (a.finished || 0))
+    : list.sort((a, b) => (order[a.status] ?? 2) - (order[b.status] ?? 2) || (a.added || 0) - (b.added || 0));
+  $('qlist').innerHTML = !list.length ? '<p class="empty">nothing here</p>' : list.slice(0, qShown).map(j => `
+    <div class="row pxrow nopick">${posterImg(j.key.split(':')[1])}<div class="top"><div>
+      <div class="n">${j.imdb ? `<a class="title" href="https://www.imdb.com/title/${esc(j.imdb)}/" target="_blank" rel="noopener">${esc(j.title)}</a>` : esc(j.title)} ${pill(j.status)} <span class="sub">${esc(j.kind === 'video' ? 'HEVC re-encode' : j.kind === 'audio' ? 'audio fix' : 'container fix')}</span></div>
+      <div class="sub">${mb(j.src_bytes)} → ${j.out_bytes ? mb(j.out_bytes) : '~' + mb(j.est_bytes)}${j.vmaf ? ` · VMAF ${j.vmaf.toFixed(1)}` : ''}
+        ${j.finished && j.status === 'done' ? ' · ' + new Date(j.finished * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}
+        ${(j.reasons || []).length ? ' · ' + j.reasons.map(esc).join('; ') : ''}</div>
+      ${j.error ? `<div class="err">${esc(j.error)}</div>` : ''}${j.note ? `<div class="sub">${esc(j.note)}</div>` : ''}
+      <div class="mono">to ${esc(j.dest)}</div></div>
+      <div class="side"><div class="save keep">−${((j.src_bytes - (j.out_bytes || j.est_bytes)) / 1e9).toFixed(1)} GB
+          <small>${j.out_bytes ? 'saved' : 'expected saving'}</small></div>
+        <div class="btns">${j.status === 'failed' ? `<button class="btn ghost" onclick="qAct('retry','${j.id}')">Retry</button>` : ''}
+        ${['queued', 'failed'].includes(j.status) ? `<button class="btn ghost" onclick="qAct('remove','${j.id}')">Remove</button>` : ''}</div></div></div></div>`).join('')
+    + (list.length > qShown ? `<p><button class="btn ghost" onclick="qShown+=60;loadQueue()">Show more (${(list.length - qShown).toLocaleString()} left)</button></p>` : '');
+  clearTimeout(QT);
+  if (!$('queue').classList.contains('hidden')) QT = setTimeout(loadQueue, 5000);
+}
+$('qmode').onclick = async e => { const m = e.target.dataset.m; if (!m) return;
+  await post('/api/queue/settings', { mode: m, idle_minutes: 10 }); loadQueue(); };
+$('qfilter').onclick = e => { const f = e.target.dataset.f; if (!f) return; qFilter = f; qShown = 60; loadQueue(); };
+$('qq').oninput = () => { qShown = 60; loadQueue(); };
+async function qAct(what, id) { await post('/api/queue/' + what, { id }); loadQueue(); }
+
+// ---------- Library names ----------
+let NM = null;
+const NMTAG = { auto: ['ready', 'ready to rename'], review: ['check', 'check'], waiting: ['wait', 'waiting for Plex'],
+  duplicate: ['dup', 'duplicate'], conflict: ['taken', 'name taken'] };
+const relTo = (p, lib) => { const r = `${(NM && NM.root) || ''}\\${lib}\\`;
+  return p && p.toLowerCase().startsWith(r.toLowerCase()) ? p.slice(r.length) : (p || ''); };
+async function loadNames() {
+  try { NM = await (await fetch('/api/names')).json(); } catch (e) { $('nmlist').innerHTML = '<p class="empty">dashboard not reachable</p>'; return; }
+  renderNames(); renderNamesCard();
+}
+function renderNames() {
+  const st = NM, issues = st.issues || [], c = k => issues.filter(i => i.confidence === k).length;
+  $('nmpill').innerHTML = st.scanned ? pill(issues.some(i => ['review', 'conflict', 'duplicate'].includes(i.confidence)) ? 'waiting' : 'done') : '';
+  [...$('nmauto').children].forEach(b => b.className = (b.dataset.a === '1') === (st.auto !== false) ? 'on tab' : '');
+  $('nmlast').textContent = st.scanned ? `last scan ${new Date(st.scanned * 1000).toLocaleString()} · next within 6 h` : 'first scan runs 2 min after the dashboard starts';
+  $('nmstats').innerHTML = !st.scanned ? '' : `<span>Checked <b>${(st.checked || 0).toLocaleString()}</b> videos</span>
+    <span>Follow the standard <b>${(st.ok || 0).toLocaleString()}</b></span>
+    <span>Need your call <b>${c('review') + c('conflict') + c('duplicate')}</b></span>
+    ${c('auto') ? `<span>Ready to rename <b>${c('auto')}</b></span>` : ''}${c('waiting') ? `<span>Waiting for Plex <b>${c('waiting')}</b></span>` : ''}
+    <span>Renamed in the last scan <b>${st.fixed_last_scan || 0}</b></span>${st.ignored ? `<span class="sub">${st.ignored} left as they are</span>` : ''}
+    ${st.error ? `<span class="err">${esc(st.error)}</span>` : ''}`;
+  $('nmlist').innerHTML = !st.scanned ? '<p class="empty">Not scanned yet. Press Scan now.</p>' : !issues.length
+    ? '<p class="empty">Every file follows the naming standard ✓</p>' : issues.map(it => {
+      const [cls, label] = NMTAG[it.confidence] || ['wait', it.confidence];
+      return `<div class="row"><div class="top"><div style="flex:1 1 420px;min-width:0">
+          <div class="n">${esc(base(it.path))} <span class="tag ${cls}">${label}</span>${it.new ? ' <span class="tag new">new</span>' : ''}</div>
+          <div class="mono">${esc(dir(it.path))}</div>
+          <div class="sub">${esc(it.problem)} · ${esc(it.plex)} · ${esc(it.reason)} · ${mb(it.size)}</div>
+          ${it.confidence === 'duplicate' ? `<div class="mono">twin: ${esc(it.target)}</div>`
+            : `<div class="fileline"><span class="sub">rename to</span><input class="nmto" id="nt_${it.id}" value="${esc(relTo(it.target, it.lib))}"
+                placeholder="${it.lib === 'Movies' ? 'Title (Year).ext' : 'Show (Year)\\Season 01\\Show (Year) - s01e01 - Title.ext'}" aria-label="new name"></div>`}
+        </div><div class="btns">
+          ${it.confidence === 'duplicate' ? `<button class="btn sm ghost bad" onclick="nmDelete('${it.id}')">Delete this copy</button>`
+            : `<button class="btn" onclick="nmFix('${it.id}')">Rename</button>`}
+          <button class="btn ghost" onclick="nmIgnore('${it.id}')" title="leave the name as it is; it won't be listed again">Leave as is</button>
+          <button class="btn ghost" onclick="fileAct('names','${it.id}','','play')">Play</button>
+          <button class="btn ghost" onclick="fileAct('names','${it.id}','','show')">Show in folder</button>
+        </div></div></div>`;
+    }).join('');
+  const rec = st.recent || [];
+  $('nmrecent').innerHTML = !rec.length ? '<p class="sub">Nothing renamed yet.</p>' : rec.map(b => `<div class="stage"><div style="min-width:0">
+      <div class="n">${esc(base(b.moves[0][1]))} <span class="sub">· ${esc(b.how)} · ${esc(b.time)}${b.moves.length > 1 ? ` · +${b.moves.length - 1} subtitle/extra file${b.moves.length > 2 ? 's' : ''}` : ''}</span></div>
+      <div class="mono">was ${esc(b.moves[0][0])}</div></div>
+      <div class="btns">${b.undone ? '<span class="sub">undone</span>' : `<button class="btn ghost sm" onclick="nmUndo('${b.batch}')">Undo</button>`}</div></div>`).join('');
+}
+function renderNamesCard() {
+  const st = NM;
+  if (!st) return;
+  const issues = st.issues || [], need = issues.filter(i => ['review', 'conflict', 'duplicate'].includes(i.confidence)).length;
+  $('nmcard').innerHTML = `<h2>Library names ${pill(!st.scanned ? 'not started' : need ? 'waiting' : 'done')}</h2>
+    <div class="big">${need}<small> file${need === 1 ? '' : 's'} need${need === 1 ? 's' : ''} your call</small></div>
+    <dl class="kv"><dt>Checked</dt><dd>${(st.checked || 0).toLocaleString()} videos · ${(st.ok || 0).toLocaleString()} follow the standard</dd>
+      <dt>Automatic fixing</dt><dd>${st.auto !== false ? 'on (confident matches only)' : 'off: asks first'}</dd>
+      <dt>Last scan</dt><dd>${st.scanned ? ago(st.scanned) : 'not yet'}${st.fixed_last_scan ? ` · renamed ${st.fixed_last_scan}` : ''}</dd>
+      ${st.error ? `<dt>Note</dt><dd class="err">${esc(st.error)}</dd>` : ''}</dl>
+    <div style="margin-top:6px"><a class="more" href="#names" onclick="openTab('names');return false">Details →</a></div>`;
+}
+async function nmDo(url, body, msg) {
+  const r = await post(url, body);
+  alertBar(r.ok ? msg(r) : 'Not done: ' + r.error);
+  await loadNames();
+}
+const nmFix = id => nmDo('/api/names/fix', { id, target: $('nt_' + id).value }, r => 'Renamed to ' + base(r.to));
+const nmIgnore = id => nmDo('/api/names/ignore', { id }, () => 'Left as it is.');
+const nmUndo = batch => nmDo('/api/names/undo', { batch }, () => 'Rename undone (that file won\'t be renamed again automatically).');
+function nmDelete(id) {
+  const it = NM.issues.find(i => i.id === id);
+  if (!confirm(`Delete this copy?\n\n${it.path}\n\nIts twin stays: ${it.target}`)) return;
+  nmDo('/api/names/delete', { id }, () => 'Deleted the extra copy (logged in deleted_log.csv).');
+}
+$('nmauto').onclick = async e => { const a = e.target.dataset.a; if (a == null) return;
+  await post('/api/names/settings', { auto: a === '1' }); loadNames(); };
+$('nmscan').onclick = async () => {
+  const b = $('nmscan'); b.disabled = true; b.textContent = 'Scanning…';
+  const r = await post('/api/names/scan');
+  b.disabled = false; b.textContent = 'Scan now';
+  alertBar(r.ok ? `Scan done: ${r.fixed} renamed, ${r.listed} listed.` : 'Scan failed: ' + r.error);
+  loadNames();
+};
+
+// ---------- Overview ----------
+function render(d) {
+  $('updated').textContent = 'updated ' + new Date(d.now * 1000).toLocaleTimeString() + ' · refreshes every 10 s';
+  const up = d.uploads || {}, disk = d.disk || {};
+  const live = [];
+  const broken = ['library', 'kopia'].filter(k => up[k] && up[k].failing);
+  if (broken.length && broken.every(k => up[k].no_internet))
+    live.push({ level: 'critical', text: 'The NAS upload containers can\'t reach Google (connection timeouts), so nothing has gone to Google Drive from the NAS. See the Google Drive uploads card.' });
+  if (disk.nas_recycle_gb > 50)
+    live.push({ level: 'warning', text: `The NAS recycle bin holds ${gb(disk.nas_recycle_gb)}. Empty it in the NAS web page (File Manager → Recycle Bin) to free the space.` });
+  $('alerts').innerHTML = [...live, ...(d.plan.alerts || [])].map(a => `<div class="alert ${esc(a.level)}">${esc(a.text)}</div>`).join('');
+
+  const line = (name, x) => !x ? '' : `<dt>${name}</dt><dd>${x.error ? `<span class="err">${esc(x.error)}</span>`
+    : x.failing ? `<span class="err">failing${x.no_internet ? ': can\'t reach Google' : ''}</span>` : 'working'} · log ${ago(x.updated)}
+    <div class="mono">${(x.tail || []).slice(-2).map(esc).join('<br>')}</div></dd>`;
+  const anyBad = broken.length > 0;
+  $('uploads').innerHTML = `<h2>Google Drive uploads ${pill(anyBad ? 'critical' : 'running')}</h2>
+    <div class="big">${up.drive_gb != null ? gb(up.drive_gb) : '…'} <small>of ${up.lib_gb != null ? gb(up.lib_gb) : '…'} client library on Drive</small></div>
+    ${up.drive_gb != null && up.lib_gb ? bar(pct(up.drive_gb, up.lib_gb), up.drive_gb >= up.lib_gb * 0.99) : ''}
+    <div class="sub">${(up.drive_files || 0).toLocaleString()} of ${(up.lib_files || 0).toLocaleString()} files</div>
+    <dl class="kv">${line('Client library (NAS)', up.library)}${line('Backups copy (NAS)', up.kopia)}
+      <dt>Drive size checked</dt><dd>${up.drive_checked ? ago(up.drive_checked) : 'checking…'} (every 30 min)</dd></dl>
+    ${anyBad ? `<div class="note-warn" style="margin-top:6px">If both fail with timeouts: containers on Docker's bridge network can be
+      cut off from the internet by a NAS firewall that only allows the local network. Allow Docker's bridge subnet in the firewall, or
+      run the uploader and kopia-offsite containers with <span class="mono">network_mode: host</span>, then restart them.</div>` : ''}`;
+
+  const x = d.dxv;
+  if (x) {
+    const k = x.counts || {}, ok = k.replaced || 0;
+    $('dxvcard').innerHTML = `<h2>Client clips → DXV conversion ${pill(x.running ? 'running' : x.todo ? 'stopped' : 'done')}</h2>
+      <div class="big">${ok} <small>of ${x.total} clips converted</small></div>
+      ${bar(pct(ok + (k.verify_failed || 0), x.total), !x.todo)}
+      <dl class="kv"><dt>Left</dt><dd>${x.todo}${k.anyway ? ` (${k.anyway} below the quality bar, converting anyway as you chose)` : ''}</dd>
+      <dt>Kept original</dt><dd>${k.verify_failed || 0} (the converted copy dropped frames)</dd>
+      <dt>Last</dt><dd class="mono">${esc(x.last || '—')}</dd></dl>
+      <div class="sub">Each original is parked in the duplicates folder (_replaced by DXV) until you approve deleting it.</div>`;
+  }
+  const m = d.ram;
+  $('sys').innerHTML = `<h2>System</h2>
+    <dl class="kv"><dt>RAM available</dt><dd>${m.avail_gb.toFixed(1)} of ${m.total_gb.toFixed(0)} GB (${m.load}% used)</dd>
+    <dt>NAS disk</dt><dd>${disk.nas_used_gb != null ? `${gb(disk.nas_used_gb)} used · ${gb(disk.nas_free_gb)} free` : 'checking…'}</dd>
+    <dt>NAS recycle bin</dt><dd class="${disk.nas_recycle_gb > 50 ? 'err' : ''}">${disk.nas_recycle_gb != null ? gb(disk.nas_recycle_gb) : 'checking…'}</dd>
+    <dt>NAS checked</dt><dd>${disk.nas_checked ? ago(disk.nas_checked) : 'not yet'} (every 5 min, over the network share)</dd></dl>`;
+
+  $('stages').innerHTML = `<h2>Backup plan <span class="sub">plan updated ${esc(d.plan.updated || '')}</span></h2>` +
+    (d.plan.stages || []).map(s => `<div class="stage"><div><div class="n">${esc(s.name)}</div><div class="note">${esc(s.note)}</div></div>${pill(s.status)}</div>`).join('');
+}
+
+async function tick() {
+  try { const r = await fetch('/api/status'); render(await r.json()); }
+  catch (e) { $('updated').textContent = 'dashboard server not reachable — is server.py running?'; }
+}
+tick(); setInterval(tick, 10000);
+refreshEncCard(); setInterval(refreshEncCard, 10000);
+loadNames(); setInterval(() => { if ($('names').classList.contains('hidden')) loadNames(); }, 60000);  // not while you type a name
+if (['queue', 'names', 'plex', 'plan'].includes(location.hash.slice(1))) openTab(location.hash.slice(1));
+</script>
+</body>
+</html>

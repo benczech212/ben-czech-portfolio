@@ -1,0 +1,262 @@
+{
+ "vibe:cozy": {
+  "min": 13.0,
+  "avg": 13.1,
+  "vmerr": 0
+ },
+ "vibe:party": {
+  "min": 26.2,
+  "avg": 26.2,
+  "vmerr": 0
+ },
+ "vibe:chaos": {
+  "min": 25.5,
+  "avg": 25.5,
+  "vmerr": 0
+ },
+ "vibe:wave": {
+  "min": 20.8,
+  "avg": 21.3,
+  "vmerr": 0
+ },
+ "vibe:jumping": {
+  "min": 15.6,
+  "avg": 15.8,
+  "vmerr": 0
+ },
+ "vibe:ethereal": {
+  "min": 12.9,
+  "avg": 13.6,
+  "vmerr": 0
+ },
+ "vibe:snake": {
+  "min": 16.0,
+  "avg": 16.0,
+  "vmerr": 0
+ },
+ "vibe:twinkle": {
+  "min": 20.3,
+  "avg": 20.3,
+  "vmerr": 0
+ },
+ "vibe:heartbeat": {
+  "min": 20.6,
+  "avg": 20.6,
+  "vmerr": 0
+ },
+ "vibe:aurora": {
+  "min": 18.6,
+  "avg": 18.6,
+  "vmerr": 0
+ },
+ "vibe:meteor": {
+  "min": 14.9,
+  "avg": 15.4,
+  "vmerr": 0
+ },
+ "vibe:bloom": {
+  "min": 18.3,
+  "avg": 18.4,
+  "vmerr": 0
+ },
+ "vibe:kaleido": {
+  "min": 17.0,
+  "avg": 17.0,
+  "vmerr": 0
+ },
+ "transition:ethereal->cozy": {
+  "min": 8,
+  "avg": 8.9,
+  "vmerr": 0
+ },
+ "transition:snake->party": {
+  "min": 10.2,
+  "avg": 12.0,
+  "vmerr": 0
+ },
+ "transition:twinkle->chaos": {
+  "min": 11.5,
+  "avg": 13.0,
+  "vmerr": 0
+ },
+ "transition:heartbeat->wave": {
+  "min": 10.7,
+  "avg": 12.8,
+  "vmerr": 0
+ },
+ "transition:aurora->jumping": {
+  "min": 9.3,
+  "avg": 12.8,
+  "vmerr": 0
+ },
+ "transition:meteor->ethereal": {
+  "min": 9.3,
+  "avg": 9.6,
+  "vmerr": 0
+ },
+ "transition:bloom->snake": {
+  "min": 9.4,
+  "avg": 11.6,
+  "vmerr": 0
+ },
+ "transition:kaleido->twinkle": {
+  "min": 9.7,
+  "avg": 13.3,
+  "vmerr": 0
+ },
+ "transition:cozy->heartbeat": {
+  "min": 9.1,
+  "avg": 10.3,
+  "vmerr": 0
+ },
+ "transition:party->aurora": {
+  "min": 10.6,
+  "avg": 13.8,
+  "vmerr": 0
+ },
+ "transition:chaos->meteor": {
+  "min": 10.5,
+  "avg": 14.2,
+  "vmerr": 0
+ },
+ "transition:wave->bloom": {
+  "min": 10.9,
+  "avg": 11.5,
+  "vmerr": 0
+ },
+ "transition:jumping->kaleido": {
+  "min": 8.9,
+  "avg": 10.9,
+  "vmerr": 0
+ },
+ "effect:flash@ethereal": {
+  "min": 10.9,
+  "avg": 10.9,
+  "vmerr": 0
+ },
+ "effect:pulse@ethereal": {
+  "min": 10.9,
+  "avg": 10.9,
+  "vmerr": 0
+ },
+ "effect:color@ethereal": {
+  "min": 10.9,
+  "avg": 10.9,
+  "vmerr": 0
+ },
+ "effect:charge@ethereal": {
+  "min": 10.9,
+  "avg": 10.9,
+  "vmerr": 0
+ },
+ "effect:sweep@ethereal": {
+  "min": 8.9,
+  "avg": 8.9,
+  "vmerr": 0
+ },
+ "effect:shockwave@ethereal": {
+  "min": 13.5,
+  "avg": 13.5,
+  "vmerr": 0
+ },
+ "effect:rings@ethereal": {
+  "min": 7.9,
+  "avg": 8.3,
+  "vmerr": 0
+ },
+ "effect:spiral@ethereal": {
+  "min": 7.4,
+  "avg": 7.4,
+  "vmerr": 0
+ },
+ "effect:wipe@ethereal": {
+  "min": 9.5,
+  "avg": 9.5,
+  "vmerr": 0
+ },
+ "effect:rain@ethereal": {
+  "min": 8.2,
+  "avg": 8.2,
+  "vmerr": 0
+ },
+ "effect:comet@ethereal": {
+  "min": 9.1,
+  "avg": 9.1,
+  "vmerr": 0
+ },
+ "effect:flash@party": {
+  "min": 16.5,
+  "avg": 16.6,
+  "vmerr": 0
+ },
+ "effect:pulse@party": {
+  "min": 16.6,
+  "avg": 16.6,
+  "vmerr": 0
+ },
+ "effect:color@party": {
+  "min": 16.5,
+  "avg": 16.5,
+  "vmerr": 0
+ },
+ "effect:charge@party": {
+  "min": 16.6,
+  "avg": 16.6,
+  "vmerr": 0
+ },
+ "effect:sweep@party": {
+  "min": 12.5,
+  "avg": 12.5,
+  "vmerr": 0
+ },
+ "effect:shockwave@party": {
+  "min": 17.9,
+  "avg": 21.4,
+  "vmerr": 0
+ },
+ "effect:rings@party": {
+  "min": 11.2,
+  "avg": 11.7,
+  "vmerr": 0
+ },
+ "effect:spiral@party": {
+  "min": 9.6,
+  "avg": 9.7,
+  "vmerr": 0
+ },
+ "effect:wipe@party": {
+  "min": 13.4,
+  "avg": 13.4,
+  "vmerr": 0
+ },
+ "effect:rain@party": {
+  "min": 10.1,
+  "avg": 10.4,
+  "vmerr": 0
+ },
+ "effect:comet@party": {
+  "min": 12.8,
+  "avg": 12.8,
+  "vmerr": 0
+ },
+ "zones:circle kaleido / mushrooms cozy / leaves aurora": {
+  "min": 16.8,
+  "avg": 16.9,
+  "vmerr": 0
+ },
+ "zones:circle bloom / mushrooms meteor / leaves ethereal": {
+  "min": 14.4,
+  "avg": 14.6,
+  "vmerr": 0
+ },
+ "zones:every zone different": {
+  "min": 15.9,
+  "avg": 15.9,
+  "vmerr": 0
+ },
+ "auto:6 s changes for 36 s": {
+  "min": 5.7,
+  "avg": 14.5,
+  "vmerr": 0
+ }
+}

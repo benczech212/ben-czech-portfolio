@@ -1,0 +1,96 @@
+# The staff prop, tracking its position, on the prototype Pi.
+#
+# Install (paths as the Pi is actually set up - see nodes/staff_pi/README.md):
+#   sudo cp deploy/systemd/campbus-staff.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now campbus-staff
+#   journalctl -u campbus-staff -f
+#
+# CAMPBUS_HOST is the machine running the broker. On the prototype that is Ben's PC;
+# at camp it becomes the booth Pi (10.42.0.1 / campbus.local), and that is the only
+# line that changes.
+#
+# Restart=always matters more than usual here: this thing runs off a battery and walks
+# around, so it will lose WiFi. campbus reconnects by itself, but if the process ever
+# does die, systemd brings it straight back with no one at a keyboard.
+
+[Unit]
+Description=Camp Bus - staff prop (casts + GPS position tracking)
+After=network-online.target
+Wants=network-online.target
+# Helps only if the sound card is already there: sound.target is reached when udev
+# finds a card, and After= does not wait for a target nothing has started. The
+# wm8960 probes ~15 s after this service starts, so the real fix is in sound.py,
+# which keeps looking for the card and plays the startup sound when it appears.
+After=sound.target
+
+[Service]
+Type=simple
+User=<user>
+WorkingDirectory=/home/<user>/campbus/nodes/staff_pi
+# Without this, Python block-buffers stdout under systemd and the journal shows lines
+# minutes late and out of order with stderr - which made a working sound card look
+# missing on 2026-10-04.
+Environment=PYTHONUNBUFFERED=1
+# Broker credentials for the production profile (CAMPBUS_USER=staff_01, CAMPBUS_PASSWORD=...).
+# Keep them in a root-owned file, mode 600; the leading "-" makes it optional on the dev broker.
+EnvironmentFile=-/etc/campbus/staff.env
+# --web --lan serves the live sensor page on http://<pi>:8081/ (casting, IMU, GPS, gate) to phones on the
+# closed camp Wi-Fi; without --lan it listens on 127.0.0.1 only.
+# --motion-gate idles the GPS once the IMU has seen nothing for --still-seconds.
+# Enabled 2026-09-22 after the sensor page showed 0 corrupt frames in 88 reads and
+# the gyro threshold was lifted clear of the 8.0 deg/s corruption artifact. If that
+# corrupt rate ever climbs again, this is the first thing to turn back off.
+#
+# --cast (2026-09-23) casts from real gestures: hold the staff still for 2 s, then
+# sweep it clockwise or counter. It publishes `spin` + `spin_dir`, the contract's
+# directional rotation - see nodes/staff_pi/gestures.py. Every threshold below is
+# still a first guess; tune them on the page, then WRITE THE NUMBERS HERE, because
+# nothing the page changes survives a restart.
+#
+# --filter-* (2026-09-23) puts a rolling window on the readings before anything
+# compares them to a threshold. Median, not mean: a mean spreads a spike across
+# the window, a median throws it away, for the same lag. Without it one bad frame
+# could restart a two-second hold you had almost finished. --accel-filter 1 and
+# --gyro-filter 1 turn it off, which is the first thing to try if casts start
+# reading gentler than they feel (a median trims the peak, and intensity is
+# scaled by the peak).
+#
+# Sound and the spell knob (2026-10-04): a WM8960 HAT plays ~/sounds, and a seesaw
+# rotary encoder at 0x36 picks the spell colour that every cast carries as `color`.
+# On start the node plays --startup-sound and runs the knob's pixel once round the
+# rainbow, then glows dim in the last chosen hue (saved in
+# ~/.config/campbus/staff-knob.json). --sound-map is the sound every cast makes; `*`
+# means any gesture. Both sounds are first picks and Ben's to change. Neither the HAT
+# nor the knob is required: without them the node logs why and carries on, and keeps
+# looking (every 5 s for 2 min, then every 30 s) in case either turns up late.
+# --sound-volume 80 (Ben, 2026-10-04) is the page slider's scale (amixer -M), set
+# every start once the card is found and before the startup sound plays.
+#
+# The arm has three sounds (Ben, 2026-10-04): --charge-sound while it is being held
+# still (stopped the moment it moves, after a 0.25 s debounce against jitter),
+# --ready-sound once when it arms, and --sound-map on the cast. First picks, Ben's
+# to change: 01-crystal-glow-a swells and sustains through the 2 s hold and is cut
+# by the chime; 06-bell-chime-a is a bell, distinct from the sci-fi cast sound.
+#
+# The cast sound pans with the cast (Ben, 2026-10-04): clockwise sweeps left to
+# right, counter-clockwise right to left; --pan-reverse swaps them. The panned files
+# are pre-rendered on the PC by nodes/staff_pi/tools/make_panned.sh (equal-power,
+# matched to -16 LUFS) and live in ~/sounds/magic/panned/, never in git. A gesture
+# with no direction plays the centred original (the `*` entry).
+ExecStart=/home/<user>/campbus/.venv/bin/python /home/<user>/campbus/nodes/staff_pi/staff_node.py \
+    --host campbus.local --track --gps-wait 60 --web 8081 --lan --motion-gate \
+    --cast --arm-seconds 2.0 --arm-accel 0.30 --arm-gyro 10 \
+    --trigger-dps 60 --min-deg 45 \
+    --filter-mode median --accel-filter 3 --gyro-filter 3 \
+    --startup-sound magic/09-power-up.wav --sound-volume 80 \
+    --charge-sound= --ready-sound=
+# QUIET (2026-10-04, Ben's ask): the sweep gesture self-casts on the bench, so only the
+# startup sound is on - no --sound-map (empty = silent casts), empty charge/ready.
+# To turn the cast, charge and ready sounds back on, replace the last line above with:
+#     --sound-map *=magic/08-teleport.wav,spin_cw=magic/panned/08-teleport_L2R.wav,spin_ccw=magic/panned/08-teleport_R2L.wav \
+#     --charge-sound magic/01-crystal-glow-a.wav --ready-sound magic/06-bell-chime-a.wav
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

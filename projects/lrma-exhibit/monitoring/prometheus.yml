@@ -1,0 +1,28 @@
+# Prometheus for the exhibit kiosk. Scrapes the control server's /metrics.
+# Run via the `prometheus` app in exhibit.yaml (data under C:\dev\tools\monitoring\data\prometheus).
+global:
+  scrape_interval: 5s
+  evaluation_interval: 30s
+
+scrape_configs:
+  - job_name: exhibit
+    static_configs:
+      - targets: ['127.0.0.1:9876']
+        labels: { instance: kiosk }
+  - job_name: windows            # CPU, memory, disk, network, per-process (windows_exporter on :9182)
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['127.0.0.1:9182']
+        labels: { instance: kiosk }
+  - job_name: prometheus
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['127.0.0.1:9090']
+  - job_name: loki
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['127.0.0.1:3100']
+  - job_name: grafana
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['127.0.0.1:3000']

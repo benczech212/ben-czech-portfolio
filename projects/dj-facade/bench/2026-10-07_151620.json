@@ -1,0 +1,112 @@
+{
+ "effect:flash@ethereal": {
+  "min": 10.8,
+  "avg": 10.8,
+  "vmerr": 0
+ },
+ "effect:pulse@ethereal": {
+  "min": 10.8,
+  "avg": 10.8,
+  "vmerr": 0
+ },
+ "effect:color@ethereal": {
+  "min": 10.8,
+  "avg": 10.8,
+  "vmerr": 0
+ },
+ "effect:charge@ethereal": {
+  "min": 10.8,
+  "avg": 10.8,
+  "vmerr": 0
+ },
+ "effect:sweep@ethereal": {
+  "min": 13.7,
+  "avg": 13.8,
+  "vmerr": 0
+ },
+ "effect:shockwave@ethereal": {
+  "min": 13.5,
+  "avg": 13.7,
+  "vmerr": 0
+ },
+ "effect:rings@ethereal": {
+  "min": 10.3,
+  "avg": 12.0,
+  "vmerr": 0
+ },
+ "effect:spiral@ethereal": {
+  "min": 9.2,
+  "avg": 9.3,
+  "vmerr": 0
+ },
+ "effect:wipe@ethereal": {
+  "min": 13.8,
+  "avg": 13.8,
+  "vmerr": 0
+ },
+ "effect:rain@ethereal": {
+  "min": 9.7,
+  "avg": 9.7,
+  "vmerr": 0
+ },
+ "effect:comet@ethereal": {
+  "min": 10.9,
+  "avg": 10.9,
+  "vmerr": 0
+ },
+ "effect:flash@party": {
+  "min": 17,
+  "avg": 17.0,
+  "vmerr": 0
+ },
+ "effect:pulse@party": {
+  "min": 17,
+  "avg": 17.0,
+  "vmerr": 0
+ },
+ "effect:color@party": {
+  "min": 17.0,
+  "avg": 17.0,
+  "vmerr": 0
+ },
+ "effect:charge@party": {
+  "min": 17.0,
+  "avg": 17.0,
+  "vmerr": 0
+ },
+ "effect:sweep@party": {
+  "min": 20.7,
+  "avg": 20.8,
+  "vmerr": 0
+ },
+ "effect:shockwave@party": {
+  "min": 24.0,
+  "avg": 24.4,
+  "vmerr": 0
+ },
+ "effect:rings@party": {
+  "min": 14.9,
+  "avg": 19.7,
+  "vmerr": 0
+ },
+ "effect:spiral@party": {
+  "min": 11.8,
+  "avg": 12.0,
+  "vmerr": 0
+ },
+ "effect:wipe@party": {
+  "min": 20.8,
+  "avg": 21.9,
+  "vmerr": 0
+ },
+ "effect:rain@party": {
+  "min": 11.7,
+  "avg": 12.0,
+  "vmerr": 0
+ },
+ "effect:comet@party": {
+  "min": 14.8,
+  "avg": 14.8,
+  "vmerr": 0
+ }
+}

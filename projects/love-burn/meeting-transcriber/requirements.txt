@@ -1,0 +1,10 @@
+# transcribe_fast.py
+faster-whisper>=1.0      # bundles Silero VAD (vad_filter=True)
+# GPU (optional): a CUDA build of torch provides the cuBLAS/cuDNN DLLs ctranslate2 needs on Windows.
+# Without it, transcription falls back to CPU int8 automatically.
+# torch
+
+# make_speaker_video.py
+numpy>=1.24
+Pillow>=10.0
+# also needs the ffmpeg executable on PATH (audio decode + H.264 encode)

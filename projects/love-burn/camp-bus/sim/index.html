@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Camp Bus</title>
+<!-- Home. The hero is the camp's live state read off retained topics, not a description of
+     the software: if you open this page the first thing you want to know is whether the bus
+     is up and what is missing. The page list underneath is a menu, not a pitch. -->
+<link rel="stylesheet" href="ui.css">
+<script src="vendor/mqtt.min.js"></script>
+<script src="shared.js"></script>
+<style>
+  .hero { padding:52px 0 40px; border-bottom:1px solid var(--rule); }
+  .hero h1 { font-size:34px; margin:0 0 18px; }
+  .state { font-size:21px; line-height:1.45; letter-spacing:-.015em; max-width:26ch; margin:0; }
+  .state .line { display:block; }
+  .state b { font-weight:650; }
+  .state .live { color:var(--live); }
+  .state .down { color:var(--down); }
+  .state .late { color:var(--stale); }
+  .state a { color:inherit; text-decoration-color:color-mix(in srgb, currentColor 35%, transparent); }
+
+  .menu { display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:0 56px;
+          margin:8px 0 0; max-width:900px; }
+  .menu a { display:block; padding:17px 0; border-bottom:1px solid var(--rule); text-decoration:none; color:inherit; }
+  .menu a:hover { border-bottom-color:var(--act); }
+  .menu a:hover .t { color:var(--act); }
+  .menu .t { font-size:16px; font-weight:600; letter-spacing:-.01em; }
+  .menu .d { display:block; color:var(--mute); font-size:13.5px; margin-top:3px; max-width:46ch; }
+
+  footer { margin-top:44px; color:var(--mute); font-size:13.5px; }
+  footer p { max-width:72ch; }
+  footer .b { color:var(--ink); font-family:var(--mono); }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <nav id="campnav"></nav>
+  <span class="spacer"></span>
+  <span class="conn" id="conn">connecting</span>
+</div>
+
+<main class="page">
+  <div class="hero">
+    <h1>Camp Bus</h1>
+    <p class="state" id="state"><span class="line">Asking the broker how camp is doing&hellip;</span></p>
+  </div>
+
+  <nav class="menu">
+    <a href="camp.html"><span class="t">Virtual camp</span>
+      <span class="d">The crystals, the hallway, the entrance screen and the map. Throw a cast and watch it cross camp.</span></a>
+    <a href="instruments.html"><span class="t">Instruments</span>
+      <span class="d">Play the mushrooms, geodes, plant and water tubes, and set the MIDI table that Ableton follows.</span></a>
+    <a href="nodes.html"><span class="t">Devices</span>
+      <span class="d">Every node on the bus: what is answering, what has gone quiet, and a way into each device's own console.</span></a>
+    <a href="routes.html"><span class="t">Routes</span>
+      <span class="d">Decide what each input controls. Edits go live in the mapping engine as you save them.</span></a>
+    <a href="gps.html"><span class="t">GPS</span>
+      <span class="d">Where a node thinks it is, in metres: scatter, drift, and the casts thrown from it.</span></a>
+    <a href="devices.html"><span class="t">Booth devices</span>
+      <span class="d">Resolume and the kitchen bell, with check-in and food-call buttons to drive them.</span></a>
+    <a href="settings.html"><span class="t">Settings</span>
+      <span class="d">Test sounds, who is touching the geodes, and which broker this browser talks to.</span></a>
+    <a href="dashboard.html"><span class="t">Bus console</span>
+      <span class="d">The plumbing: loaded rules, audio meters, and every message on the wire as it happens.</span></a>
+  </nav>
+
+  <footer>
+    <p>Broker <span class="b" id="broker"></span>. Remap the camp on the Routes page or by editing
+      <code>booth/mappings.yaml</code> — the engine reloads it on save and rejects a bad edit rather than
+      taking the camp down. The contract every builder codes against is <code>docs/SCHEMA.md</code>, and
+      <code>handbook/</code> explains how the whole thing fits together.</p>
+  </footer>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const url = Camp.Settings.brokerUrl();
+  $('broker').textContent = url;
+
+  const nodes = new Map();          // id -> {online, at}
+  let mode = null, dj = undefined, rules = null;
+  // camp/mode and booth/dj come off the bus: escape before they reach innerHTML.
+  const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+  const N = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+    'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen'];
+  const word = (k) => String(N[k] != null ? N[k] : k);     // above sixteen, digits read better anyway
+  const Cap = (t) => String(t).charAt(0).toUpperCase() + String(t).slice(1);
+
+  function paint(connected) {
+    const el = $('state');
+    if (!connected) {
+      el.innerHTML = `<span class="line"><b class="down">The broker is not answering.</b></span>`
+        + `<span class="line">Nothing here works until it is. Start it with <code>docker compose up -d</code>.</span>`;
+      return;
+    }
+    const fleet = [...nodes.values()].filter((n) => !Camp.isEphemeralNode(n.id));
+    const live = fleet.filter((n) => n.online);
+    const lines = [];
+    lines.push(fleet.length
+      ? `<span class="line"><b class="live">${Cap(word(live.length))}</b> of ${word(fleet.length)} devices <a href="nodes.html">answering</a>.</span>`
+      : `<span class="line">The bus is up, and <b>nothing has joined it</b>.</span>`);
+    if (mode) lines.push(`<span class="line">Camp mode is <b>${esc(mode)}</b>${mode === 'idle' ? ', so nothing is lit but what you cast' : ''}.</span>`);
+    if (dj !== undefined) lines.push(`<span class="line">${dj ? `<b>${esc(dj)}</b> is on.` : 'The booth is empty.'}</span>`);
+    if (rules != null) lines.push(`<span class="line">${Cap(word(rules))} <a href="routes.html">routes</a> are live.</span>`);
+    el.innerHTML = lines.join('');
+  }
+
+  const setConn = (t, c) => { const e = $('conn'); e.textContent = t; e.className = 'conn ' + (c || ''); };
+  const c = mqtt.connect(url, { clientId: 'sim_home_' + Math.random().toString(36).slice(2, 8), clean: true, reconnectPeriod: 3000 });
+  c.on('connect', () => { setConn('connected', 'ok'); c.subscribe(['node/+/status', 'mapping/loaded', 'camp/mode', 'booth/dj']); paint(true); });
+  c.on('close', () => { setConn('disconnected', 'bad'); paint(false); });
+  c.on('error', (e) => { setConn(e.message, 'bad'); paint(false); });
+  c.on('message', (topic, buf) => {
+    let m; try { m = JSON.parse(buf.toString()); } catch (e) { return; }
+    if (topic === 'mapping/loaded') rules = m.rules;
+    else if (topic === 'camp/mode') mode = m.mode;
+    else if (topic === 'booth/dj') dj = m.artist || null;
+    else {
+      const id = topic.split('/')[1];
+      nodes.set(id, { id, online: !!m.online });
+    }
+    paint(true);
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+# runtime state and logs the dashboard and scripts write next to themselves
+dashboard/config.json
+dashboard/*.json
+!dashboard/config.example.json
+dashboard/*.csv
+dashboard/*.log
+dashboard/*.pid
+dashboard/*.lock
+dashboard/*.stop
+dashboard/*.stop.now
+dashboard/*.tmp
+dashboard/cache/
+dashboard/work/
+__pycache__/
+# compose env files hold logins and image pins
+nas/docker/*/.env

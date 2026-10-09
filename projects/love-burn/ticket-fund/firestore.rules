@@ -1,0 +1,198 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ------------------------------------------------------------------ identity
+    function signedIn() { return request.auth != null; }
+    // Google sign-in always yields a verified email; anything else must verify first.
+    function verified() { return signedIn() && request.auth.token.email_verified == true; }
+    function cfg() { return get(/databases/$(database)/documents/config/main).data; }
+    function isAdmin() { return verified() && request.auth.token.email in cfg().admins; }
+
+    // A signed-in user is a MEMBER once their uid is linked to a member record:
+    // memberUids/{uid} -> {memberId}, and that member doc's uid points back at them.
+    function linkPath() { return /databases/$(database)/documents/memberUids/$(request.auth.uid); }
+    function myMemberId() { return get(linkPath()).data.memberId; }
+    function myMember() { return get(/databases/$(database)/documents/members/$(myMemberId())).data; }
+    function isMember() { return verified() && exists(linkPath()) && myMember().uid == request.auth.uid; }
+    // Roster, ballots and discussion are visible to linked members and admins only.
+    function canReadCamp() { return isMember() || isAdmin(); }
+
+    function onlyKeys(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
+    // A member may only add/change/remove THEIR OWN entry (keyed by uid) in a map field.
+    function onlyOwnMapEntry(field) {
+      return request.resource.data.get(field, {}).diff(resource.data.get(field, {})).affectedKeys().hasOnly([request.auth.uid]);
+    }
+    // The caller's new entry in a map field (null when they removed it).
+    function myEntry(field) { return request.resource.data.get(field, {}).get(request.auth.uid, null); }
+    // A member's own helpers/donations entry must carry their real member id + name.
+    function entryIsMe(e) { return e.memberId == myMemberId() && e.name == myMember().name; }
+    function validHelper(e) {
+      return e == null || (e is map && e.keys().hasOnly(['memberId', 'name']) && entryIsMe(e));
+    }
+    // Donations: a positive quantity no larger than the item's own quantity.
+    function validDonation(d, maxQty) {
+      return d == null || (d is map && d.keys().hasOnly(['memberId', 'name', 'qty']) && entryIsMe(d)
+        && d.qty is number && d.qty > 0 && d.qty <= maxQty && d.qty <= 100000);
+    }
+
+    // ------------------------------------------------------------------ config
+    // Seeded server-side (seed/seed.mjs --admin you@example.com); never created from the app.
+    match /config/main {
+      allow read: if verified();
+      allow create, delete: if false;
+      allow update: if isAdmin()
+        && request.resource.data.admins is list && request.resource.data.admins.size() > 0
+        && request.resource.data.prices is map
+        && request.resource.data.goal is number && request.resource.data.goal >= 0;
+    }
+
+    // ------------------------------------------------------------------ projects + items
+    match /projects/{project} {
+      allow read: if verified();
+      allow create, delete: if isAdmin();
+      // Admins edit freely; a linked member may ONLY toggle their own "willing to help" entry.
+      allow update: if isAdmin() || (isMember() && onlyKeys(['helpers']) && onlyOwnMapEntry('helpers')
+        && validHelper(myEntry('helpers')));
+    }
+
+    match /projects/{project}/items/{item} {
+      allow read: if verified();
+      allow create, delete: if isAdmin();
+      // Admins edit freely; a linked member may ONLY set / remove their own donation entry.
+      allow update: if isAdmin() || (isMember() && onlyKeys(['donations']) && onlyOwnMapEntry('donations')
+        && validDonation(myEntry('donations'), resource.data.get('qty', 1)));
+    }
+
+    // ------------------------------------------------------------------ discussion
+    // {projectId, uid, memberId, name, text, parentId|null, hearts:{uid:true}, createdAt}
+    // Reads use one collection-group listener, so the read rule sits on the wildcard path.
+    match /{path=**}/comments/{comment} {
+      allow read: if canReadCamp();
+    }
+    match /projects/{project}/comments/{comment} {
+      allow create: if isMember()
+        && comment.matches('^[A-Za-z0-9]{20}$')              // auto ids only (they end up in the DOM)
+        && request.resource.data.keys().hasOnly(['projectId', 'uid', 'memberId', 'name', 'text', 'parentId', 'hearts', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.memberId == myMemberId()
+        && request.resource.data.name == myMember().name
+        && request.resource.data.projectId == project
+        && exists(/databases/$(database)/documents/projects/$(project))
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000
+        && (request.resource.data.parentId == null
+            || (request.resource.data.parentId is string
+                && exists(/databases/$(database)/documents/projects/$(project)/comments/$(request.resource.data.parentId))))
+        && request.resource.data.hearts == {}
+        && request.resource.data.createdAt is number;
+      // Hearts: a member may add (value true) or remove only their own entry.
+      allow update: if isAdmin() || (isMember() && onlyKeys(['hearts']) && onlyOwnMapEntry('hearts')
+        && request.resource.data.hearts.get(request.auth.uid, true) == true);
+      allow delete: if isAdmin() || (isMember() && resource.data.uid == request.auth.uid);
+    }
+
+    // ------------------------------------------------------------------ members + claiming
+    // members/{id}: {name, role, uid|null, email|null}. `email` is the address an admin
+    // pre-registered for that person; only a verified sign-in with that exact email can claim it.
+    match /members/{member} {
+      allow read: if canReadCamp()
+        // before linking, a user may see only the record(s) pre-registered to their own email
+        || (verified() && resource.data.email == request.auth.token.email);
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['name', 'role', 'uid', 'email'])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && request.resource.data.role in ['builder', 'performer', 'member', 'guest'];
+      allow delete: if isAdmin();
+      allow update: if isAdmin()
+        // self-claim: an unclaimed record pre-registered to this verified email, linked in the
+        // same batch (memberUids/{uid}), by a uid that is not linked to another member already
+        || (verified()
+            && resource.data.uid == null
+            && resource.data.email != null
+            && resource.data.email == request.auth.token.email
+            && onlyKeys(['uid'])
+            && request.resource.data.uid == request.auth.uid
+            && !exists(linkPath())
+            && getAfter(linkPath()).data.memberId == member);
+    }
+
+    // memberUids/{uid}: {memberId}. Written in the same batch as a claim, or by an admin.
+    match /memberUids/{uid} {
+      allow read: if (signedIn() && request.auth.uid == uid) || isAdmin();
+      allow create: if isAdmin()
+        || (verified() && request.auth.uid == uid
+            && request.resource.data.keys().hasOnly(['memberId'])
+            && get(/databases/$(database)/documents/members/$(request.resource.data.memberId)).data.uid == null
+            && getAfter(/databases/$(database)/documents/members/$(request.resource.data.memberId)).data.uid == uid);
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    // claims/{uid}: an access request from someone with no pre-registered record.
+    // An admin approves it by linking the uid to a member (and deletes the claim).
+    match /claims/{uid} {
+      allow read: if (signedIn() && request.auth.uid == uid) || isAdmin();
+      allow create: if verified() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'name', 'createdAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 80
+        && request.resource.data.createdAt is number;
+      allow update: if false;
+      allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+    }
+
+    // ------------------------------------------------------------------ ballots
+    // Ranked-choice ballots: one doc per member, id == member id. Readable by linked members
+    // and admins so results can be tallied client-side. Only the member who claimed that
+    // record may write it; guests don't vote.
+    // ranking = top-level projects; sub = { parentProjectId: [childIds...] }.
+    match /ballots/{member} {
+      function memberDoc() { return get(/databases/$(database)/documents/members/$(member)).data; }
+      function ownsMember() { return verified() && memberDoc().uid == request.auth.uid; }
+      function validBallot() {
+        return request.resource.data.keys().hasOnly(['uid', 'memberId', 'ranking', 'sub', 'secret', 'updatedAt'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.memberId == member
+          && request.resource.data.ranking is list
+          && request.resource.data.ranking.size() <= 50
+          && (!('sub' in request.resource.data) || request.resource.data.sub is map)
+          && (!('secret' in request.resource.data) || request.resource.data.secret is bool);
+      }
+      allow read: if canReadCamp();
+      allow create, update: if ownsMember() && memberDoc().role != 'guest' && validBallot();
+      allow delete: if isAdmin() || ownsMember();
+    }
+
+    // ------------------------------------------------------------------ tickets
+    // Redemption codes: ADMIN ONLY. Members never read this collection;
+    // an approved code is copied onto the member's own request doc.
+    match /codes/{code} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    // Ticket requests: one doc per requested ticket.
+    match /requests/{req} {
+      // members see only their own requests; admins see all
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      // a linked member may create a PENDING request for themselves, with no code,
+      // priced exactly at the current config price for that tier (no spoofing)
+      allow create: if isAdmin() || (isMember()
+        && request.resource.data.keys().hasOnly(['memberId', 'memberName', 'uid', 'tier', 'price', 'status', 'code', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.memberId == myMemberId()
+        && request.resource.data.memberName == myMember().name
+        && request.resource.data.status == 'pending'
+        && request.resource.data.code == null
+        && request.resource.data.price == cfg().prices[request.resource.data.tier]);
+      // only admins change status / attach codes
+      allow update: if isAdmin();
+      // a member may cancel their own still-pending request
+      allow delete: if isAdmin()
+        || (signedIn() && resource.data.uid == request.auth.uid && resource.data.status == 'pending');
+    }
+
+    match /{other=**} { allow read, write: if false; }
+  }
+}

@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AWEtisticats Ticket Fund</title>
+<style>
+  :root{--bg:#0D0B14;--surface:#1A1626;--surface2:#241E33;--line:#38304C;--text:#F2EDE4;
+    --muted:#8B84A0;--show:#FF4FA3;--art:#4FD8E0;--amber:#FFB84F;--ok:#7BE07A;--bad:#FF6B5E}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,Arial,sans-serif;
+    font-size:16px;line-height:1.5;padding-left:190px}
+  .wrap{max-width:860px;margin:0 auto;padding:18px 16px}
+  h1{font-size:1.5rem;margin:.2em 0 0}
+  .sub{color:var(--muted);font-size:.9rem;margin:0 0 14px}
+  h2{font-size:1.15rem;margin:1.2em 0 .5em;color:var(--show)}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+  .panel.shelved{opacity:.55}
+  button{background:var(--surface2);color:var(--text);border:1px solid var(--line);border-radius:8px;
+    padding:8px 14px;font-size:.95rem;cursor:pointer}
+  button:active{transform:scale(.97)}
+  button.primary{background:var(--show);color:#fff;border-color:var(--show);font-weight:700}
+  button.google{background:#fff;color:#1a1a1a;font-weight:600}
+  button.icon{padding:6px 9px;font-size:.85rem}
+  button:disabled{opacity:.35;cursor:default}
+  input,select,textarea{background:var(--surface2);color:var(--text);border:1px solid var(--line);border-radius:8px;
+    padding:8px 10px;font-size:.95rem;max-width:100%;font-family:inherit}
+  textarea{width:100%;min-height:110px}
+  label.chk{display:flex;gap:6px;align-items:center;font-size:.9rem;color:var(--muted);cursor:pointer}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .grow{flex:1;min-width:120px}
+  .thermo{height:26px;background:var(--surface2);border-radius:13px;overflow:hidden;border:1px solid var(--line)}
+  .thermo>div{height:100%;background:linear-gradient(90deg,var(--show),var(--art));border-radius:13px;transition:width .6s;min-width:6px}
+  .big{font-size:1.6rem;font-weight:800}
+  .money{font-variant-numeric:tabular-nums}
+  .bar{height:14px;background:var(--surface2);border-radius:7px;overflow:hidden;margin:6px 0;display:flex}
+  .bar>div{height:100%;transition:width .5s}
+  .bar .don{background:var(--ok)} .bar .first{background:var(--show)}
+  .legend{display:flex;gap:14px;font-size:.78rem;color:var(--muted);flex-wrap:wrap}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}
+  .tag{display:inline-block;font-size:.72rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .tag.builder,.tag.performer{color:var(--art);border-color:var(--art)}
+  .tag.member{color:var(--amber);border-color:var(--amber)}
+  .tag.guest{color:var(--show);border-color:var(--show)}
+  .tag.paid,.tag.approved,.tag.active{color:var(--ok);border-color:var(--ok)}
+  .tag.pending,.tag.undecided{color:var(--amber);border-color:var(--amber)}
+  .tag.rejected,.tag.shelved{color:var(--bad);border-color:var(--bad)}
+  .tag.required{background:var(--amber);border-color:var(--amber);color:#2a1a00}
+  .code{font-family:Consolas,monospace;background:var(--surface2);border:1px dashed var(--ok);
+    padding:2px 10px;border-radius:6px;color:var(--ok);letter-spacing:.08em;font-size:.9rem}
+  .item{display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--line);font-size:.92rem;flex-wrap:wrap}
+  .item:last-child{border-bottom:none}
+  .item .name{flex:1;min-width:140px}
+  .item.crossed .name,.item.crossed .cost{text-decoration:line-through;color:var(--muted)}
+  .item.done .cost{text-decoration:line-through;color:var(--muted)}
+  .donor{color:var(--ok);font-size:.8rem}
+  .dep{color:var(--amber);font-size:.78rem}
+  .dep.broken{color:var(--bad)}
+  .sublist{margin:8px 0 0 12px;padding-left:12px;border-left:2px solid var(--line)}
+  .sublist .item{padding:5px 0}
+  .nav{position:fixed;top:0;left:0;bottom:0;width:190px;display:flex;flex-direction:column;gap:2px;
+    background:var(--surface);border-right:1px solid var(--line);z-index:10;padding-top:10px}
+  .nav .brand{font-size:1.05rem;font-weight:800;padding:10px 16px 14px;border-bottom:1px solid var(--line);margin-bottom:8px}
+  .nav button{border:none;border-radius:0;padding:12px 18px;font-size:.95rem;background:none;color:var(--muted);
+    text-align:left;border-left:3px solid transparent}
+  .nav button.active{color:var(--show);font-weight:700;background:var(--surface2);border-left-color:var(--show)}
+  @media(max-width:720px){
+    body{padding-left:60px}
+    .nav{width:60px}
+    .nav .brand{padding:10px 6px 14px;text-align:center;font-size:1rem}
+    .nav .brand .lbl,.nav button .lbl{display:none}
+    .nav button{text-align:center;padding:14px 4px;font-size:1.25rem}
+  }
+  .muted{color:var(--muted)} .ok{color:var(--ok)} .bad{color:var(--bad)} .art{color:var(--art)} .amber{color:var(--amber)}
+  .small{font-size:.85rem}
+  .hidden{display:none!important}
+  .memberrow{display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px dashed var(--line);flex-wrap:wrap}
+  .memberrow:last-child{border-bottom:none}
+  .rank{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:34px;padding:0 8px;border-radius:17px;
+    background:var(--surface2);border:1px solid var(--line);color:var(--muted);font-weight:800;font-size:.95rem;font-variant-numeric:tabular-nums}
+  .rank.r1{background:var(--show);color:#fff;border-color:var(--show)}
+  .rank.r2{background:var(--art);color:#08222a;border-color:var(--art)}
+  .rank.r3{background:var(--amber);color:#2a1a00;border-color:var(--amber)}
+  .rank.sm{min-width:26px;height:26px;font-size:.8rem}
+  .ballot .item{gap:6px}
+  .ballot .item .name{font-size:1rem}
+  .ballot button.icon{width:38px;height:38px;padding:0;font-size:1rem;border-radius:50%}
+  .ballot button.add{background:var(--art);color:#08222a;border:none;font-weight:800}
+  .tally{width:100%;border-collapse:collapse;font-size:.85rem;font-variant-numeric:tabular-nums}
+  .tally th,.tally td{padding:4px 8px;text-align:right;border-bottom:1px dashed var(--line)}
+  .tally th:first-child,.tally td:first-child{text-align:left}
+  .tally td.out{color:var(--bad)}
+  .budget{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:.92rem}
+  .budget b{font-variant-numeric:tabular-nums;text-align:right}
+  .pub{font-size:.85rem;padding:4px 0;border-bottom:1px dashed var(--line)}
+  .pub:last-child{border-bottom:none}
+  #toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--surface2);
+    border:1px solid var(--show);border-radius:10px;padding:10px 18px;z-index:99;transition:opacity .3s;max-width:90vw}
+  .proj-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .proj-head h3{margin:0;font-size:1.05rem;flex:1;min-width:140px}
+  .proj-head h3 a{color:var(--text);text-decoration:none}
+  .proj-head h3 a:hover{color:var(--art)}
+  details summary{cursor:pointer;color:var(--muted);font-size:.88rem;margin-top:6px}
+  .userchip{display:flex;gap:8px;align-items:center;font-size:.85rem;color:var(--muted)}
+  .userchip img{width:26px;height:26px;border-radius:50%}
+  .desc{white-space:pre-wrap;color:var(--text);font-size:.95rem}
+  .backlink{color:var(--art);text-decoration:none;font-size:.9rem}
+  .cfg-grid{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center;font-size:.9rem}
+  .comment{padding:8px 0;border-bottom:1px dashed var(--line)}
+  .comment:last-child{border-bottom:none}
+  .comment .meta{font-size:.8rem;color:var(--muted)}
+  .comment .text{white-space:pre-wrap;margin:2px 0 4px}
+  .comment .replies{margin:6px 0 0 18px;padding-left:12px;border-left:2px solid var(--line)}
+  button.heart{padding:2px 8px;font-size:.85rem;border-radius:999px}
+  button.heart.on{color:var(--show);border-color:var(--show)}
+  #drawerBack{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;opacity:0;pointer-events:none;transition:opacity .25s}
+  #drawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,92vw);background:var(--surface);border-left:1px solid var(--line);
+    z-index:51;transform:translateX(100%);transition:transform .25s;overflow-y:auto;padding:18px 18px 28px;box-shadow:-12px 0 30px rgba(0,0,0,.4)}
+  body.drawer-open #drawerBack{opacity:1;pointer-events:auto}
+  body.drawer-open #drawer{transform:none}
+  #drawer h3{margin:0;font-size:1.2rem}
+  #drawer .close{position:absolute;top:12px;right:12px;width:36px;height:36px;border-radius:50%;padding:0;font-size:1rem}
+  #drawer .stats{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:.9rem;margin:12px 0}
+  #drawer .stats b{display:block;font-size:1.05rem}
+  button.info{padding:2px 8px;font-size:.8rem;border-radius:999px;color:var(--muted)}
+  .needs{width:100%;border-collapse:collapse;font-size:.9rem}
+  .needs th{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:6px 6px;border-bottom:1px solid var(--line)}
+  .needs td{padding:7px 6px;border-bottom:1px dashed var(--line);vertical-align:middle}
+  .needs td.n,.needs th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .needs tr.group td{background:var(--surface2);font-weight:700;padding:8px 6px;border-bottom:none}
+  .needs tr.group td .small{font-weight:400}
+  .needs tr.crossed td{color:var(--muted);text-decoration:line-through}
+  .needs tr.done td{color:var(--muted)}
+  .needs .sub{color:var(--muted);font-size:.8rem}
+  @media(max-width:720px){ .needs .hide-sm{display:none} }
+  .helper{display:inline-block;background:var(--surface2);border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:.85rem;margin:2px 4px 2px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="row" style="justify-content:space-between">
+    <div><h1>🎭🐱 AWEtisticats Ticket Fund</h1>
+    <p class="sub">Fund the art. Claim your ticket. Rank what you love.</p></div>
+    <div id="authBox" class="userchip"></div>
+  </div>
+
+  <div id="setupWarn" class="panel hidden"><b class="bad">Not connected</b> <span class="small muted">— firebase-config.js missing/unfilled.</span></div>
+  <div id="signinPanel" class="panel hidden">
+    <p>Sign in so your vote and your tickets are yours alone. 🐾</p>
+    <button class="google" onclick="signIn()">🔑 Sign in with Google</button>
+  </div>
+
+  <section id="page-overview">
+    <div class="panel">
+      <div class="row" style="justify-content:space-between">
+        <span class="muted small">BALLOTS CAST</span><span class="muted small" id="goalLabel"></span>
+      </div>
+      <div class="big" id="totalRaised">0</div>
+      <div class="thermo"><div id="thermoFill" style="width:0%"></div></div>
+      <div class="row small muted" style="justify-content:space-between;margin-top:6px">
+        <span id="ticketStats"></span><span id="donateStats"></span>
+      </div>
+    </div>
+    <div class="panel" id="budgetBox"></div>
+    <div id="requiredBox"></div>
+    <h2>🗳️ Camp Ranking</h2>
+    <div class="panel" id="resultsBox"></div>
+    <h2>Projects</h2>
+    <div class="legend" style="margin:0 4px 10px"><span><i style="background:var(--ok)"></i>donated (share of cost)</span>
+      <span><span class="tag required">required</span> funded first, not voted on</span>
+      <span><span class="tag active">active</span> / <span class="tag shelved">shelved</span> decided by the leads after the vote</span></div>
+    <div id="projectList"></div>
+  </section>
+
+  <section id="page-detail" class="hidden"><div id="detailBody"></div></section>
+
+  <section id="page-vote" class="hidden">
+    <div class="panel" id="claimPanel"></div>
+    <div id="ballotPanels"></div>
+    <div class="panel hidden" id="ticketsPanel"></div>
+  </section>
+
+  <section id="page-needs" class="hidden">
+    <h2>📋 Needs — every line item in one place</h2>
+    <div class="panel">
+      <div class="row">
+        <input id="needsSearch" class="grow" placeholder="Search items or projects…" oninput="renderNeeds()">
+        <select id="needsScope" onchange="renderNeeds()">
+          <option value="open">still needed</option>
+          <option value="all">everything</option>
+          <option value="donated">donated</option>
+        </select>
+        <select id="needsSort" onchange="renderNeeds()">
+          <option value="project">by project</option>
+          <option value="left">biggest need first</option>
+          <option value="cheap">cheapest first</option>
+        </select>
+        <label class="chk"><input type="checkbox" id="needsShelved" onchange="renderNeeds()"> include shelved</label>
+      </div>
+      <div class="row small muted" id="needsSummary" style="margin-top:8px;justify-content:space-between"></div>
+    </div>
+    <div class="panel" style="padding:6px 8px;overflow-x:auto"><table class="needs" id="needsTable"></table></div>
+  </section>
+
+  <section id="page-members" class="hidden">
+    <h2>Members & Roles</h2>
+    <div class="panel" id="addMemberPanel">
+      <div class="row">
+        <input id="newMemberName" class="grow" placeholder="Name">
+        <input id="newMemberEmail" class="grow" type="email" placeholder="Google email (optional: lets them claim it themselves)">
+        <select id="newMemberRole">
+          <option value="builder">Builder</option><option value="performer">Performer</option>
+          <option value="member" selected>Member</option><option value="guest">Guest</option>
+        </select>
+        <button class="primary" onclick="addMember()">Add</button>
+      </div>
+    </div>
+    <div class="panel hidden" id="claimsAdminPanel"></div>
+    <div class="panel" id="memberList"></div>
+    <p class="small muted">Request tickets under <b>My Vote → My Tickets</b>; an admin approves and assigns your redemption code. Pay via: <span id="payNote" class="art"></span></p>
+    <div class="panel hidden" id="reqAdminPanel"></div>
+    <div class="panel hidden" id="codePoolPanel"></div>
+    <div class="panel hidden" id="configPanel">
+      <h2 style="margin-top:0">⚙️ Admin Config</h2>
+      <div class="cfg-grid">
+        <label>Camp budget $</label><input id="cfgGoal" type="number" style="width:120px">
+        <label>Builder $</label><input id="cfgBuilder" type="number" style="width:100px">
+        <label>Performer $</label><input id="cfgPerformer" type="number" style="width:100px">
+        <label>Member $</label><input id="cfgMember" type="number" style="width:100px">
+        <label>Guest $</label><input id="cfgGuest" type="number" style="width:100px">
+        <label>Pay note</label><input id="cfgPayNote" class="grow">
+        <label>Admin emails</label><input id="cfgAdmins" class="grow" placeholder="a@x.com, b@y.com">
+      </div>
+      <button class="primary" style="margin-top:10px" onclick="saveConfig()">Save config</button>
+    </div>
+  </section>
+
+  <section id="page-projects" class="hidden">
+    <h2>Manage Projects</h2>
+    <div class="panel" id="addProjPanel">
+      <div class="row">
+        <input id="newProjEmoji" style="width:64px" placeholder="🎪" maxlength="4">
+        <input id="newProjName" class="grow" placeholder="Project name">
+        <select id="newProjParent"><option value="">top-level</option></select>
+        <label class="chk"><input type="checkbox" id="newProjRequired"> required</label>
+        <button class="primary" onclick="addProject()">Add project</button>
+      </div>
+    </div>
+    <div id="projAdminList"></div>
+  </section>
+</div>
+
+<div class="nav">
+  <div class="brand">🎭🐱 <span class="lbl">Ticket Fund</span></div>
+  <button data-page="overview" class="active" onclick="go('overview')">📊 <span class="lbl">Overview</span></button>
+  <button data-page="vote" onclick="go('vote')">🗳️ <span class="lbl">My Vote</span></button>
+  <button data-page="needs" onclick="go('needs')">📋 <span class="lbl">Needs</span></button>
+  <button data-page="members" onclick="go('members')">👥 <span class="lbl">Members</span></button>
+  <button data-page="projects" onclick="go('projects')">🛠 <span class="lbl">Projects</span></button>
+</div>
+<div id="drawerBack" onclick="closeDrawer()"></div>
+<aside id="drawer" role="dialog" aria-modal="true"><div id="drawerBody"></div></aside>
+<div id="toast" style="opacity:0"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script>
+/* ================= state ================= */
+let db=null, auth=null, user=null;
+let projects=[], itemsByProj={}, members=[], requests=[], codes=[], ballots=[], comments=[];
+let reqMode=null, reqUnsub=null, codesWatching=false;
+// Membership: memberUids/{uid} links a sign-in to a member record. Until it exists (and the
+// user is not an admin) the rules hide the roster, ballots and discussion, so we only look up
+// records pre-registered to the user's own email (claimable) and their own access request.
+let memberLink=null, claimable=[], myClaim=null, allClaims=[], configMissing=false;
+let config={prices:{builder:150,performer:150,member:300,guest:600}, goal:5950, payNote:"ask a lead", admins:[]};
+const $=id=>document.getElementById(id);
+function toast(m){const t=$('toast');t.textContent=m;t.style.opacity=1;setTimeout(()=>t.style.opacity=0,2200)}
+function money(n){ n=+n||0; return '$'+(Math.abs(n%1)>0.004 ? n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) : Math.round(n).toLocaleString()) }
+function num(n){ n=+n||0; return Number.isInteger(n)?String(n):String(+n.toFixed(3)) }
+// HTML-escape for text AND attribute values (quotes included).
+function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]) }
+// A value passed as an argument inside an inline on*="..." handler: a JSON string literal,
+// HTML-escaped so the attribute stays intact. (esc() alone is not enough there: the browser
+// decodes entities before the handler's JS is parsed.)
+function jsq(s){ return esc(JSON.stringify(String(s??''))) }
+function safeUrl(u){ return /^https:\/\//i.test(u||'') ? u : '' }
+function isAdmin(){ return !!(user && (config.admins||[]).includes(user.email)) }
+function myMember(){ return user&&memberLink ? members.find(m=>m.id===memberLink&&m.uid===user.uid)||null : null }
+function canSeeCamp(){ return !!(memberLink||isAdmin()) }
+
+/* ================= boot ================= */
+try{
+  firebase.initializeApp(window.FIREBASE_CONFIG);
+  db=firebase.firestore(); auth=firebase.auth();
+  if(window.USE_EMULATORS){ auth.useEmulator('http://localhost:9099'); db.useEmulator('localhost',8080); }
+}catch(e){ $('setupWarn').classList.remove('hidden'); }
+
+if(auth){
+  auth.onAuthStateChanged(async u=>{
+    user=u; renderAuth();
+    if(u){ startWatches(); } else { renderAll(); }
+  });
+}
+function signIn(){
+  const p=new firebase.auth.GoogleAuthProvider();
+  (window.USE_EMULATORS ? auth.signInWithRedirect(p) : auth.signInWithPopup(p)).catch(e=>toast(e.message));
+}
+function signOut(){ auth.signOut() }
+
+let watching=false;
+function startWatches(){
+  if(watching||!db) return; watching=true;
+  db.doc('config/main').onSnapshot(s=>{ configMissing=!s.exists; if(s.exists) config={...config,...s.data()}; ensureRequestWatch(); startCampWatches(); renderAll(); }, e=>console.warn(e));
+  db.doc('memberUids/'+user.uid).onSnapshot(s=>{ memberLink=s.exists?s.data().memberId:null; startCampWatches(); renderAll(); }, e=>console.warn('link',e));
+  db.doc('claims/'+user.uid).onSnapshot(s=>{ myClaim=s.exists?s.data():null; renderAll(); }, e=>console.warn('claim',e));
+  if(user.email) db.collection('members').where('email','==',user.email).onSnapshot(s=>{
+    claimable=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }, e=>console.warn('claimable',e));
+  ensureRequestWatch();
+  db.collection('projects').orderBy('order').onSnapshot(s=>{
+    projects=s.docs.map(d=>({id:d.id,...d.data()}));
+    projects.forEach(p=>{ if(!itemsByProj[p.id]) watchItems(p.id); });
+    renderAll();
+  }, e=>toast('Read error: '+e.code));
+}
+// Roster, ballots and discussion: readable only by linked members and admins (firestore.rules).
+let campWatching=false, claimsWatching=false;
+function startCampWatches(){
+  if(!user||!db) return;
+  if(isAdmin()&&!claimsWatching){ claimsWatching=true;
+    db.collection('claims').onSnapshot(s=>{ allClaims=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }, e=>console.warn('claims',e)); }
+  if(campWatching||!canSeeCamp()) return; campWatching=true;
+  db.collection('members').orderBy('name').onSnapshot(s=>{
+    members=s.docs.map(d=>({id:d.id,...d.data()})); renderAll();
+  }, e=>console.warn(e));
+  db.collection('ballots').onSnapshot(s=>{
+    ballots=s.docs.map(d=>({id:d.id,...d.data()})); renderAll();
+  }, e=>console.warn('ballots',e));
+  db.collectionGroup('comments').orderBy('createdAt').onSnapshot(s=>{
+    comments=s.docs.map(d=>({id:d.id,...d.data()})); renderAll();
+  }, e=>console.warn('comments',e));
+}
+function projComments(pid){ return comments.filter(c=>c.projectId===pid) }
+function watchItems(pid){
+  itemsByProj[pid]=[];
+  db.collection('projects/'+pid+'/items').orderBy('order').onSnapshot(s=>{
+    itemsByProj[pid]=s.docs.map(d=>({id:d.id,...d.data()})); renderAll();
+  }, e=>console.warn(e));
+}
+function ensureRequestWatch(){
+  if(!user||!db) return;
+  const mode=isAdmin()?'all':'own';
+  if(mode!==reqMode){
+    if(reqUnsub) reqUnsub();
+    reqMode=mode;
+    const q = mode==='all' ? db.collection('requests') : db.collection('requests').where('uid','==',user.uid);
+    reqUnsub=q.onSnapshot(s=>{ requests=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }, e=>console.warn('requests',e));
+  }
+  if(mode==='all'&&!codesWatching){
+    codesWatching=true;
+    db.collection('codes').onSnapshot(s=>{ codes=s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }, e=>console.warn('codes',e));
+  }
+}
+// No client-side bootstrap: config/main (with the admin list) is seeded server-side by
+// `node seed/seed.mjs --admin you@example.com`, and the rules refuse to create it from here.
+
+/* ================= project model =================
+   project: {name, emoji, description, order, parentId|null, required:bool, status:'undecided'|'active'|'shelved', helpers:{uid:{memberId,name}}}
+   item:    {name, cost (unit $), qty, dependsOn: projectId|null, donations:{uid:{memberId,name,qty}}, order}
+   ballot:  {uid, memberId, ranking:[topLevelIds], sub:{parentId:[childIds]}, secret:bool, updatedAt}
+*/
+function proj(pid){ return projects.find(p=>p.id===pid) }
+function status(p){ return (p&&p.status)||'undecided' }
+function isShelved(p){ return status(p)==='shelved' }
+function children(pid){ return projects.filter(p=>p.parentId===pid) }
+function topLevel(){ return projects.filter(p=>!p.parentId||!proj(p.parentId)) }
+function itemQty(i){ const q=+i.qty; return q>0?q:1 }
+function qtyLabel(i){ const q=itemQty(i); return q===1?'':` <span class="small muted">× ${num(q)} @ ${money(i.cost)}</span>` }
+function itemTotal(i){ return itemQty(i)*(+i.cost||0) }
+function itemDonatedQty(i){ return Math.min(itemQty(i), Object.values(i.donations||{}).reduce((a,d)=>a+(+d.qty||0),0)) }
+function itemDonated(i){ return itemDonatedQty(i)*(+i.cost||0) }
+function itemCrossed(i){ return !!(i.dependsOn && proj(i.dependsOn) && isShelved(proj(i.dependsOn))) } // dependency shelved → item is off
+function liveItems(pid){ return (itemsByProj[pid]||[]).filter(i=>!itemCrossed(i)) }
+function ownCost(pid){ return liveItems(pid).reduce((a,i)=>a+itemTotal(i),0) }
+function ownDonated(pid){ return liveItems(pid).reduce((a,i)=>a+itemDonated(i),0) }
+// project cost includes its (non-shelved) sub-projects
+function projCost(pid){ return ownCost(pid)+children(pid).filter(c=>!isShelved(c)).reduce((a,c)=>a+projCost(c.id),0) }
+function projDonated(pid){ return ownDonated(pid)+children(pid).filter(c=>!isShelved(c)).reduce((a,c)=>a+projDonated(c.id),0) }
+function projNeed(pid){ return Math.max(0, projCost(pid)-projDonated(pid)) }
+function memberReqs(mid){ return requests.filter(r=>r.memberId===mid).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)) }
+function bars(pid){ // green donated share of total cost
+  const cost=projCost(pid); if(!cost) return '<div class="bar"></div>';
+  return `<div class="bar"><div class="don" style="width:${100*projDonated(pid)/cost}%"></div></div>`;
+}
+function canVote(m){ return !!m && m.role!=='guest' }
+function eligibleVoters(){ return members.filter(canVote) }
+function ballotOf(mid){ return ballots.find(b=>b.id===mid) }
+function myBallot(){ const me=myMember(); return (me&&ballotOf(me.id))||{ranking:[],sub:{},secret:false} }
+function helperList(p){ return Object.values(p.helpers||{}) }
+function memberName(mid){ const m=members.find(x=>x.id===mid); return m?m.name:'?' }
+
+/* ---- vote groups: 'top' = top-level non-required projects; each parent with children gets its own sub-vote ---- */
+function voteable(p){ return !p.required && !isShelved(p) }
+function groupCandidates(g){ return (g==='top'?topLevel():children(g)).filter(voteable) }
+function subGroups(){ return projects.filter(p=>children(p.id).length && !isShelved(p)).map(p=>p.id) }
+function rankingFor(b,g){ return g==='top'?(b.ranking||[]):(((b.sub||{})[g])||[]) }
+
+/* ---- STV-style sequential elimination -> full ranked order ----
+   Each round: count every ballot's highest-ranked surviving project; eliminate
+   the project with the fewest; ballots transfer to their next choice. Final
+   order = last survivor first, then eliminated projects in reverse order.
+   Ties: fewest Borda points goes out first, then the newer project. */
+function runSTV(candidates, rankings){
+  const ids=candidates.map(c=>c.id), order=Object.fromEntries(candidates.map((c,i)=>[c.id,i]));
+  const clean=rankings.map(r=>{ const seen=new Set(); return (r||[]).filter(x=>ids.includes(x)&&!seen.has(x)&&seen.add(x)); }).filter(r=>r.length);
+  const borda={}; ids.forEach(id=>borda[id]=0);
+  clean.forEach(r=>r.forEach((id,i)=>borda[id]+=ids.length-i));
+  let remaining=[...ids]; const rounds=[], eliminated=[];
+  while(remaining.length>1){
+    const tally={}; remaining.forEach(id=>tally[id]=0); let exhausted=0;
+    clean.forEach(r=>{ const top=r.find(id=>remaining.includes(id)); if(top) tally[top]++; else exhausted++; });
+    const min=Math.min(...remaining.map(id=>tally[id]));
+    const losers=remaining.filter(id=>tally[id]===min).sort((a,b)=>(borda[a]-borda[b])||(order[b]-order[a]));
+    const out=losers[0];
+    rounds.push({n:rounds.length+1, tally, exhausted, eliminated:out, tie:losers.length>1});
+    eliminated.push(out); remaining=remaining.filter(id=>id!==out);
+  }
+  const first={}; ids.forEach(id=>first[id]=0); clean.forEach(r=>first[r[0]]++);
+  return {ranking:[...remaining, ...eliminated.reverse()], rounds, first, ballots:clean.length};
+}
+let results={}; // {top:{...}, [parentId]:{...}} recomputed on every render
+function computeResults(){
+  results={top:runSTV(groupCandidates('top'), ballots.map(b=>rankingFor(b,'top')))};
+  subGroups().forEach(g=>results[g]=runSTV(groupCandidates(g), ballots.map(b=>rankingFor(b,g))));
+}
+function groupOf(p){ return p.parentId&&proj(p.parentId)?p.parentId:'top' }
+function rankOf(p){ const r=results[groupOf(p)]; if(!r||!r.ballots) return null; const i=r.ranking.indexOf(p.id); return i<0?null:i+1 }
+function firstOf(p){ const r=results[groupOf(p)]; return r?(r.first[p.id]||0):0 }
+function rankBadge(p,sm){ if(p.required) return `<span class="tag required">required</span>`; const r=rankOf(p); return r?`<span class="rank r${r}${sm?' sm':''}" title="ranking">#${r}</span>`:'' }
+function statusTag(p){ const s=status(p); return s==='undecided'?'':`<span class="tag ${s}">${s}</span>` }
+
+/* ================= description drawer (slides in from the right) ================= */
+let drawerProject=null;
+function openDrawer(pid){ drawerProject=pid; renderDrawer(); document.body.classList.add('drawer-open'); }
+function closeDrawer(){ document.body.classList.remove('drawer-open'); drawerProject=null; }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeDrawer(); });
+window.addEventListener('hashchange',closeDrawer);
+function renderDrawer(){
+  const p=drawerProject&&proj(drawerProject); const el=$('drawerBody');
+  if(!p){ el.innerHTML=''; return }
+  const parent=p.parentId?proj(p.parentId):null, kids=children(p.id), helpers=helperList(p), items=itemsByProj[p.id]||[];
+  const g=results[groupOf(p)], r=rankOf(p);
+  el.innerHTML=`<button class="close" onclick="closeDrawer()" title="close">✕</button>
+    <div class="row" style="gap:10px;padding-right:40px"><span style="font-size:2rem">${esc(p.emoji||'🎪')}</span>
+      <div><h3>${esc(p.name)}</h3><div class="row" style="gap:6px;margin-top:4px">${rankBadge(p,true)}${statusTag(p)}${parent?`<span class="small muted">part of ${esc(parent.name)}</span>`:''}</div></div></div>
+    <div class="stats">
+      <div><span class="small muted">cost</span><b class="money">${money(projCost(p.id))}</b></div>
+      <div><span class="small muted">still needed</span><b class="money ${projNeed(p.id)<=0&&projCost(p.id)?'ok':''}">${money(projNeed(p.id))}</b></div>
+      <div><span class="small muted">${p.required?'vote':'first-choice votes'}</span><b>${p.required?'not voted on':(g&&g.ballots?firstOf(p):'—')}</b></div>
+      <div><span class="small muted">helpers</span><b>🙋 ${helpers.length}</b></div>
+    </div>
+    ${bars(p.id)}
+    <div class="desc" style="margin-top:12px">${esc(p.description||'')||'<span class="muted">No description yet.</span>'}</div>
+    ${kids.length?`<div class="small muted" style="margin-top:12px;text-transform:uppercase;letter-spacing:.05em;font-weight:700">Sub-projects</div>
+      ${kids.map(c=>`<div class="item"><span>${esc(c.emoji||'')}</span><span class="name"><a href="#" onclick="openDrawer(${jsq(c.id)});return false" style="color:inherit;text-decoration:none">${esc(c.name)}</a></span><span class="small muted money">${money(projCost(c.id))}</span></div>`).join('')}`:''}
+    ${items.length?`<details style="margin-top:10px"><summary>${items.length} line items · ${money(ownCost(p.id))}</summary>${itemsHTML(p.id)}</details>`:''}
+    ${helpers.length?`<div style="margin-top:12px">${helpers.map(h=>`<span class="helper">${esc(h.name)}</span>`).join('')}</div>`:''}
+    <div class="row" style="margin-top:16px;gap:8px">
+      <a class="backlink" href="#/project/${esc(p.id)}"><button class="primary">Open full page ›</button></a>
+      <span class="small muted">💬 ${projComments(p.id).length} comments</span></div>`;
+}
+
+/* ================= routing ================= */
+let currentPage='overview', currentProject=null;
+function go(page){ location.hash = page==='overview' ? '' : '#/'+page; }
+function openProject(pid){ location.hash = '#/project/'+pid; }
+function route(){
+  const h=location.hash.replace(/^#\/?/,'');
+  if(h.startsWith('project/')){ currentPage='detail'; currentProject=h.slice(8); }
+  else { currentPage=h||'overview'; currentProject=null; }
+  ['overview','detail','vote','needs','members','projects'].forEach(p=>$('page-'+p).classList.toggle('hidden',p!==currentPage));
+  document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===currentPage||(currentPage==='detail'&&b.dataset.page==='overview')));
+  donatingItem=null; editingItem=null;
+  renderAll();
+}
+window.addEventListener('hashchange',route);
+
+/* ================= render ================= */
+function renderAuth(){
+  const b=$('authBox');
+  if(user){ const photo=safeUrl(user.photoURL); b.innerHTML=`${photo?`<img src="${esc(photo)}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">`:''}<span>${esc(user.displayName||user.email)}${isAdmin()?' 👑':''}</span><button class="small" onclick="signOut()">out</button>`; $('signinPanel').classList.add('hidden'); }
+  else { b.innerHTML=''; $('signinPanel').classList.remove('hidden'); }
+}
+function renderAll(){
+  computeResults();
+  renderAuth(); renderOverview(); renderDetail(); renderVote(); renderDrawer(); renderNeeds(); renderMembers(); renderReqAdmin(); renderCodePool(); renderProjAdmin(); renderConfig();
+  $('payNote').textContent=config.payNote||'';
+  $('addMemberPanel').classList.toggle('hidden',!isAdmin());
+  $('addProjPanel').classList.toggle('hidden',!isAdmin());
+  $('configPanel').classList.toggle('hidden',!isAdmin());
+}
+
+function subRows(p, linky){ // nested sub-project lines inside a parent card
+  const kids=children(p.id); if(!kids.length) return '';
+  const r=results[p.id]; const ordered=r&&r.ballots ? [...kids].sort((a,b)=>(rankOf(a)||99)-(rankOf(b)||99)) : kids;
+  return `<div class="sublist">${ordered.map(c=>`<div class="item ${isShelved(c)?'crossed':''}">
+      ${rankBadge(c,true)}<span>${esc(c.emoji||'🎪')}</span>
+      <span class="name">${linky?`<a href="#/project/${esc(c.id)}" style="color:inherit;text-decoration:none">${esc(c.name)} ›</a>`:esc(c.name)} ${statusTag(c)} <button class="info" onclick="openDrawer(${jsq(c.id)})" title="quick look">ℹ️</button></span>
+      ${r&&r.ballots?`<span class="small muted">${firstOf(c)} first</span>`:''}
+      <span class="small muted money">${money(projCost(c.id))}</span></div>`).join('')}
+    ${r&&r.ballots?`<div class="small muted" style="margin-top:4px">sub-vote: ${r.ballots} ballot${r.ballots===1?'':'s'} ranked these</div>`:''}</div>`;
+}
+
+function projCardHTML(p, linky){
+  const cost=projCost(p.id), need=projNeed(p.id), helpers=helperList(p).length, g=results[groupOf(p)];
+  return `<div class="panel ${isShelved(p)?'shelved':''}">
+    <div class="proj-head">${rankBadge(p)}<span style="font-size:1.4rem">${esc(p.emoji||'🎪')}</span>
+      <h3>${linky?`<a href="#/project/${esc(p.id)}">${esc(p.name)} ›</a>`:esc(p.name)} ${statusTag(p)} ${linky?`<button class="info" onclick="openDrawer(${jsq(p.id)})" title="quick look">ℹ️ about</button>`:''}</h3>
+      <span class="${need<=0&&cost?'ok':'muted'} small money">${isShelved(p)?'shelved':need<=0&&cost?'COVERED ✔':money(need)+' still needed'}</span></div>
+    ${bars(p.id)}
+    <div class="row small muted" style="justify-content:space-between">
+      <span style="color:var(--show)">${p.required?'not voted on':(g&&g.ballots?firstOf(p)+' first-choice vote'+(firstOf(p)===1?'':'s'):'no votes yet')}</span>
+      <span class="ok">${money(projDonated(p.id))} donated</span><span>cost ${money(cost)}</span>
+      <span>🙋 ${helpers} helper${helpers===1?'':'s'}</span><span>💬 ${projComments(p.id).length}</span></div>
+    ${subRows(p, linky)}`;
+}
+
+function itemsHTML(pid){ // compact read-only line items (overview expander)
+  const items=itemsByProj[pid]||[];
+  return items.map(i=>{ const dq=itemDonatedQty(i), cr=itemCrossed(i);
+    return `<div class="item ${cr?'crossed':dq>=itemQty(i)?'done':''}">
+      <span class="name">${esc(i.name)}${qtyLabel(i)}
+        ${i.dependsOn&&proj(i.dependsOn)?`<span class="dep ${cr?'broken':''}">needs ${esc(proj(i.dependsOn).name)}${cr?' (shelved)':''}</span>`:''}</span>
+      ${dq?`<span class="donor">🎁 ${itemQty(i)===1?'donated':num(dq)+' donated'}</span>`:''}
+      <span class="cost money">${money(itemTotal(i))}</span></div>`; }).join('')||'<div class="small muted">no items yet</div>';
+}
+
+function renderBudget(){
+  const tops=topLevel().filter(p=>!isShelved(p));
+  const req=tops.filter(p=>p.required), voted=tops.filter(p=>!p.required);
+  const reqNeed=req.reduce((a,p)=>a+projNeed(p.id),0);
+  const actNeed=voted.filter(p=>status(p)==='active').reduce((a,p)=>a+projNeed(p.id),0);
+  const undNeed=voted.filter(p=>status(p)==='undecided').reduce((a,p)=>a+projNeed(p.id),0);
+  const budget=+config.goal||0, left=budget-reqNeed, afterActive=left-actNeed;
+  $('budgetBox').innerHTML=`<div class="row" style="justify-content:space-between"><span class="muted small">BUDGET — required projects come off the top</span></div>
+    <div class="budget">
+      <span>Camp budget</span><b class="money">${money(budget)}</b>
+      <span>Required projects (${req.length}) still needed</span><b class="money amber">− ${money(reqNeed)}</b>
+      <span>Left for voted projects</span><b class="money ${left<0?'bad':''}">${money(left)}</b>
+      <span>Active voted projects (${voted.filter(p=>status(p)==='active').length}) still needed</span><b class="money">− ${money(actNeed)}</b>
+      <span>${afterActive<0?'Over budget by':'Unallocated'}</span><b class="money ${afterActive<0?'bad':'ok'}">${money(Math.abs(afterActive))}</b>
+      <span class="muted">Undecided projects (${voted.filter(p=>status(p)==='undecided').length}) would need</span><b class="money muted">${money(undNeed)}</b>
+    </div>
+    <div class="small muted" style="margin-top:6px">Donated gear already comes off each project's need. Leads activate or shelve projects from each project page once the ranking is in.</div>`;
+}
+
+function renderOverview(){
+  const elig=eligibleVoters().length, n=ballots.filter(b=>(b.ranking||[]).length||Object.values(b.sub||{}).some(r=>r&&r.length)).length;
+  $('goalLabel').textContent=elig+' eligible voters';
+  $('totalRaised').textContent=n;
+  $('thermoFill').style.width=Math.min(100,100*n/Math.max(elig,1))+'%';
+  const ap=requests.filter(r=>r.status==='approved').length, pe=requests.filter(r=>r.status==='pending').length;
+  $('ticketStats').textContent=(isAdmin()?'':'your ')+'tickets: '+ap+' approved'+(pe?' · '+pe+' pending':'');
+  const live=topLevel().filter(p=>!isShelved(p));
+  $('donateStats').textContent=money(live.reduce((a,p)=>a+projDonated(p.id),0))+' of '+money(live.reduce((a,p)=>a+projCost(p.id),0))+' project cost covered by donations';
+  renderBudget();
+  renderResults();
+  const req=topLevel().filter(p=>p.required);
+  $('requiredBox').innerHTML=req.length?`<h2>⚓ Required (funded first)</h2>${req.map(p=>projCardHTML(p,true)+`
+      <details><summary>${(itemsByProj[p.id]||[]).length} line items</summary>${itemsHTML(p.id)}</details></div>`).join('')}`:'';
+  const rest=topLevel().filter(p=>!p.required).sort((a,b)=>(isShelved(a)-isShelved(b))||((rankOf(a)||99)-(rankOf(b)||99)));
+  $('projectList').innerHTML=rest.map(p=>projCardHTML(p,true)+`
+      <details><summary>${(itemsByProj[p.id]||[]).length} line items</summary>${itemsHTML(p.id)}</details></div>`).join('')||'<p class="muted">No projects yet.</p>';
+}
+
+function resultsTable(r, byId){
+  if(!r.rounds.length) return '';
+  return `<details><summary>Round by round (${r.rounds.length} elimination round${r.rounds.length===1?'':'s'})</summary>
+    <table class="tally"><tr><th>Project</th>${r.rounds.map(x=>`<th>R${x.n}</th>`).join('')}</tr>
+    ${r.ranking.map(pid=>`<tr><td>${esc(byId[pid].name)}</td>${r.rounds.map(x=>{
+        const v=x.tally[pid]; return v==null?'<td class="muted">—</td>':`<td class="${x.eliminated===pid?'out':''}">${v}${x.eliminated===pid?' ✖':''}</td>`; }).join('')}</tr>`).join('')}
+    <tr><td class="muted">exhausted ballots</td>${r.rounds.map(x=>`<td class="muted">${x.exhausted}</td>`).join('')}</tr></table>
+    <p class="small muted" style="margin:6px 0 0">Each round counts every ballot's top surviving project and eliminates the lowest (✖); those ballots move to their next choice.${r.rounds.some(x=>x.tie)?' Ties broken by total ranking points.':''}</p></details>`;
+}
+function publicBallotsHTML(byId){
+  const pub=ballots.filter(b=>!b.secret&&((b.ranking||[]).length||Object.values(b.sub||{}).some(r=>r&&r.length)));
+  const secret=ballots.length-pub.length;
+  const line=r=>r.filter(id=>byId[id]).map((id,i)=>`${i+1}. ${esc(byId[id].emoji||'')} ${esc(byId[id].name)}`).join(' · ')||'<span class="muted">—</span>';
+  return `<details><summary>Public ballots (${pub.length}${secret?` · ${secret} secret`:''})</summary>
+    ${pub.map(b=>`<div class="pub"><b>${esc(memberName(b.memberId||b.id))}</b>: ${line(b.ranking||[])}
+      ${Object.entries(b.sub||{}).filter(([g,r])=>byId[g]&&r&&r.length).map(([g,r])=>`<div class="small muted" style="margin-left:12px">${esc(byId[g].name)} sub-vote: ${line(r)}</div>`).join('')}</div>`).join('')||'<div class="small muted">Everyone who voted chose a secret ballot.</div>'}
+    <p class="small muted" style="margin:6px 0 0">Members choose on My Vote whether their ballot is public (default) or secret. Secret ballots are still counted.</p></details>`;
+}
+function renderResults(){
+  const el=$('resultsBox'), r=results.top, n=r.ballots, elig=eligibleVoters().length, cands=groupCandidates('top');
+  if(!cands.length){ el.innerHTML='<p class="muted" style="margin:0">No projects up for a vote yet.</p>'; return }
+  if(!n){ el.innerHTML=`<p class="muted" style="margin:0">No ballots yet. Head to <b>My Vote</b> and rank the projects — ${elig} eligible voter${elig===1?'':'s'}.</p>`; return }
+  const byId=Object.fromEntries(projects.map(p=>[p.id,p]));
+  const rows=r.ranking.map((pid,i)=>{ const p=byId[pid], f=r.first[pid]||0;
+    return `<div class="item"><span class="rank r${i+1}">#${i+1}</span><span style="font-size:1.2rem">${esc(p.emoji||'🎪')}</span>
+      <span class="name"><a href="#/project/${esc(pid)}" style="color:var(--text);text-decoration:none">${esc(p.name)}</a> ${statusTag(p)} <button class="info" onclick="openDrawer(${jsq(p.id)})" title="quick look">ℹ️</button>
+        <div class="bar" style="margin:4px 0 0;height:8px"><div class="first" style="width:${100*f/n}%"></div></div></span>
+      <span class="small muted money">${f} first choice${f===1?'':'s'}</span></div>`; }).join('');
+  const subs=subGroups().filter(g=>results[g].ballots&&groupCandidates(g).length>1).map(g=>{ const p=byId[g], rr=results[g];
+    return `<div style="margin-top:12px"><div class="small muted" style="text-transform:uppercase;letter-spacing:.05em;font-weight:700">${esc(p.emoji||'')} ${esc(p.name)} — sub-project vote (${rr.ballots} ballot${rr.ballots===1?'':'s'})</div>
+      ${rr.ranking.map((cid,i)=>`<div class="item"><span class="rank sm r${i+1}">#${i+1}</span><span class="name">${esc(byId[cid].emoji||'')} ${esc(byId[cid].name)} ${statusTag(byId[cid])}</span><span class="small muted">${rr.first[cid]||0} first</span></div>`).join('')}
+      ${resultsTable(rr,byId)}</div>`; }).join('');
+  el.innerHTML=`<div class="small muted" style="margin-bottom:6px">${n} of ${elig} eligible members have voted · ranked-choice (STV-style elimination) · required projects are not on the ballot</div>${rows}${resultsTable(r,byId)}${subs}${publicBallotsHTML(byId)}`;
+}
+
+let donatingItem=null, editingItem=null;
+function depSelect(id, cur, pid){
+  const opts=projects.filter(p=>p.id!==pid).map(p=>`<option value="${esc(p.id)}" ${cur===p.id?'selected':''}>${esc(p.emoji||'')} ${esc(p.name)}</option>`).join('');
+  return `<select id="${id}" title="only needed if another project is chosen"><option value="">no dependency</option>${opts}</select>`;
+}
+function parentSelect(id, cur, self){
+  const opts=projects.filter(p=>p.id!==self&&!p.parentId).map(p=>`<option value="${esc(p.id)}" ${cur===p.id?'selected':''}>${esc(p.emoji||'')} ${esc(p.name)}</option>`).join('');
+  return `<select id="${id}"><option value="">top-level project</option>${opts}</select>`;
+}
+function itemRowHTML(p, i, me, admin){
+  if(editingItem===i.id) return `<div class="item"><input id="edi-n" class="grow" value="${esc(i.name)}" placeholder="name">
+    <input id="edi-c" type="number" step="any" style="width:90px" value="${i.cost}" title="unit $">
+    <span class="small muted">×</span><input id="edi-q" type="number" step="any" min="0" style="width:70px" value="${num(itemQty(i))}" title="quantity">
+    ${depSelect('edi-d', i.dependsOn||'', p.id)}
+    <button class="primary icon" onclick="saveItem(${jsq(p.id)},${jsq(i.id)})">Save</button>
+    <button class="icon" onclick="editingItem=null;renderDetail()">Cancel</button></div>`;
+  const qty=itemQty(i), dq=itemDonatedQty(i), left=Math.max(0,qty-dq), cr=itemCrossed(i);
+  const dons=Object.entries(i.donations||{}).filter(([,d])=>+d.qty>0);
+  const mineKey=user?user.uid:null;
+  return `<div class="item ${cr?'crossed':left<=0?'done':''}">
+    <span class="name">${esc(i.name)}${qtyLabel(i)}
+      ${i.dependsOn&&proj(i.dependsOn)?`<span class="dep ${cr?'broken':''}">needs <a href="#/project/${esc(i.dependsOn)}" style="color:inherit">${esc(proj(i.dependsOn).name)}</a>${cr?' — shelved, so this is off':''}</span>`:''}</span>
+    <span class="cost money">${money(itemTotal(i))}</span>
+    ${dons.length?`<span class="donor">🎁 ${dons.map(([k,d])=>esc(d.name)+(qty===1?'':' ×'+num(d.qty))+((k===mineKey||admin)?` <button class="icon" style="padding:0 6px" onclick="undonate(${jsq(p.id)},${jsq(i.id)},${jsq(k)})" title="undo">↩</button>`:'')).join(' · ')}</span>`:''}
+    ${!cr&&left>0&&me ? (donatingItem===i.id
+        ? `<span class="row">${qty===1?'':`<input id="don-q" type="number" step="any" min="0" max="${num(left)}" value="${num(left)}" style="width:80px"> <span class="small muted">of ${num(left)} left</span>`}
+           <button class="primary icon" onclick="donate(${jsq(p.id)},${jsq(i.id)})">${qty===1?'Yes, I\'ll cover it':'Donate'}</button><button class="icon" onclick="donatingItem=null;renderDetail()">✕</button></span>`
+        : `<button class="icon" onclick="donatingItem=${jsq(i.id)};renderDetail()">🎁 Donate${dq?' more':''}</button>`) : ''}
+    ${!cr&&left<=0?'<span class="small ok">fully donated ✔</span>':''}
+    ${admin?`<button class="icon" onclick="editingItem=${jsq(i.id)};donatingItem=null;renderDetail()">✏️</button><button class="icon" onclick="delItem(${jsq(p.id)},${jsq(i.id)})">✕</button>`:''}
+  </div>`;
+}
+
+function renderDetail(){
+  if(currentPage!=='detail') return;
+  keepDrafts(); // unsent comment text survives live re-renders
+  const p=proj(currentProject);
+  const body=$('detailBody');
+  if(!p){ body.innerHTML='<p class="muted">Project not found. <a class="backlink" href="#">← back</a></p>'; return }
+  const admin=isAdmin(), me=myMember(), items=itemsByProj[p.id]||[], kids=children(p.id), parent=p.parentId?proj(p.parentId):null;
+  const editing = body.dataset.editing===p.id; // preserve edit mode across re-renders
+  const helpers=helperList(p), meHelping=!!(user&&(p.helpers||{})[user.uid]);
+  const r=results[p.id];
+  body.innerHTML=`
+    <a class="backlink" href="${parent?'#/project/'+parent.id:'#'}">← ${parent?esc(parent.name):'all projects'}</a>
+    ${projCardHTML(p,false)}
+    </div>
+    <div class="panel">
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0">About</h2>
+        ${admin&&!editing?`<button class="icon" onclick="startEditProj(${jsq(p.id)})">✏️ Edit project</button>`:''}</div>
+      ${editing?`
+        <div class="row" style="margin-bottom:8px">
+          <input id="edEmoji" style="width:64px" value="${esc(p.emoji||'')}" maxlength="4">
+          <input id="edName" class="grow" value="${esc(p.name)}">
+        </div>
+        <div class="row" style="margin-bottom:8px">
+          ${kids.length?'<span class="small muted">has sub-projects (stays top-level)</span>':parentSelect('edParent', p.parentId||'', p.id)}
+          <label class="chk"><input type="checkbox" id="edRequired" ${p.required?'checked':''}> required (funded first, not voted on)</label>
+          <select id="edStatus">${['undecided','active','shelved'].map(s=>`<option value="${s}" ${status(p)===s?'selected':''}>${s}</option>`).join('')}</select>
+        </div>
+        <textarea id="edDesc" placeholder="Detailed description — what it is, why it rules, who's building it">${esc(p.description||'')}</textarea>
+        <div class="row" style="margin-top:8px">
+          <button class="primary" onclick="saveProj(${jsq(p.id)})">Save</button>
+          <button onclick="cancelEditProj()">Cancel</button>
+        </div>`
+      :`<div class="desc">${esc(p.description||'')||'<span class="muted">No description yet.'+(admin?' Hit ✏️ Edit project.':'')+'</span>'}</div>
+        ${status(p)==='shelved'?'<p class="small bad" style="margin:8px 0 0">Shelved by the leads — its cost is out of the budget and anything depending on it is crossed off.</p>':status(p)==='active'?'<p class="small ok" style="margin:8px 0 0">Activated by the leads — this one is happening.</p>':''}`}
+    </div>
+    <div class="panel">
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0">🙋 Willing to help</h2>
+        ${me?`<button class="${meHelping?'':'primary'} icon" onclick="toggleHelp(${jsq(p.id)})">${meHelping?'✋ count me out':'🙋 I can help with this'}</button>`:''}</div>
+      <div style="margin-top:8px">${helpers.map(h=>`<span class="helper">${esc(h.name)}</span>`).join('')||'<span class="small muted">Nobody yet — be the first.</span>'}</div>
+    </div>
+    ${(kids.length||admin)&&!parent?`<div class="panel">
+      <h2 style="margin-top:0">🧩 Sub-projects <span class="small muted">— voted on among themselves</span></h2>
+      ${kids.length?subRows(p,true):'<div class="small muted">None yet.</div>'}
+      ${r&&r.ballots&&kids.length>1?resultsTable(r,Object.fromEntries(projects.map(x=>[x.id,x]))):''}
+      ${admin?`<div class="row" style="margin-top:10px"><input id="sub-e" style="width:64px" placeholder="🎪" maxlength="4"><input id="sub-n" class="grow" placeholder="New sub-project"><button onclick="addSubProject(${jsq(p.id)})">Add sub-project</button></div>`:''}
+    </div>`:''}
+    <div class="panel">
+      <h2 style="margin-top:0">💬 Discussion</h2>
+      ${me?`<div class="row"><textarea id="cm-new" class="grow" style="min-height:60px" placeholder="Ideas, questions, offers…">${esc(draft['new']||'')}</textarea>
+        <button class="primary" onclick="postComment(${jsq(p.id)},null)">Post</button></div>`
+        :'<p class="small muted">Claim your name on My Vote to join the discussion.</p>'}
+      <div style="margin-top:8px">${commentsHTML(p.id, me, admin)||'<span class="small muted">No comments yet.</span>'}</div>
+    </div>
+    <div class="panel">
+      <h2 style="margin-top:0">Line items <span class="small muted">— qty × unit cost; donate any amount</span></h2>
+      ${items.map(i=>itemRowHTML(p,i,me,admin)).join('')||'<div class="small muted">no items yet</div>'}
+      ${admin?`<div class="row" style="margin-top:10px">
+        <input id="dit-n" class="grow" placeholder="New line item">
+        <input id="dit-c" type="number" step="any" style="width:90px" placeholder="unit $">
+        <span class="small muted">×</span><input id="dit-q" type="number" step="any" min="0" style="width:70px" placeholder="qty" value="1">
+        ${depSelect('dit-d','',p.id)}
+        <button onclick="addItemDetail(${jsq(p.id)})">Add item</button></div>`:''}
+      ${!me&&user?'<p class="small muted" style="margin:8px 0 0">Claim your name on My Vote to donate items.</p>':''}
+    </div>`;
+  if(editing) body.dataset.editing=p.id; else delete body.dataset.editing;
+}
+
+/* ---- Needs page: flat list of every line item across projects ---- */
+let needsDonating=null;
+function projPath(p){ const par=p.parentId&&proj(p.parentId); return (par?esc(par.emoji||'')+' '+esc(par.name)+' › ':'')+esc(p.emoji||'')+' '+esc(p.name) }
+function renderNeeds(){
+  if(currentPage!=='needs') return;
+  const q=($('needsSearch').value||'').toLowerCase(), scope=$('needsScope').value, sort=$('needsSort').value, inclShelved=$('needsShelved').checked;
+  const me=myMember(), admin=isAdmin();
+  const rows=[];
+  projects.forEach(p=>{ if(!inclShelved&&isShelved(p)) return;
+    (itemsByProj[p.id]||[]).forEach(i=>{
+      const qty=itemQty(i), dq=itemDonatedQty(i), left=Math.max(0,qty-dq), cr=itemCrossed(i)||isShelved(p);
+      const leftCost=cr?0:left*(+i.cost||0);
+      if(scope==='open'&&(cr||left<=0||!(+i.cost))) return;
+      if(scope==='donated'&&!dq) return;
+      if(q&&!(i.name.toLowerCase().includes(q)||p.name.toLowerCase().includes(q))) return;
+      rows.push({p,i,qty,dq,left,cr,leftCost,total:itemTotal(i)});
+    });
+  });
+  if(sort==='left') rows.sort((a,b)=>b.leftCost-a.leftCost);
+  else if(sort==='cheap') rows.sort((a,b)=>(a.leftCost||a.total)-(b.leftCost||b.total));
+  else { const ord=projects.map(p=>p.id); rows.sort((a,b)=>{ const ga=a.p.parentId||a.p.id, gb=b.p.parentId||b.p.id; return (ord.indexOf(ga)-ord.indexOf(gb))||(ord.indexOf(a.p.id)-ord.indexOf(b.p.id))||((a.i.order||0)-(b.i.order||0)); }); }
+  const totalLeft=rows.reduce((a,r)=>a+r.leftCost,0), totalCost=rows.reduce((a,r)=>a+(r.cr?0:r.total),0);
+  $('needsSummary').innerHTML=`<span>${rows.length} item${rows.length===1?'':'s'} · cost ${money(totalCost)} · <b class="amber">${money(totalLeft)} still needed</b></span>
+    <span>${me?'🎁 Donate straight from this list.':'Claim your name on My Vote to donate.'}</span>`;
+  let html=`<tr><th>Project</th><th>Item</th><th class="n hide-sm">Qty</th><th class="n hide-sm">Unit</th><th class="n">Total</th><th class="n">Left</th><th></th></tr>`;
+  let lastGroup=null;
+  rows.forEach(r=>{ const {p,i}=r;
+    if(sort==='project'){ const g=p.parentId&&proj(p.parentId)?proj(p.parentId):p;
+      if(g.id!==lastGroup){ lastGroup=g.id; html+=`<tr class="group"><td colspan="7">${rankBadge(g,true)} ${esc(g.emoji||'')} ${esc(g.name)} ${statusTag(g)} <span class="small muted">${money(projNeed(g.id))} still needed of ${money(projCost(g.id))}</span> <button class="info" onclick="openDrawer(${jsq(g.id)})">ℹ️</button></td></tr>`; } }
+    const dep=i.dependsOn&&proj(i.dependsOn)?`<div class="dep ${r.cr?'broken':''}">needs ${esc(proj(i.dependsOn).name)}</div>`:'';
+    const dons=Object.entries(i.donations||{}).filter(([,d])=>+d.qty>0).map(([,d])=>esc(d.name)+(r.qty===1?'':' ×'+num(d.qty))).join(', ');
+    const act = r.cr||!(+i.cost) ? '' : r.left<=0 ? '<span class="small ok">covered ✔</span>'
+      : !me ? '' : needsDonating===i.id
+        ? `<span class="row" style="gap:4px;flex-wrap:nowrap">${r.qty===1?'':`<input id="ndon-q" type="number" step="any" min="0" max="${num(r.left)}" value="${num(r.left)}" style="width:70px">`}<button class="primary icon" onclick="donateFromNeeds(${jsq(p.id)},${jsq(i.id)})">${r.qty===1?'I\'ll cover it':'Give'}</button><button class="icon" onclick="needsDonating=null;renderNeeds()">✕</button></span>`
+        : `<button class="icon" onclick="needsDonating=${jsq(i.id)};renderNeeds()">🎁</button>`;
+    html+=`<tr class="${r.cr?'crossed':r.left<=0?'done':''}"><td>${sort==='project'&&p.parentId?`<span class="sub">↳ ${esc(p.emoji||'')} ${esc(p.name)}</span>`:sort==='project'?'':`<a href="#" onclick="openDrawer(${jsq(p.id)});return false" style="color:inherit;text-decoration:none">${projPath(p)}</a>`}</td>
+      <td>${esc(i.name)}${dep}${dons?`<div class="donor">🎁 ${dons}</div>`:''}</td>
+      <td class="n hide-sm muted">${r.qty===1?'':num(r.qty)}</td><td class="n hide-sm money muted">${r.qty===1?'':money(i.cost)}</td>
+      <td class="n money">${money(r.total)}</td><td class="n money ${r.leftCost?'amber':'muted'}">${money(r.leftCost)}</td><td>${act}</td></tr>`;
+  });
+  $('needsTable').innerHTML=rows.length?html:'<tr><td class="muted" style="padding:14px">Nothing matches.</td></tr>';
+}
+async function donateFromNeeds(pid,iid){
+  const me=myMember(); if(!me) return;
+  const i=(itemsByProj[pid]||[]).find(x=>x.id===iid); if(!i) return;
+  const already=+((i.donations||{})[user.uid]||{}).qty||0;
+  const others=Object.entries(i.donations||{}).filter(([k])=>k!==user.uid).reduce((a,[,d])=>a+(+d.qty||0),0);
+  let q=$('ndon-q')?parseFloat($('ndon-q').value):1; if(!(q>0)) return toast('Enter a quantity > 0');
+  q=Math.min(Math.max(0,itemQty(i)-others), already+q);
+  try{ await db.doc('projects/'+pid+'/items/'+iid).update({['donations.'+user.uid]:{memberId:me.id,name:me.name,qty:q}}); needsDonating=null; toast('🎁 Thank you — '+(itemQty(i)===1?'':num(q)+' × ')+i.name+' covered'); }
+  catch(e){ toast('Failed: '+e.code) }
+}
+
+/* ---- discussion: threaded comments (one reply level), hearts keyed by uid ---- */
+let replyTo=null, draft={};
+function keepDrafts(){ document.querySelectorAll('textarea[id^="cm-"]').forEach(t=>draft[t.id.slice(3)]=t.value); }
+function commentHTML(c, me, admin, depth){
+  const hearts=Object.keys(c.hearts||{}).length, mine=!!(user&&(c.hearts||{})[user.uid]);
+  const when=c.createdAt?new Date(c.createdAt).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
+  const replies=comments.filter(r=>r.parentId===c.id);
+  return `<div class="comment"><div class="meta"><b style="color:var(--text)">${esc(c.name||'?')}</b> · ${when}</div>
+    <div class="text">${esc(c.text)}</div>
+    <div class="row" style="gap:6px">
+      <button class="heart ${mine?'on':''}" ${me?'':'disabled'} onclick="heart(${jsq(c.projectId)},${jsq(c.id)})">${mine?'❤️':'🤍'} ${hearts||''}</button>
+      ${me&&depth===0?`<button class="icon" onclick="replyTo=${jsq(c.id)};renderDetail()">↩ reply</button>`:''}
+      ${(admin||(user&&c.uid===user.uid))?`<button class="icon" onclick="delComment(${jsq(c.projectId)},${jsq(c.id)})">✕</button>`:''}</div>
+    ${replyTo===c.id&&me?`<div class="row" style="margin-top:6px"><textarea id="cm-${esc(c.id)}" class="grow" style="min-height:48px" placeholder="Reply to ${esc(c.name)}">${esc(draft[c.id]||'')}</textarea>
+      <button class="primary icon" onclick="postComment(${jsq(c.projectId)},${jsq(c.id)})">Reply</button><button class="icon" onclick="replyTo=null;renderDetail()">✕</button></div>`:''}
+    ${replies.length?`<div class="replies">${replies.map(r=>commentHTML(r,me,admin,depth+1)).join('')}</div>`:''}</div>`;
+}
+function commentsHTML(pid, me, admin){ return projComments(pid).filter(c=>!c.parentId).map(c=>commentHTML(c,me,admin,0)).join('') }
+async function postComment(pid, parentId){
+  const me=myMember(); if(!me) return;
+  const el=$('cm-'+(parentId||'new')), text=(el?el.value:'').trim(); if(!text) return;
+  try{
+    await db.collection('projects/'+pid+'/comments').add({projectId:pid, uid:user.uid, memberId:me.id, name:me.name, text, parentId:parentId||null, hearts:{}, createdAt:Date.now()});
+    delete draft[parentId||'new']; if(el) el.value=''; replyTo=null; toast('Posted 💬');
+  }catch(e){ toast('Failed: '+e.code) }
+}
+async function heart(pid,cid){
+  if(!myMember()) return; const c=comments.find(x=>x.id===cid); if(!c) return; const on=!!(c.hearts||{})[user.uid];
+  try{ await db.doc('projects/'+pid+'/comments/'+cid).update({['hearts.'+user.uid]: on?firebase.firestore.FieldValue.delete():true}); }
+  catch(e){ toast('Failed: '+e.code) }
+}
+async function delComment(pid,cid){
+  const b=db.batch(); b.delete(db.doc('projects/'+pid+'/comments/'+cid));
+  comments.filter(r=>r.parentId===cid).forEach(r=>b.delete(db.doc('projects/'+pid+'/comments/'+r.id)));
+  try{ await b.commit(); }catch(e){ toast('Failed: '+e.code) }
+}
+
+function renderVote(){
+  const cp=$('claimPanel'), tp=$('ticketsPanel'), bp=$('ballotPanels');
+  if(!user){ cp.innerHTML='<p class="muted">Sign in above to vote and request tickets.</p>'; tp.classList.add('hidden'); bp.innerHTML=''; return }
+  const me=myMember();
+  if(!me){
+    tp.classList.add('hidden'); bp.innerHTML='';
+    if(!user.emailVerified){ cp.innerHTML='<p class="bad">Your sign-in email is not verified, so the camp data stays hidden. Sign in with Google (verified) instead.</p>'; return }
+    if(configMissing){ cp.innerHTML='<p class="muted">The fund is not set up yet: an organiser must seed it first (<code>node seed/seed.mjs --admin …</code>).</p>'; return }
+    if(memberLink){ cp.innerHTML='<p class="muted">Loading your member record…</p>'; return }
+    const mine=claimable.filter(m=>!m.uid);
+    if(mine.length){
+      cp.innerHTML=`<p>Welcome ${esc(user.displayName||'')}! An organiser registered your email for:</p>
+        ${mine.map(m=>`<div class="row" style="margin-top:6px"><b class="grow">${esc(m.name)}</b> <span class="tag ${esc(m.role)}">${esc(m.role)}</span>
+        <button class="primary" onclick="claimMember(${jsq(m.id)})">This is me</button></div>`).join('')}`;
+    } else if(myClaim){
+      cp.innerHTML=`<p>Thanks ${esc(myClaim.name)} — your access request is waiting for an organiser to link it to your member record.</p>
+        <button class="icon" style="width:auto;padding:0 10px;border-radius:8px" onclick="cancelClaim()">withdraw request</button>`;
+    } else {
+      cp.innerHTML=`<p>Welcome ${esc(user.displayName||'')}! Your email isn't on the camp list yet. Ask for access and an organiser will link you to your member record:</p>
+        <div class="row"><input id="claimName" class="grow" maxlength="80" placeholder="Your name as the camp knows you" value="${esc(user.displayName||'')}">
+        <button class="primary" onclick="requestAccess()">Request access</button></div>`;
+    }
+    return;
+  }
+  cp.innerHTML=`<b>${esc(me.name)}</b> <span class="tag ${esc(me.role)}">${esc(me.role)}</span>
+    <span class="small muted"> — ${canVote(me)?'rank the projects below (partial rankings are fine), then request your ticket.':'guest tickets don&#39;t include a vote, but you can still request tickets below.'}</span>`;
+  bp.innerHTML = canVote(me) ? [ballotPanelHTML('top'), ...subGroups().filter(g=>groupCandidates(g).length>1).map(g=>ballotPanelHTML(g))].join('') : '';
+  renderMyTickets(me);
+}
+
+function ballotPanelHTML(g){
+  const cands=groupCandidates(g), byId=Object.fromEntries(cands.map(p=>[p.id,p]));
+  const mine=myBallot(), ranked=rankingFor(mine,g).filter(id=>byId[id]), unranked=cands.filter(p=>!ranked.includes(p.id));
+  const parent=g==='top'?null:proj(g);
+  const row=(p,i)=>`<div class="item"><span class="rank r${i+1}">#${i+1}</span><span style="font-size:1.2rem">${esc(p.emoji||'🎪')}</span>
+      <span class="name">${esc(p.name)} <a class="backlink small" href="#" onclick="openDrawer(${jsq(p.id)});return false">details ›</a></span>
+      <button class="icon" ${i===0?'disabled':''} onclick="moveRank(${jsq(g)},${jsq(p.id)},-1)" title="move up">▲</button>
+      <button class="icon" ${i===ranked.length-1?'disabled':''} onclick="moveRank(${jsq(g)},${jsq(p.id)},1)" title="move down">▼</button>
+      <button class="icon" onclick="unrank(${jsq(g)},${jsq(p.id)})" title="remove from ballot">✕</button></div>`;
+  const secretRow = g==='top' ? `<label class="chk" style="margin:0 0 10px"><input type="checkbox" ${mine.secret?'checked':''} onchange="setSecret(this.checked)"> 🔒 keep my ballot secret <span class="muted">(ballots are public unless you check this)</span></label>`:'';
+  if(!cands.length) return `<div class="panel ballot"><h2 style="margin:0">🗳️ My Vote</h2><p class="small muted" style="margin:6px 0 0">Nothing to vote on yet.</p></div>`;
+  return `<div class="panel ballot"><div class="row" style="justify-content:space-between"><h2 style="margin:0">${parent?`🧩 ${esc(parent.emoji||'')} ${esc(parent.name)} — rank its sub-projects`:'🗳️ My Vote'}</h2>
+      ${ranked.length?`<button class="icon" style="width:auto;border-radius:8px;padding:0 10px" onclick="clearBallot(${jsq(g)})">clear</button>`:''}</div>
+    <p class="small muted" style="margin:6px 0 10px">${parent?'Which parts of this project matter most to you?':'Put what you want funded most at #1. Rank as many or as few as you like.'} Saves automatically.</p>
+    ${secretRow}
+    ${ranked.map((id,i)=>row(byId[id],i)).join('')||'<div class="small muted" style="padding:6px 0">Nothing ranked yet — add below.</div>'}
+    ${unranked.length?`<div class="small muted" style="margin-top:14px;text-transform:uppercase;letter-spacing:.05em;font-weight:700">Not on your ballot</div>
+      ${unranked.map(p=>`<div class="item"><span style="font-size:1.2rem">${esc(p.emoji||'🎪')}</span><span class="name muted">${esc(p.name)} <a class="backlink small" href="#" onclick="openDrawer(${jsq(p.id)});return false">details ›</a></span>
+        <button class="icon add" onclick="rankProject(${jsq(g)},${jsq(p.id)})" title="add to ballot">+</button></div>`).join('')}`
+      :`<div class="small ok" style="margin-top:10px">✔ Full ballot — everything ranked.</div>`}</div>`;
+}
+
+function renderMembers(){
+  const admin=isAdmin();
+  $('memberList').innerHTML=members.map(m=>{
+    const rs=memberReqs(m.id), ap=rs.filter(r=>r.status==='approved').length, pe=rs.filter(r=>r.status==='pending').length;
+    const tix=(ap?ap+'✔':'')+(ap&&pe?' ':'')+(pe?pe+'⏳':'');
+    const b=ballotOf(m.id), voted=b&&((b.ranking||[]).length||Object.values(b.sub||{}).some(r=>r&&r.length));
+    const helping=projects.filter(p=>Object.values(p.helpers||{}).some(h=>h.memberId===m.id)).length;
+    return `<div class="memberrow">
+      <b class="grow">${esc(m.name)} ${m.uid?'<span class="small ok" title="linked">●</span>':'<span class="small muted" title="unclaimed">○</span>'}</b>
+      ${admin?`<select onchange="setRole(${jsq(m.id)},this.value)">
+        ${['builder','performer','member','guest'].map(r=>`<option value="${r}" ${m.role===r?'selected':''}>${r} $${config.prices[r]||0}</option>`).join('')}</select>
+        <button class="icon" onclick="delMember(${jsq(m.id)},${jsq(m.name)})">🗑</button>`
+      :`<span class="tag ${esc(m.role)}">${esc(m.role)}</span>`}
+      <span class="small muted money">${tix?'🎫 '+tix+' · ':''}${helping?'🙋 '+helping+' · ':''}${voted?'<span class="ok">🗳️ voted'+(b.secret?' 🔒':'')+'</span>':(canVote(m)?'<span class="muted">not voted</span>':'')}</span>
+    </div>`;
+  }).join('')||'<p class="muted">No members yet.</p>';
+  renderClaimsAdmin();
+}
+function renderClaimsAdmin(){
+  const el=$('claimsAdminPanel'); if(!isAdmin()||!allClaims.length){ el.classList.add('hidden'); el.innerHTML=''; return }
+  el.classList.remove('hidden');
+  const unclaimed=members.filter(m=>!m.uid);
+  const keep={}; allClaims.forEach(c=>{ const s=$('claimSel-'+c.id); if(s) keep[c.id]=s.value; });
+  el.innerHTML=`<h2 style="margin-top:0">🔗 Access requests</h2>`+allClaims.map(c=>`<div class="memberrow">
+      <b class="grow">${esc(c.name)} <span class="small muted">${esc(c.email)}</span></b>
+      <select id="claimSel-${esc(c.id)}">${unclaimed.map(m=>`<option value="${esc(m.id)}" ${keep[c.id]===m.id?'selected':''}>${esc(m.name)}</option>`).join('')||'<option value="">no unclaimed members</option>'}</select>
+      <button class="primary icon" style="width:auto;padding:0 10px" onclick="linkClaim(${jsq(c.id)})">Link</button>
+      <button class="icon" onclick="dismissClaim(${jsq(c.id)})" title="dismiss">✕</button></div>`).join('');
+}
+
+function renderMyTickets(me){
+  const tp=$('ticketsPanel'); tp.classList.remove('hidden');
+  const keepTier=$('reqTier')?$('reqTier').value:null, keepQty=$('reqQty')?$('reqQty').value:1;
+  const mine=memberReqs(me.id);
+  tp.innerHTML=`<h2 style="margin-top:0">🎟️ My Tickets</h2>
+    <div class="row">
+      <select id="reqTier">${Object.entries(config.prices).map(([t,p])=>`<option value="${t}" ${t===(keepTier||me.role)?'selected':''}>${t} — ${money(p)}</option>`).join('')}</select>
+      <input id="reqQty" type="number" min="1" max="10" value="${keepQty||1}" style="width:70px">
+      <button class="primary" onclick="requestTickets()">Request</button>
+    </div>
+    ${mine.map(r=>`<div class="item">
+      <span class="name"><span class="tag ${esc(r.tier)}">${esc(r.tier)}</span> <span class="money">${money(r.price!=null?r.price:config.prices[r.tier]||0)}</span></span>
+      ${r.status==='pending'?`<span class="tag pending">⏳ pending</span><button class="icon" onclick="cancelReq(${jsq(r.id)})">cancel</button>`
+       :r.status==='approved'?`<span class="tag approved">✔ approved</span><span class="code">${esc(r.code||'')}</span>`
+       :`<span class="tag rejected">✖ rejected</span>`}
+    </div>`).join('')||'<p class="small muted" style="margin-bottom:0">No tickets requested yet.</p>'}`;
+}
+
+function renderReqAdmin(){
+  const el=$('reqAdminPanel'); if(!isAdmin()){ el.classList.add('hidden'); return }
+  el.classList.remove('hidden');
+  const order={pending:0,approved:1,rejected:2};
+  const rs=[...requests].sort((a,b)=>(order[a.status]-order[b.status])||((a.createdAt||0)-(b.createdAt||0)));
+  el.innerHTML=`<h2 style="margin-top:0">🎫 Ticket Requests</h2>
+    ${rs.map(r=>`<div class="item">
+      <span class="name"><b>${esc(r.memberName||'?')}</b> <span class="tag ${esc(r.tier)}">${esc(r.tier)}</span> <span class="money muted">${money(r.price!=null?r.price:0)}</span></span>
+      ${r.status==='pending'?`<button class="primary icon" onclick="approveReq(${jsq(r.id)})">✔ Approve</button><button class="icon" onclick="rejectReq(${jsq(r.id)})">✖ Reject</button>`
+       :r.status==='approved'?`<span class="code">${esc(r.code||'')}</span><button class="icon" onclick="rejectReq(${jsq(r.id)})">revoke</button>`
+       :`<span class="tag rejected">rejected</span>`}
+    </div>`).join('')||'<p class="small muted" style="margin-bottom:0">No requests yet.</p>'}`;
+}
+
+function renderCodePool(){
+  const el=$('codePoolPanel'); if(!isAdmin()){ el.classList.add('hidden'); return }
+  el.classList.remove('hidden');
+  const keepTier=$('codeTier')?$('codeTier').value:null, keepCodes=$('codeInput')?$('codeInput').value:'';
+  const tiers=Object.keys(config.prices);
+  el.innerHTML=`<h2 style="margin-top:0">🔐 Code Pool <span class="small muted">(admins only — members never see this)</span></h2>
+    <div class="row small" style="margin-bottom:8px">${tiers.map(t=>{
+      const all=codes.filter(c=>c.tier===t), free=all.filter(c=>!c.assignedTo);
+      return `<span class="tag ${t}">${t}: ${free.length} free / ${all.length}</span>`;}).join('')}</div>
+    <div class="row">
+      <select id="codeTier">${tiers.map(t=>`<option value="${t}" ${t===keepTier?'selected':''}>${t}</option>`).join('')}</select>
+      <input id="codeInput" class="grow" placeholder="CODE-1, CODE-2, ..." value="${esc(keepCodes)}">
+      <button onclick="addCodes()">Add</button>
+      <button onclick="genCodes()">+5 fake</button>
+    </div>`;
+}
+
+function renderProjAdmin(){
+  const admin=isAdmin();
+  const keepParent=$('newProjParent')?$('newProjParent').value:'';
+  $('newProjParent').innerHTML=`<option value="">top-level</option>`+topLevel().map(p=>`<option value="${esc(p.id)}" ${keepParent===p.id?'selected':''}>sub-project of ${esc(p.emoji||'')} ${esc(p.name)}</option>`).join('');
+  const line=p=>`<div class="proj-head" style="padding:4px 0">${rankBadge(p,true)}<span style="font-size:1.2rem">${esc(p.emoji||'🎪')}</span>
+        <h3 style="font-size:.98rem"><a href="#/project/${esc(p.id)}">${esc(p.name)} ›</a> ${statusTag(p)}</h3>
+        <span class="small muted money">${money(projCost(p.id))} · ${(itemsByProj[p.id]||[]).length} items · 🙋 ${helperList(p).length}</span>
+        ${admin?`<select onchange="setStatus(${jsq(p.id)},this.value)" title="activate / shelve">${['undecided','active','shelved'].map(s=>`<option value="${s}" ${status(p)===s?'selected':''}>${s}</option>`).join('')}</select>
+        <button class="icon" onclick="delProject(${jsq(p.id)},${jsq(p.name)})">🗑</button>`:''}</div>`;
+  $('projAdminList').innerHTML=topLevel().map(p=>`<div class="panel ${isShelved(p)?'shelved':''}">${line(p)}
+      ${children(p.id).length?`<div class="sublist">${children(p.id).map(line).join('')}</div>`:''}
+    </div>`).join('')||'<p class="muted">No projects yet.</p>';
+}
+
+let cfgDirty=false;
+function renderConfig(){
+  if(!isAdmin()||cfgDirty) return;
+  $('cfgGoal').value=config.goal||0; $('cfgBuilder').value=config.prices.builder;
+  $('cfgPerformer').value=config.prices.performer; $('cfgMember').value=config.prices.member;
+  $('cfgGuest').value=config.prices.guest; $('cfgPayNote').value=config.payNote||'';
+  $('cfgAdmins').value=(config.admins||[]).join(', ');
+}
+['cfgGoal','cfgBuilder','cfgPerformer','cfgMember','cfgGuest','cfgPayNote','cfgAdmins'].forEach(id=>{
+  document.addEventListener('input',e=>{ if(e.target.id===id) cfgDirty=true; });
+});
+
+/* ================= actions ================= */
+// Self-claim of a record pre-registered to this email: set members/{id}.uid and create the
+// memberUids/{uid} link in ONE batch (the rules check each against the other).
+async function claimMember(id){
+  if(!id) return;
+  const b=db.batch();
+  b.update(db.doc('members/'+id),{uid:user.uid});
+  b.set(db.doc('memberUids/'+user.uid),{memberId:id});
+  try{ await b.commit(); toast('Claimed! Your vote and tickets are yours alone. 🔒'); }
+  catch(e){ toast('Claim failed: '+e.code) }
+}
+async function requestAccess(){
+  const name=($('claimName').value||'').trim().slice(0,80); if(!name) return toast('Enter your name');
+  try{ await db.doc('claims/'+user.uid).set({uid:user.uid, email:user.email, name, createdAt:Date.now()}); toast('Request sent — an organiser will link you'); }
+  catch(e){ toast('Request failed: '+e.code) }
+}
+async function cancelClaim(){ try{ await db.doc('claims/'+user.uid).delete(); }catch(e){ toast('Failed: '+e.code) } }
+// Admin approval: link a claim's uid to the chosen unclaimed member record.
+async function linkClaim(uid){
+  const c=allClaims.find(x=>x.id===uid), sel=$('claimSel-'+uid), mid=sel&&sel.value; if(!c||!mid) return;
+  const m=members.find(x=>x.id===mid); if(!m||m.uid) return toast('That member is already linked');
+  const b=db.batch();
+  b.update(db.doc('members/'+mid),{uid, email:c.email});
+  b.set(db.doc('memberUids/'+uid),{memberId:mid});
+  b.delete(db.doc('claims/'+uid));
+  try{ await b.commit(); toast('Linked '+c.name+' → '+m.name); }catch(e){ toast('Link failed: '+e.code) }
+}
+async function dismissClaim(uid){ try{ await db.doc('claims/'+uid).delete(); }catch(e){ toast('Failed: '+e.code) } }
+function newProjectDoc(name, emoji, parentId, required){
+  return {name, emoji:emoji||'🎪', description:'', order:Date.now(), parentId:parentId||null, required:!!required, status:'undecided', helpers:{}};
+}
+async function addProject(){
+  const name=$('newProjName').value.trim(); if(!name) return;
+  const ref=await db.collection('projects').add(newProjectDoc(name, $('newProjEmoji').value.trim(), $('newProjParent').value, $('newProjRequired').checked));
+  $('newProjName').value='';$('newProjEmoji').value='';$('newProjRequired').checked=false; toast('Project added'); openProject(ref.id);
+}
+async function addSubProject(parentId){
+  const name=$('sub-n').value.trim(); if(!name) return;
+  await db.collection('projects').add(newProjectDoc(name, $('sub-e').value.trim(), parentId, false));
+  toast('Sub-project added');
+}
+async function delProject(id,name){
+  const kids=children(id);
+  if(!confirm('Delete "'+name+'"'+(kids.length?' and its '+kids.length+' sub-project(s)':'')+'?')) return;
+  const b=db.batch(); b.delete(db.doc('projects/'+id)); kids.forEach(k=>b.delete(db.doc('projects/'+k.id))); await b.commit();
+}
+async function setStatus(id,s){ await db.doc('projects/'+id).update({status:s}); toast(s==='active'?'Activated ✔':s==='shelved'?'Shelved':'Back to undecided'); }
+function startEditProj(pid){ $('detailBody').dataset.editing=pid; renderDetail(); }
+function cancelEditProj(){ delete $('detailBody').dataset.editing; renderDetail(); }
+async function saveProj(pid){
+  const patch={name:$('edName').value.trim()||'Untitled', emoji:$('edEmoji').value.trim()||'🎪', description:$('edDesc').value,
+    required:$('edRequired').checked, status:$('edStatus').value};
+  if($('edParent')) patch.parentId=$('edParent').value||null;
+  await db.doc('projects/'+pid).update(patch);
+  delete $('detailBody').dataset.editing; toast('Saved');
+}
+async function toggleHelp(pid){
+  const me=myMember(); if(!me) return toast('Claim your name first (My Vote tab)');
+  const p=proj(pid); const helping=!!(p.helpers||{})[user.uid];
+  const F=firebase.firestore.FieldValue;
+  try{ await db.doc('projects/'+pid).update({['helpers.'+user.uid]: helping?F.delete():{memberId:me.id,name:me.name}}); toast(helping?'Okay, counted out':'🙋 Counted in — thank you!'); }
+  catch(e){ toast('Failed: '+e.code) }
+}
+async function addItemDetail(pid){
+  const n=$('dit-n').value.trim(), c=parseFloat($('dit-c').value), q=parseFloat($('dit-q').value); if(!n||!(c>=0)) return toast('Need a name and a unit cost');
+  await db.collection('projects/'+pid+'/items').add({name:n,cost:c,qty:q>0?q:1,dependsOn:$('dit-d').value||null,donations:{},order:Date.now()});
+  $('dit-n').value='';$('dit-c').value='';$('dit-q').value='1';$('dit-d').value='';
+}
+async function saveItem(pid,iid){
+  const n=$('edi-n').value.trim(), c=parseFloat($('edi-c').value), q=parseFloat($('edi-q').value);
+  if(!n||!(c>=0)) return toast('Need a name and a unit cost ≥ 0');
+  editingItem=null;
+  await db.doc('projects/'+pid+'/items/'+iid).update({name:n, cost:c, qty:q>0?q:1, dependsOn:$('edi-d').value||null}); toast('Item updated');
+}
+async function delItem(pid,iid){ await db.doc('projects/'+pid+'/items/'+iid).delete(); }
+async function donate(pid,iid){
+  const me=myMember(); if(!me) return toast('Claim your name first (My Vote tab)');
+  const i=(itemsByProj[pid]||[]).find(x=>x.id===iid); if(!i) return;
+  const already=+((i.donations||{})[user.uid]||{}).qty||0;
+  const others=Object.entries(i.donations||{}).filter(([k])=>k!==user.uid).reduce((a,[,d])=>a+(+d.qty||0),0);
+  const cap=Math.max(0, itemQty(i)-others);
+  let q=$('don-q')?parseFloat($('don-q').value):1; if(!(q>0)) return toast('Enter a quantity > 0');
+  q=Math.min(cap, already+q);
+  try{ await db.doc('projects/'+pid+'/items/'+iid).update({['donations.'+user.uid]:{memberId:me.id,name:me.name,qty:q}}); donatingItem=null; toast('🎁 Thank you — '+(itemQty(i)===1?'':num(q)+' × ')+i.name+' covered'); }
+  catch(e){ toast('Failed: '+e.code) }
+}
+async function undonate(pid,iid,key){
+  try{ await db.doc('projects/'+pid+'/items/'+iid).update({['donations.'+key]: firebase.firestore.FieldValue.delete()}); }
+  catch(e){ toast('Failed: '+e.code) }
+}
+async function addMember(){
+  const name=$('newMemberName').value.trim(); if(!name) return;
+  const email=($('newMemberEmail').value||'').trim().toLowerCase()||null;
+  await db.collection('members').add({name, role:$('newMemberRole').value, uid:null, email});
+  $('newMemberName').value=''; $('newMemberEmail').value=''; toast('Member added');
+}
+async function setRole(id,role){ await db.doc('members/'+id).update({role}); }
+async function requestTickets(){
+  const me=myMember(); if(!me) return;
+  const tier=$('reqTier').value, qty=Math.max(1,Math.min(10,+$('reqQty').value||1));
+  const price=config.prices[tier]; if(price==null) return toast('Unknown tier');
+  try{
+    const b=db.batch();
+    for(let i=0;i<qty;i++) b.set(db.collection('requests').doc(),
+      {memberId:me.id, memberName:me.name, uid:user.uid, tier, price, status:'pending', code:null, createdAt:Date.now()+i});
+    await b.commit();
+    $('reqQty').value=1;
+    toast(`Requested ${qty} ${tier} ticket${qty>1?'s':''} — an admin will approve and assign your code 🎟️`);
+  }catch(e){ toast('Request failed: '+e.code) }
+}
+async function cancelReq(id){
+  const r=requests.find(x=>x.id===id); if(!r) return;
+  try{ await db.doc('requests/'+id).delete(); toast('Request cancelled'); }
+  catch(e){ toast('Failed: '+e.code) }
+}
+async function approveReq(id){
+  const r=requests.find(x=>x.id===id); if(!r) return;
+  const c=codes.find(c=>c.tier===r.tier&&!c.assignedTo);
+  if(!c) return toast('No free '+r.tier+' codes — add some to the pool below');
+  const b=db.batch();
+  b.update(db.doc('codes/'+c.id),{assignedTo:r.id, assignedUid:r.uid||null});
+  b.update(db.doc('requests/'+id),{status:'approved', code:c.code});
+  await b.commit(); toast('Approved — code assigned 🎟️');
+}
+async function rejectReq(id){
+  const r=requests.find(x=>x.id===id); if(!r) return;
+  const b=db.batch();
+  if(r.code){ const c=codes.find(c=>c.code===r.code); if(c) b.update(db.doc('codes/'+c.id),{assignedTo:null, assignedUid:null}); }
+  b.update(db.doc('requests/'+id),{status:'rejected', code:null});
+  await b.commit();
+  toast(r.status==='approved'?'Revoked — code returned to pool':'Rejected');
+}
+async function addCodes(){
+  const tier=$('codeTier').value;
+  const list=$('codeInput').value.split(/[\s,;]+/).map(s=>s.trim()).filter(Boolean);
+  if(!list.length) return;
+  const b=db.batch();
+  list.forEach(code=>b.set(db.collection('codes').doc(),{code, tier, assignedTo:null, assignedUid:null}));
+  await b.commit(); $('codeInput').value=''; toast(list.length+' '+tier+' codes added 🔐');
+}
+async function genCodes(){
+  const tier=$('codeTier').value;
+  const b=db.batch();
+  for(let i=0;i<5;i++){
+    const code='LB27-'+tier.slice(0,1).toUpperCase()+'-'+Math.random().toString(36).slice(2,8).toUpperCase();
+    b.set(db.collection('codes').doc(),{code, tier, assignedTo:null, assignedUid:null});
+  }
+  await b.commit(); toast('5 fake '+tier+' codes generated');
+}
+async function delMember(id,name){
+  if(!confirm('Remove '+name+'?')) return;
+  const m=members.find(x=>x.id===id);
+  const b=db.batch(); b.delete(db.doc('members/'+id)); b.delete(db.doc('ballots/'+id));
+  if(m&&m.uid) b.delete(db.doc('memberUids/'+m.uid));
+  await b.commit();
+}
+/* ---- ballot actions: each change writes the whole ballot (owner-only per rules) ----
+   g = 'top' (main vote) or a parent project id (its sub-project vote) */
+async function writeBallot(patch){
+  const me=myMember(); if(!me||!canVote(me)) return;
+  const cur=myBallot();
+  const doc={uid:user.uid, memberId:me.id, ranking:cur.ranking||[], sub:{...(cur.sub||{})}, secret:!!cur.secret, updatedAt:Date.now(), ...patch};
+  try{ await db.doc('ballots/'+me.id).set(doc); }
+  catch(e){ toast('Vote not saved: '+e.code) }
+}
+function saveBallot(g, ranking){ return g==='top' ? writeBallot({ranking}) : writeBallot({sub:{...(myBallot().sub||{}), [g]:ranking}}); }
+function setSecret(v){ writeBallot({secret:!!v}).then(()=>toast(v?'🔒 Your ballot is now secret':'👀 Your ballot is public')); }
+function rankProject(g,pid){ const r=rankingFor(myBallot(),g); if(!r.includes(pid)) saveBallot(g,[...r,pid]); }
+function unrank(g,pid){ saveBallot(g, rankingFor(myBallot(),g).filter(x=>x!==pid)); }
+function moveRank(g,pid,delta){
+  const r=[...rankingFor(myBallot(),g)], i=r.indexOf(pid), j=i+delta; if(i<0||j<0||j>=r.length) return;
+  [r[i],r[j]]=[r[j],r[i]]; saveBallot(g,r);
+}
+async function clearBallot(g){ if(confirm('Clear this ballot?')) await saveBallot(g,[]); }
+async function saveConfig(){
+  const admins=$('cfgAdmins').value.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
+  if(!admins.length) return toast('Keep at least one admin');
+  if(user&&!admins.includes(user.email)&&!confirm('You are removing YOURSELF from admins. Sure?')) return;
+  await db.doc('config/main').update({
+    goal:+$('cfgGoal').value||0,
+    prices:{builder:+$('cfgBuilder').value||150, performer:+$('cfgPerformer').value||150, member:+$('cfgMember').value||300, guest:+$('cfgGuest').value||600},
+    payNote:$('cfgPayNote').value, admins
+  });
+  cfgDirty=false; toast('Config saved ⚙️');
+}
+route();
+</script>
+</body>
+</html>

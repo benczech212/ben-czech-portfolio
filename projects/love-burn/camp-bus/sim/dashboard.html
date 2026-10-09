@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Camp Bus Console</title>
+<!-- Dev/test console. Open this file in a browser; it talks to the broker's WebSocket
+     listener (default ws://localhost:9001). Fires the exact messages real devices send
+     and shows what comes back. mqtt.js is loaded from a CDN for now; vendor it into
+     this folder before the burn if the console is wanted on the offline camp LAN. -->
+<script src="vendor/mqtt.min.js"></script>
+<script src="shared.js"></script>
+<link rel="stylesheet" href="ui.css">
+<style>
+  :root { --bg:#0b0f12; --panel:#131a1f; --ink:#e6edf1; --dim:#7d8f9a; --ok:#4dffa6; --bad:#ff5252; --beat:#ff4000; --acc:#4de0ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; font: 14px/1.4 system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+  header { display:flex; gap:16px; align-items:center; padding:10px 16px; background:var(--panel); border-bottom:1px solid #2a2a30; }
+  header h1 { font-size:16px; margin:0; }
+  header input { background:#000; color:var(--ink); border:1px solid #333; padding:4px 8px; border-radius:4px; width:220px; }
+  header button, .btn { background:#2b2b33; color:var(--ink); border:1px solid #3a3a44; padding:6px 10px; border-radius:6px; cursor:pointer; }
+  .btn:hover { background:#3a3a46; }
+  #conn { font-size:12px; color:var(--dim); }
+  #conn.ok { color:var(--ok); } #conn.bad { color:var(--bad); }
+  main { display:grid; grid-template-columns: 1fr 1fr; gap:12px; padding:12px 16px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  section { background:var(--panel); border:1px solid #2a2a30; border-radius:8px; padding:12px; }
+ h2 { font-size:13px; letter-spacing:-.005em; color:var(--dim); margin:0 0 8px; }
+  table { width:100%; border-collapse: collapse; font-size:13px; }
+  td, th { text-align:left; padding:3px 6px; border-bottom:1px solid #26262c; }
+  th { color:var(--dim); font-weight:500; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--bad); margin-right:6px; }
+  .dot.on { background:var(--ok); }
+  #beat { width:44px; height:44px; border-radius:50%; background:#333; transition: background .08s, transform .08s; display:inline-block; vertical-align:middle; margin-right:12px; }
+  #beat.hit { background:var(--beat); transform: scale(1.15); }
+  .meter { height:10px; background:#2a2a30; border-radius:5px; overflow:hidden; margin:3px 0; }
+  .meter > div { height:100%; width:0; background:var(--acc); transition: width .05s linear; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:6px 0; }
+  .row input[type=text] { background:#000; color:var(--ink); border:1px solid #333; padding:5px 8px; border-radius:4px; }
+  .row input[type=range] { width:160px; }
+  #log { font: 12px/1.5 ui-monospace, Consolas, monospace; max-height: 360px; overflow:auto; white-space:pre; }
+  #log .t { color:var(--dim); } #log .cmd { color:#ffb454; } #log .in { color:#8fd3ff; } #log .disp { color:#c3a6ff; }
+  #now { font-size:22px; }
+  #rules li { margin:2px 0; } #rules { margin:0; padding-left:18px; color:#ccc; }
+  small { color:var(--dim); }
+</style>
+</head>
+<body>
+<header>
+  <nav id="campnav"></nav>
+  <input id="url" value="ws://localhost:9001" spellcheck="false">
+  <button id="connect">Connect</button>
+  <span id="conn">disconnected</span>
+</header>
+<main>
+  <section>
+    <h2>Now playing</h2>
+    <div id="now">(booth empty)</div>
+    <small id="nowmeta"></small>
+    <div style="margin-top:6px"><small>camp mode:</small> <b id="campmode">?</b></div>
+    <div style="margin-top:10px"><span id="banner"></span></div>
+    <h2 style="margin-top:14px">Audio</h2>
+    <div class="row"><span id="beat"></span><span id="bpm">-- bpm</span></div>
+    <div>bass <div class="meter"><div id="m-bass"></div></div>
+         mid <div class="meter"><div id="m-mid"></div></div>
+         high <div class="meter"><div id="m-high"></div></div></div>
+  </section>
+
+  <section>
+    <h2>Fire an input <small>(publishes exactly what the real device would)</small></h2>
+    <div class="row">
+      <button class="btn" data-pub="press:big_red_button">Big Red Button</button>
+      <button class="btn" data-pub="hold:big_red_button:2.5">Hold 2.5 s</button>
+      <button class="btn" data-pub="pull:lever">Lever</button>
+    </div>
+    <div class="row">Crank <input id="crank" type="range" min="-5" max="5" step="0.1" value="0"> <span id="crankv">0.0</span> turns/s</div>
+    <div class="row">Dial-a-vibe
+      <button class="btn" data-pub="mode:dial_a_vibe:cozy">cozy</button>
+      <button class="btn" data-pub="mode:dial_a_vibe:party">party</button>
+      <button class="btn" data-pub="mode:dial_a_vibe:chaos">chaos</button>
+    </div>
+    <div class="row">Staff
+      <input id="staffcolor" type="color" value="#ff4000" title="staff colour">
+      <button class="btn" data-pub="staff:staff_01:slam:0.9">slam</button>
+      <button class="btn" data-pub="staff:staff_01:spin:0.5">spin</button>
+      <button class="btn" data-pub="staff:staff_01:swing:0.4">swing</button>
+    </div>
+    <div class="row">DJ <input id="artist" type="text" placeholder="artist name" value="SideQuest">
+      <button class="btn" id="checkin">Check in</button>
+      <button class="btn" data-pub="checkout">Check out</button>
+    </div>
+    <div class="row">Kitchen
+      <button class="btn" data-pub="foodcall:dinner">Food call</button>
+      <button class="btn" data-pub="foodcall:midnight snack:soft">Soft (after midnight)</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Nodes <small>(node/+/status, retained)</small></h2>
+    <table><thead><tr><th></th><th>node</th><th>fw</th><th>ip</th><th>uptime</th><th>interactions</th></tr></thead>
+      <tbody id="nodes"></tbody></table>
+    <h2 style="margin-top:14px">Loaded mapping rules <small>(mapping/loaded)</small></h2>
+    <ul id="rules"><li><small>none yet</small></li></ul>
+  </section>
+
+  <section>
+    <h2>Bus log <small>(everything except audio/*)</small> <button class="btn" id="clear" style="float:right;padding:2px 8px">clear</button></h2>
+    <div id="log"></div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  let client = null;
+  const nodes = {};   // id -> {status, count}
+  const nodeId = 'console_' + Math.random().toString(36).slice(2, 8);
+
+  function setConn(text, cls) { const c = $('conn'); c.textContent = text; c.className = cls || ''; }
+
+  function connect() {
+    if (client) { try { client.end(true); } catch (e) {} client = null; }
+    const url = $('url').value.trim();
+    setConn('connecting to ' + url + ' ...');
+    client = mqtt.connect(url, {
+      clientId: nodeId, clean: true, keepalive: 20, reconnectPeriod: 2000,
+      will: { topic: `node/${nodeId}/status`, payload: JSON.stringify({ online: false, ts: 0 }), retain: true, qos: 0 },
+    });
+    client.on('connect', () => {
+      setConn('connected ' + url, 'ok');
+      pub(`node/${nodeId}/status`, { online: true, ip: 'browser', fw: 'console-0.1', uptime: 0 }, true);
+      client.subscribe(['#']);
+    });
+    client.on('reconnect', () => setConn('reconnecting ...', 'bad'));
+    client.on('close', () => setConn('disconnected', 'bad'));
+    client.on('error', (e) => setConn('error: ' + e.message, 'bad'));
+    client.on('message', onMessage);
+  }
+
+  function pub(topic, payload, retain = false) {
+    if (!client || !client.connected) return;
+    if (!('ts' in payload)) payload.ts = Date.now();
+    client.publish(topic, JSON.stringify(payload), { retain, qos: 0 });
+  }
+
+  // ---- inputs (mirror sim/inputs.py exactly)
+  const toy = (t, event, value, extra = {}) => pub(`toy/${t}`, { toy: t, event, value, ...extra });
+  const inputs = {
+    press: (t) => toy(t, 'press', 1),
+    hold: (t, s) => toy(t, 'hold', parseFloat(s)),
+    pull: (t) => toy(t, 'pull', 1),
+    mode: (t, m) => toy(t, 'mode', m),
+    staff: (id, gesture, intensity) => pub(`staff/${id}`, { staff_id: id, gesture, intensity: parseFloat(intensity), color: $('staffcolor').value, via: 'console', rssi: -50 }),
+    checkout: () => pub('booth/dj', { artist: null, since: Date.now() }, true),
+    foodcall: (meal, soft) => pub('kitchen/foodcall', { meal, soft: soft === 'soft' }),
+  };
+  document.querySelectorAll('[data-pub]').forEach((b) => b.addEventListener('click', () => {
+    const [kind, ...args] = b.dataset.pub.split(':');
+    inputs[kind](...args);
+  }));
+  $('checkin').addEventListener('click', () => {
+    const artist = $('artist').value.trim() || 'Unknown DJ';
+    pub('booth/dj', { artist, slot: null, since: Date.now(), timer_end: Date.now() + 45 * 60000, logo: null }, true);
+  });
+  let crankTimer = null;
+  $('crank').addEventListener('input', (e) => {
+    const v = parseFloat(e.target.value); $('crankv').textContent = v.toFixed(1);
+    clearTimeout(crankTimer); crankTimer = setTimeout(() => toy('crank', 'rate', v), 60);
+  });
+
+  // ---- rendering
+  function onMessage(topic, buf) {
+    let msg; try { msg = JSON.parse(buf.toString()); } catch (e) { msg = { _raw: buf.toString() }; }
+    if (topic === 'audio/beat') { const b = $('beat'); b.classList.add('hit'); setTimeout(() => b.classList.remove('hit'), msg.n % 4 === 0 ? 140 : 70); $('bpm').textContent = `${msg.bpm} bpm  #${msg.n}`; return; }
+    if (topic === 'audio/energy') { for (const k of ['bass', 'mid', 'high']) $('m-' + k).style.width = Math.round((msg[k] || 0) * 100) + '%'; return; }
+    if (topic === 'audio/bpm') return;
+    if (topic === 'booth/dj') { $('now').textContent = msg.artist ? 'NOW PLAYING: ' + msg.artist : '(booth empty)'; $('nowmeta').textContent = msg.artist ? `since ${new Date(msg.since).toLocaleTimeString()}${msg.timer_end ? ' · ends ' + new Date(msg.timer_end).toLocaleTimeString() : ''}` : ''; }
+    if (topic === 'display/banner') $('banner').textContent = msg.text ? `[${msg.level}] ${msg.text}` : '';
+    if (topic === 'camp/mode') $('campmode').textContent = m.mode || '?';
+    if (topic === 'mapping/loaded') $('rules').innerHTML = (msg.names || []).map((n) => `<li>${esc(n)}</li>`).join('') || '<li><small>no rules</small></li>';
+    const m = topic.match(/^node\/([^/]+)\/(status|count)$/);
+    if (m) { nodes[m[1]] = nodes[m[1]] || {}; nodes[m[1]][m[2]] = msg; renderNodes(); if (m[2] === 'status') return; }
+    log(topic, msg);
+  }
+  function renderNodes() {
+    $('nodes').innerHTML = Object.keys(nodes).sort().map((id) => {
+      const s = nodes[id].status || {}, c = nodes[id].count || {};
+      return `<tr><td><span class="dot ${s.online ? 'on' : ''}"></span></td><td>${esc(id)}</td><td>${esc(s.fw || '')}</td><td>${esc(s.ip || '')}</td><td>${s.uptime ?? ''}</td><td>${c.interactions ?? ''}</td></tr>`;
+    }).join('');
+  }
+  const logEl = $('log');
+  function log(topic, msg) {
+    const cls = topic.startsWith('cmd/') ? 'cmd' : topic.startsWith('display/') ? 'disp' : /^(toy|staff|midi|kitchen|booth)\//.test(topic) ? 'in' : '';
+    const line = document.createElement('div');
+    line.innerHTML = `<span class="t">${new Date().toLocaleTimeString()}</span> <span class="${cls}">${esc(topic.padEnd(28))}</span> ${esc(JSON.stringify(msg))}`;
+    logEl.prepend(line);
+    while (logEl.childNodes.length > 300) logEl.removeChild(logEl.lastChild);
+  }
+  const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  $('clear').addEventListener('click', () => { logEl.innerHTML = ''; });
+  $('connect').addEventListener('click', connect);
+  connect();
+})();
+</script>
+</body>
+</html>

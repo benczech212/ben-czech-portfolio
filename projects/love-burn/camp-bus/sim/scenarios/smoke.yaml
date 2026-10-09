@@ -1,0 +1,132 @@
+# Smoke scenario: every default mapping rule fires and reaches the right mock device.
+# Run with the mapping engine + sim devices up:
+#   python sim/inputs.py --host localhost run sim/scenarios/smoke.yaml
+name: smoke - default mappings end to end
+steps:
+  - do: { press: big_red_button }
+    expect:
+      - { topic: cmd/hallway/sweep,  payload: { color: "#ff4000" } }
+      - { topic: cmd/crystals/flash, payload: { color: "#ffffff", ms: 300 } }
+    expect_not:
+      - { topic: cmd/kitchen/bell, within_ms: 300 }
+
+  - do: { hold: [big_red_button, 2.5] }
+    expect:
+      - { topic: cmd/all/pulse, payload: { seconds: 2.5 } }
+
+  - do: { crank: 3.0 }
+    expect:
+      - { topic: cmd/hallway/speed, payload: { value: 3.0 } }
+
+  - do: { mode: [dial_a_vibe, chaos] }
+    expect:
+      - { topic: cmd/all/mode, payload: { mode: chaos } }
+
+  - do: { staff: [staff_01, slam, 0.9, "#ff4000"] }
+    expect:
+      - { topic: cmd/hallway/shockwave, payload: { intensity: 0.9, color: "#ff4000", from: staff_01 } }
+
+  - do: { staff: [staff_02, spin, 0.4, "#00ccff"] }
+    expect:
+      - { topic: cmd/crystals/charge, payload: { intensity: 0.4, color: "#00ccff" } }
+    expect_not:
+      - { topic: cmd/hallway/shockwave, within_ms: 300 }
+
+  - do: { staff: [staff_01, swing, 0.3, "#ff00aa"] }
+    expect:
+      - { topic: cmd/all/color, payload: { intensity: 0.3, color: "#ff00aa", shape: cone } }
+
+  - do: { wand: [wand_01, flick, 0.7, "#00c8ff", 25.7368, -80.1547, 90] }
+    expect:
+      - { topic: cmd/crystals/flash, payload: { intensity: 0.7, color: "#00c8ff", from: wand_01, shape: cone, cone_deg: 25, heading: 90.0 } }
+    expect_not:
+      - { topic: cmd/hallway/shockwave, within_ms: 300 }
+
+  - do: { drum: [drum_01, hit, 1.0, "#ffd400"] }
+    expect:
+      - { topic: cmd/all/pulse, payload: { intensity: 1.0, color: "#ffd400", from: drum_01, speed_mps: 4 } }
+
+  - do: { drum: [drum_01, roll, 0.5, "#ffd400"] }
+    expect:
+      - { topic: cmd/crystals/charge, payload: { intensity: 0.5, from: drum_01 } }
+
+  - do: { whip: [whip_01, crack, 0.9, "#ff2d95", 25.7368, -80.1547, 45] }
+    expect:
+      - { topic: cmd/crystals/flash, payload: { from: whip_01, shape: cone, cone_deg: 12, speed_mps: 30 } }
+      - { topic: cmd/hallway/rings, payload: { from: whip_01, count: 3 } }
+
+  - do: { whip: [whip_01, lash, 0.6, "#ff2d95"] }
+    expect:
+      - { topic: cmd/crystals/color, payload: { from: whip_01, cone_deg: 140, cutoff_m: 25 } }
+
+  - do: { hit: [amanita, 0.7] }
+    expect:
+      - { topic: cmd/crystals/flash,  payload: { intensity: 0.7, color: "#ff3b3b", from: mycelium_01, nearest: 4, instant: true } }
+      - { topic: cmd/hallway/breathe, payload: { intensity: 0.7, from: mycelium_01 } }
+
+  - do: { hit: [ghost, 0.5] }
+    expect:
+      - { topic: cmd/crystals/flash, payload: { color: "#4dffa6", from: mycelium_01 } }
+    expect_not:
+      - { topic: cmd/hallway/#, within_ms: 300 }
+
+  - do: { touch: [aquamarine, 0.62] }
+    expect:
+      - { topic: cmd/crystals/color, payload: { intensity: 0.62, color: "#4de0ff", from: geode_01 } }
+      - { topic: cmd/hallway/rain,   payload: { color: "#4de0ff" } }
+
+  - do: { touch: { pad: aquamarine, event: hold, velocity: 0.62, value: 0.7 } }
+    expect:
+      - { topic: cmd/crystals/charge, payload: { intensity: 0.7, from: geode_01 } }
+
+  - do: { touch: { pad: aquamarine, event: release } }
+    expect_not:
+      - { topic: cmd/#, within_ms: 300 }
+
+  - do: { bend: { pad: leaf_2, event: bend, velocity: 0.5, value: 0.5 } }
+    expect:
+      - { topic: cmd/crystals/color, payload: { intensity: 0.5, color: "#8fff5a", from: plant_01, nearest: 3, instant: true } }
+
+  - do: { bend: [leaf_2, 0.85] }
+    expect:
+      - { topic: cmd/all/pulse, payload: { intensity: 0.85, color: "#8fff5a", from: plant_01 } }
+
+  - do: { bend: [leaf_5, 0.6] }
+    expect:
+      - { topic: cmd/all/pulse, payload: { intensity: 0.6, color: "#d8ff3d", from: plant_01 } }
+
+  - do: { dip: [tube_2, 0.75] }
+    expect:
+      - { topic: cmd/crystals/pulse, payload: { intensity: 0.75, color: "#3d9bff", from: tubes_01, nearest: 3, instant: true } }
+      - { topic: cmd/hallway/rings,  payload: { color: "#3d9bff", from: tubes_01, count: 3 } }
+
+  - do: { dip: { pad: tube_3, event: hold, velocity: 0.7, value: 0.82 } }
+    expect:
+      - { topic: cmd/crystals/charge, payload: { intensity: 0.82, color: "#7cffd4", from: tubes_01 } }
+
+  - do: { dip: { pad: tube_3, event: release } }
+    expect_not:
+      - { topic: cmd/#, within_ms: 300 }
+
+  - do: { checkin: SideQuest }
+    expect:
+      - { topic: cmd/resolume/clip, payload: { name: SideQuest } }
+      - { topic: display/mode,      payload: { mode: nowplaying } }
+
+  - do: { checkout: null }
+    expect:
+      - { topic: cmd/resolume/clip, payload: { name: null, fallback: Camp Logo } }
+
+  - do: { foodcall: dinner }
+    expect:
+      - { topic: cmd/kitchen/bell, payload: { soft: false } }
+      - { topic: display/banner,   payload: { level: takeover, text: "FOOD'S UP - dinner!" } }
+
+  - do: { foodcall: [midnight snack, true] }
+    expect:
+      - { topic: cmd/kitchen/bell, payload: { soft: true } }
+
+  # an unmapped toy must be silent on cmd/
+  - do: { press: nothing_mapped }
+    expect_not:
+      - { topic: cmd/#, within_ms: 300 }

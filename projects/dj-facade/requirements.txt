@@ -1,0 +1,18 @@
+# Python 3.12 (developed on 3.12.1). Versions are the ones the project was developed against (minimums, not pins).
+# The bridge (tools/facade_bridge.py) also needs the `campbus` MQTT client, a separate package
+# from the camp event-bus project that is not included here.
+# External tool: ffmpeg on PATH (record_clip, record_showreel, cast_feed).
+
+pixelblaze-client>=1.1.8      # import pixelblaze
+websocket-client>=1.9         # import websocket (pb_bench, facade_bridge)
+numpy>=2.0
+opencv-python>=4.9            # import cv2 (camera mapper, zones, bridge)
+requests>=2.31                # music_cues, record_showreel, cast_feed
+paho-mqtt>=2.0                # bus_test
+sounddevice>=0.5              # music_cues
+pychromecast>=14.0            # cast_feed
+pyzmq>=26.0                   # import zmq (cast_feed live captions)
+
+# Windows-only helpers (audio routing, default device, Spotify window control)
+comtypes>=1.4; sys_platform == "win32"
+pycaw>=20240316; sys_platform == "win32"

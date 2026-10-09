@@ -1,0 +1,13 @@
+__pycache__/
+# recordings and their derived files never belong in git
+*.aac
+*.flac
+*.ogg
+*.m4a
+*.wav
+*.mp3
+*.mp4
+*.tsv
+*.ass
+*-transcript.md
+*-preview.png

@@ -1,0 +1,1075 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Booth Devices</title>
+<!-- Mock Resolume output + kitchen bell (moved off the Virtual Camp page). Same broker, same topics. -->
+<script src="vendor/mqtt.min.js"></script>
+<script src="shared.js"></script>
+<link rel="stylesheet" href="ui.css">
+<style>
+  :root { --bg:#0b0f12; --panel:#131a1f; --ink:#e6edf1; --dim:#7d8f9a; --ok:#4dffa6; --bad:#ff5252; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font: 14px/1.4 system-ui, sans-serif; }
+  header { display:flex; gap:12px; align-items:center; padding:8px 16px; background:var(--panel); border-bottom:1px solid #222; flex-wrap:wrap; }
+  header h1 { font-size:15px; margin:0 8px 0 0; }
+  header a { color:var(--dim); font-size:12px; text-decoration:none; }
+  header input[type=text] { background:#000; color:var(--ink); border:1px solid #333; padding:4px 8px; border-radius:4px; width:200px; }
+  .btn { background:#26262e; color:var(--ink); border:1px solid #363640; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:13px; }
+  #conn { font-size:12px; color:var(--dim); } #conn.ok { color:var(--ok); } #conn.bad { color:var(--bad); }
+  main { display:grid; grid-template-columns: 1fr 1fr; gap:12px; padding:12px 16px; max-width:1100px; }
+  @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
+  section { background:var(--panel); border:1px solid #222; border-radius:10px; padding:10px 12px; }
+ h2 { font-size:13px; letter-spacing:-.005em; color:var(--dim); margin:0 0 8px; display:flex; justify-content:space-between; }
+  h2 small { text-transform:none; letter-spacing:0; font-weight:400; }
+  #proj { background:#000; border:2px dashed #333; border-radius:6px; aspect-ratio:16/9; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; }
+  #proj .clip { font-size:40px; font-weight:800; letter-spacing:.05em; color:#fff; text-shadow:0 0 30px currentColor; transition: transform .15s; }
+  #proj .clip.fallback { color:#8fd3ff; font-size:28px; }
+  #proj .tag { position:absolute; bottom:6px; left:10px; font-size:11px; color:#556; }
+  #proj.hit .clip { transform: scale(1.08); }
+  #bell { font-size:110px; text-align:center; padding:20px 0 0; transform-origin: 50% 10%; display:inline-block; width:100%; }
+  #bell.ring { animation: ring .9s ease-out; } #bell.soft { animation: ring-soft .9s ease-out; }
+  @keyframes ring { 0%{transform:rotate(0)} 15%{transform:rotate(28deg)} 35%{transform:rotate(-24deg)} 55%{transform:rotate(16deg)} 75%{transform:rotate(-8deg)} 100%{transform:rotate(0)} }
+  @keyframes ring-soft { 0%{transform:rotate(0)} 30%{transform:rotate(8deg)} 60%{transform:rotate(-6deg)} 100%{transform:rotate(0)} }
+  #bellmsg { text-align:center; color:var(--dim); font-size:13px; min-height:1.4em; }
+  #log { font: 12px/1.5 ui-monospace, Consolas, monospace; color:#aab; max-height:200px; overflow:auto; white-space:pre; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+  .row input[type=text] { background:#000; color:var(--ink); border:1px solid #333; padding:5px 8px; border-radius:4px; width:140px; }
+  /* ---- matrix panel ---- */
+  /* hug the panel: black bars inside the frame read as part of the display */
+  #mxwrap { background:#000; border:2px dashed #333; border-radius:6px; padding:8px;
+            width:fit-content; margin:0 auto; max-width:100%; }
+  #mx { width:min(460px, 78vw); aspect-ratio:2/1; image-rendering:pixelated; display:block; border-radius:3px; }
+  #rose { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; width:186px; margin:10px auto 0; }
+  #rose button { background:#26262e; color:var(--ink); border:1px solid #363640; border-radius:6px;
+                 padding:9px 0; cursor:pointer; font:600 12px/1 system-ui,sans-serif; }
+  #rose button:hover { border-color:#5a5a68; }
+  #rose button:active { background:#3ddc84; color:#0a0a0c; }
+  #rose .mid { display:flex; align-items:center; justify-content:center; font:11px ui-monospace,monospace;
+               color:var(--dim); border:1px solid #23232c; border-radius:6px; }
+  .hint { color:var(--dim); font-size:11.5px; line-height:1.5; margin:8px 0 0; }
+  /* ---- zone editor: the whole window, because a 64x32 map is guesswork in a thumbnail ---- */
+  #zoverlay { position:fixed; inset:0; z-index:50; background:#08080a; display:flex; flex-direction:column; }
+  #zoverlay[hidden] { display:none; }
+  #zcalbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:8px 14px;
+              background:#161620; border-bottom:1px solid #2a2a34; }
+  #zcalbar[hidden] { display:none; }
+  #zcallist { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  #zcallist .zchip { padding:4px 8px; }
+  #zcallist kbd, .hint kbd { background:#0c0c10; border:1px solid #333; border-radius:3px;
+                             padding:0 5px; font:11px ui-monospace,monospace; color:var(--ink); }
+  #zcallist .edge { width:1px; align-self:stretch; background:#2a2a34; margin:0 3px; }
+  #zbar, #zbar2 { display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+                  padding:8px 14px; background:var(--panel); border-bottom:1px solid #222; }
+  #zbar2 { background:#101014; }
+  #zbar .sep { width:1px; align-self:stretch; background:#2a2a34; margin:0 3px; }
+  #zbar .ttl { font:600 13px system-ui,sans-serif; margin-right:4px; }
+  #zoverlay label { color:var(--dim); font-size:12.5px; }
+  #zoverlay input[type=text] { background:#000; color:var(--ink); border:1px solid #333;
+                               padding:5px 8px; border-radius:4px; }
+  .btn.on { background:#17241c; border-color:var(--ok); color:var(--ok); }
+  .btn:disabled { opacity:.4; cursor:default; }
+  #zmain { flex:1; display:flex; min-height:0; }
+  #zstage { flex:1; display:flex; align-items:center; justify-content:center;
+            padding:14px; min-width:0; overflow:hidden; }
+  #zcv { image-rendering:pixelated; cursor:crosshair; background:#000; touch-action:none;
+         box-shadow:0 0 0 1px #2a2a34, 0 12px 44px #000a; }
+  #zside { width:236px; flex:none; border-left:1px solid #222; padding:10px 12px;
+           overflow:auto; background:#0d0d11; }
+ #zside h3 { font:600 13px/1.2 system-ui,sans-serif; letter-spacing:-.005em; color:var(--dim); margin:0 0 8px; }
+  #zlist { display:flex; flex-direction:column; gap:5px; }
+  .zchip { display:flex; align-items:center; gap:8px; background:#1b1b22; border:1px solid #2a2a34;
+           border-radius:7px; padding:6px 8px; cursor:pointer; font-size:12.5px; }
+  .zchip.on { border-color:#3ddc84; background:#17241c; }
+  .zchip .sw { width:14px; height:14px; border-radius:3px; border:1px solid #0006; flex:none; }
+  .zchip .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .zchip .n { color:var(--dim); font:11px ui-monospace,monospace; }
+  .zchip .x { color:#66666f; padding:0 2px; }
+  .zchip .x:hover { color:var(--bad); }
+  #zread { margin-left:auto; font:12px ui-monospace,monospace; color:var(--dim); }
+  #zside .hint kbd { background:#1b1b22; border:1px solid #2a2a34; border-radius:3px;
+                     padding:0 4px; font:11px ui-monospace,monospace; }
+  .hint b { color:#ffb300; font-weight:600; }
+</style>
+</head>
+<body>
+<header>
+  <nav id="campnav"></nav>
+  <input id="url" type="text" value="" spellcheck="false">
+  <button class="btn" id="connect">Connect</button>
+  <span id="conn">disconnected</span>
+</header>
+<main>
+  <section>
+    <h2>Matrix panel <small>cmd/matrix/#</small></h2>
+    <div id="mxwrap"><canvas id="mx" width="64" height="32"></canvas></div>
+    <div id="rose">
+      <button data-h="315">NW</button><button data-h="0">N</button><button data-h="45">NE</button>
+      <button data-h="270">W</button><div class="mid" id="rosemid">fill</div><button data-h="90">E</button>
+      <button data-h="225">SW</button><button data-h="180">S</button><button data-h="135">SE</button>
+    </div>
+    <div class="row">
+      <input type="color" id="mxcolor" value="#ff4000" title="colour">
+      <select id="mxfx" title="effect">
+        <option value="wipe">wipe (fill, stays)</option>
+        <option value="sweep">sweep (band, passes)</option>
+        <option value="flash">flash</option>
+        <option value="pulse">pulse</option>
+        <option value="color">color (tint, fades)</option>
+        <option value="charge">charge</option>
+      </select>
+      <label style="color:var(--dim)">intensity <input type="range" id="mxint" min="0.05" max="1" step="0.05" value="1" style="width:90px;vertical-align:middle"></label>
+      <span id="mxintv" style="font:12px ui-monospace,monospace">1.00</span>
+      <button class="btn" id="mxclear">Clear</button>
+      <button class="btn" id="mxedit">Edit zones</button>
+    </div>
+
+    <p class="hint">The canvas mirrors whatever the real panel is told to do, by listening to
+      the same <span style="font-family:ui-monospace,monospace">cmd/matrix/#</span> it does.
+      <b>The buttons are a bench test:</b> they publish straight to
+      <span style="font-family:ui-monospace,monospace">cmd/</span>, bypassing the mapping
+      engine, which nothing on this bus does in normal operation. To aim the panel the real
+      way, add a rule on the Routes page &mdash; a prop already carries a compass heading, so
+      pointing the staff aims the fill.</p>
+  </section>
+  <section>
+    <h2>Resolume output <small>cmd/resolume/clip</small></h2>
+    <div id="proj"><div class="clip fallback" id="clip">Camp Logo</div><div class="tag" id="cliptag">fallback</div></div>
+    <div class="row"><input id="artist" type="text" value="SideQuest"><button class="btn" id="checkin">Check in</button><button class="btn" id="checkout">Check out</button></div>
+  </section>
+  <section>
+    <h2>Kitchen bell <small>cmd/kitchen/bell</small></h2>
+    <div id="bell">&#x1F514;</div>
+    <div id="bellmsg"></div>
+    <div class="row"><button class="btn" id="foodcall">Food call</button><button class="btn" id="foodsoft">Soft (quiet hours)</button></div>
+  </section>
+  <section style="grid-column: 1 / -1">
+    <h2>Recent commands <small>cmd/resolume/#, cmd/kitchen/#, booth/dj</small></h2>
+    <div id="log"></div>
+  </section>
+</main>
+
+<!-- The zone editor owns the window while it is open. These pixels decide which rock
+     lights up, and picking them in a 460px thumbnail was guesswork. -->
+<div id="zoverlay" hidden>
+  <div id="zbar">
+    <span class="ttl">Zone editor</span>
+    <button class="btn" id="ztbrush">Brush</button>
+    <button class="btn" id="ztpoly">Polygon</button>
+    <label>size <input type="range" id="zbrush" min="1" max="10" value="3" style="width:90px;vertical-align:middle"></label>
+    <span id="zbrushv" style="font:12px ui-monospace,monospace">3</span>
+    <span class="sep"></span>
+    <button class="btn" id="zgrid">Grid</button>
+    <span class="sep"></span>
+    <label>view <span id="zrotv" style="font:12px ui-monospace,monospace">0&deg;</span></label>
+    <button class="btn" id="zrotl" title="turn the view anticlockwise">&#x21ba;</button>
+    <button class="btn" id="zrotr" title="turn the view clockwise">&#x21bb;</button>
+    <span class="sep"></span>
+    <button class="btn" id="zcalib" title="walk the panel block by block and ask which rock each one is behind">Calibrate</button>
+    <label>block <select id="zcalstep" style="background:#000;color:var(--ink);border:1px solid #333;border-radius:4px;padding:4px">
+      <option value="1">1 px</option><option value="2">2 px</option>
+      <option value="4" selected>4 px</option><option value="8">8 px</option>
+    </select></label>
+    <span class="sep"></span>
+    <button class="btn" id="zundo">Undo</button>
+    <button class="btn" id="zclear">Clear all</button>
+    <span id="zread">&mdash;</span>
+  </div>
+  <div id="zbar2">
+    <button class="btn" id="zlive" title="publish the map as you draw, so the rocks light up while you work">Live to panel</button>
+    <label>panel <input type="text" id="znode" value="matrix_01" style="width:104px"></label>
+    <button class="btn" id="zsave">Save to panel</button>
+    <button class="btn" id="zshow">Show zones</button>
+    <button class="btn" id="zcycle">Rainbow cycle</button>
+    <button class="btn" id="zoff">Off</button>
+    <span style="margin-left:auto"></span>
+    <button class="btn" id="zdone">Done</button>
+  </div>
+  <div id="zcalbar" hidden>
+    <span id="zcalat" style="font:12px ui-monospace,monospace; color:var(--dim)"></span>
+    <span class="sep"></span>
+    <button class="btn" id="zcalback" title="go back one block and undo what it was assigned">&#x2190; Back</button>
+    <button class="btn" id="zcalsave">Stop &amp; save</button>
+    <button class="btn" id="zcalrestart" title="go back to the first block and walk the panel again">Restart</button>
+    <span class="sep"></span>
+    <span id="zcallist"></span>
+    <span style="margin-left:auto"></span>
+    <span id="zcalnote" style="font:12px ui-monospace,monospace; color:var(--ok)"></span>
+    <span class="hint" style="margin:0 0 0 10px"><kbd>N</kbd> new rock &middot; <kbd>0</kbd> none
+      &middot; <kbd>Enter</kbd> same as last &middot; <kbd>&#x232b;</kbd> back
+      &middot; <kbd>S</kbd> stop &amp; save &middot; <kbd>Esc</kbd> stop</span>
+  </div>
+  <div id="zmain">
+    <div id="zstage"><canvas id="zcv"></canvas></div>
+    <aside id="zside">
+      <h3>Zones</h3>
+      <div id="zlist"></div>
+      <div class="row"><button class="btn" id="zadd">Add zone</button></div>
+      <p class="hint"><b>The colours here are the ones the panel uses</b> &mdash; zone 1 is
+        red, the rest spread evenly round the wheel &mdash; so <em>Show zones</em> puts
+        exactly this picture on the rocks. Unpainted pixels stay dark.</p>
+      <p class="hint"><b>Polygon:</b> click the corners, then click the first point again
+        (or <kbd>Enter</kbd>) to fill it. <kbd>Esc</kbd> cancels.</p>
+      <p class="hint"><b>Rotate turns the view only</b>, for when you are stood behind the
+        panel or it is mounted on its side. What goes on the wire is always panel-native,
+        so the board never has to know.</p>
+      <p class="hint"><b>Live to panel</b> publishes as you draw, so the rock lights up
+        while the brush is still on it. <em>Save</em> is the one that retains the map.</p>
+      <p class="hint"><b>Calibrate</b> lights one block of the panel white and asks
+        which rock it is behind, then steps to the next. The rocks you have already
+        worked out <b>stay lit in their own colours</b> while it asks &mdash; what you
+        are checking is this one against those. It walks in a serpentine, so the block
+        after this one is next to it and <kbd>Enter</kbd> &mdash; same as the last
+        &mdash; is usually the answer. Zones touching the block are offered first.</p>
+      <p class="hint"><b>Stop &amp; save</b> ends the walk and retains the map, and
+        <em>Calibrate</em> picks up where you left off next time; <b>Restart</b> goes
+        back to the first block. Progress is also retained every 20 blocks, so a stray
+        refresh cannot cost you an hour of it.</p>
+      <p class="hint"><kbd>1</kbd>&ndash;<kbd>9</kbd> pick a zone, <kbd>0</kbd> erases,
+        <kbd>B</kbd> brush, <kbd>P</kbd> polygon, <kbd>G</kbd> grid, <kbd>[</kbd> <kbd>]</kbd>
+        size, <kbd>R</kbd> rotate.</p>
+    </aside>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  let client = null;
+  const nodeId = 'sim_devices_' + Math.random().toString(36).slice(2, 8);
+  $('url').value = Camp.Settings.brokerUrl();
+  function setConn(text, cls) { const c = $('conn'); c.textContent = text; c.className = cls || ''; }
+  function pub(topic, payload, retain = false) { if (!client || !client.connected) return; if (!('ts' in payload)) payload.ts = Date.now(); client.publish(topic, JSON.stringify(payload), { retain, qos: 0 }); }
+  function log(topic, m) { const el = $('log'); const line = document.createElement('div'); line.textContent = `${new Date().toLocaleTimeString()}  ${topic.padEnd(22)} ${JSON.stringify(m)}`; el.prepend(line); while (el.childNodes.length > 60) el.removeChild(el.lastChild); }
+  function setClip(m) {
+    const el = $('clip'), name = m.name || m.fallback || 'Camp Logo';
+    el.textContent = name; el.classList.toggle('fallback', !m.name); $('cliptag').textContent = m.name ? 'clip by artist name' : 'fallback clip';
+    $('proj').classList.add('hit'); setTimeout(() => $('proj').classList.remove('hit'), 200);
+  }
+  function ringBell(m) {
+    const b = $('bell'); b.classList.remove('ring', 'soft'); void b.offsetWidth;
+    b.classList.add(m.soft ? 'soft' : 'ring'); $('bellmsg').textContent = (m.soft ? 'ding (soft, quiet hours)' : 'DING DING DING') + ' - ' + new Date().toLocaleTimeString();
+  }
+  // ---- the matrix panel, mirroring what the real one was told ----------------
+  // Same maths as nodes/matrix_portal/effects.py. The board has to animate this by
+  // rewriting a 32-colour palette because it cannot touch 2048 pixels a frame; a
+  // browser can, so this draws per pixel and skips that trick.
+  const MX = (() => {
+    const W = 64, H = 32, EDGE = 0.14, BAND = 0.22, GLOW_HALFLIFE = 5;
+    const ctx = $('mx').getContext('2d');
+    let fill = [0, 0, 0], glow = [0, 0, 0], glowA = 0, glowAt = 0;
+    let active = [], projU = null, projH = null;
+
+    const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+    const mix = (a, b, k) => (k <= 0 ? a : k >= 1 ? b
+      : [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k]);
+    function hex(v) {
+      const m = /^#?([0-9a-f]{6})$/i.exec(String(v || ''));
+      if (!m) return [1, 1, 1];
+      const n = parseInt(m[1], 16);
+      return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+    }
+    function projection(h) {
+      if (projH === h && projU) return projU;
+      const th = h * Math.PI / 180, dx = Math.sin(th), dy = -Math.cos(th);
+      const cx = (W - 1) / 2, cy = (H - 1) / 2;
+      const c = [(-cx) * dx + (-cy) * dy, cx * dx + (-cy) * dy, (-cx) * dx + cy * dy, cx * dx + cy * dy];
+      const lo = Math.min.apply(null, c), span = (Math.max.apply(null, c) - lo) || 1;
+      const out = new Float32Array(W * H);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) out[y * W + x] = (((x - cx) * dx + (y - cy) * dy) - lo) / span;
+      projU = out; projH = h; return out;
+    }
+    function submit(effect, m, now) {
+      const color = hex(m.color), intensity = clamp01(m.intensity == null ? 1 : +m.intensity);
+      const heading = (+m.heading || 0 + 360) % 360;
+      let dur = 0;
+      if (effect === 'flash') dur = (m.ms == null ? 2500 : +m.ms) / 1000;
+      else if (effect === 'pulse') dur = m.seconds == null ? 3 : +m.seconds;
+      else if (effect === 'color') dur = m.seconds == null ? 2.5 : +m.seconds;
+      else if (effect === 'wipe' || effect === 'sweep') dur = m.seconds == null ? 1.2 : +m.seconds;
+      if (effect === 'charge') {
+        decay(now);
+        glow = mix(glow, color, glowA <= 0 ? 1 : 0.5);
+        glowA = clamp01(glowA + intensity * 0.7); glowAt = now; return true;
+      }
+      if (effect === 'wipe' || effect === 'sweep') {
+        active.filter((f) => f.kind === 'wipe').forEach(commit);
+        active = active.filter((f) => f.kind !== 'wipe' && f.kind !== 'sweep');
+        projection(heading);
+      } else if (!['flash', 'pulse', 'color'].includes(effect)) { return false; }
+      active.push({ kind: effect, color, intensity, start: now, dur, heading });
+      return true;
+    }
+    const commit = (f) => { if (f.kind === 'wipe') fill = mix(fill, f.color, f.intensity); };
+    function decay(now) {
+      if (glowA <= 0) return;
+      const dt = now - glowAt;
+      if (dt > 0) { glowA *= Math.pow(0.5, dt / GLOW_HALFLIFE); if (glowA < 0.004) glowA = 0; }
+      glowAt = now;
+    }
+    const prog = (f, now) => (f.dur <= 0 ? 1 : clamp01((now - f.start) / f.dur));
+    function coverage(f, t, now) {
+      const p = prog(f, now);
+      if (f.kind === 'wipe') return clamp01(((-EDGE + p * (1 + 2 * EDGE)) - t) / EDGE);
+      return clamp01(1 - Math.abs(t - (-BAND + p * (1 + 2 * BAND))) / BAND);
+    }
+    function uniform(now) {
+      let a = 0, c = [1, 1, 1];
+      for (const f of active) {
+        if (f.kind === 'wipe' || f.kind === 'sweep') continue;
+        const p = prog(f, now);
+        let k = 0;
+        if (f.kind === 'flash' || f.kind === 'color') k = f.intensity * (1 - p);
+        else if (f.kind === 'pulse') k = f.intensity * (0.5 - 0.5 * Math.cos(2 * Math.PI * p * 2));
+        if (k <= 0) continue;
+        const tot = 1 - (1 - a) * (1 - k);
+        if (tot > 0) c = [(c[0] * a * (1 - k) + f.color[0] * k) / tot,
+                          (c[1] * a * (1 - k) + f.color[1] * k) / tot,
+                          (c[2] * a * (1 - k) + f.color[2] * k) / tot];
+        a = tot;
+      }
+      return { c, a: clamp01(a) };
+    }
+    function draw(now) {
+      active = active.filter((f) => { if (prog(f, now) >= 1) { commit(f); return false; } return true; });
+      decay(now);
+      const base = mix(fill, glow, glowA), u = uniform(now);
+      const dir = active.filter((f) => f.kind === 'wipe' || f.kind === 'sweep');
+      const pu = projection(projH || 0);
+      const img = ctx.createImageData(W, H), d = img.data;
+      for (let i = 0; i < W * H; i++) {
+        let c = base;
+        for (const f of dir) c = mix(c, f.color, coverage(f, pu[i], now) * f.intensity);
+        if (u.a > 0) c = mix(c, u.c, u.a);
+        d[i * 4] = c[0] * 255; d[i * 4 + 1] = c[1] * 255; d[i * 4 + 2] = c[2] * 255; d[i * 4 + 3] = 255;
+      }
+      ctx.putImageData(img, 0, 0);
+    }
+    return { submit, draw, heading: () => projH || 0 };
+  })();
+
+  // ---- zone editor -----------------------------------------------------------
+  // A zone is the set of pixels that light one rock. The panel treats the zone id
+  // exactly the way it treats a position along a fill - same buckets, same palette -
+  // so everything drawn here costs the board nothing extra to show.
+  const ZONES = (() => {
+    const W = 64, H = 32;
+    const cv = $('zcv'), off = document.createElement('canvas');
+    let data = new Uint8Array(W * H);
+    let names = [];                 // names[0] is zone 1; zone 0 means unassigned
+    let current = 1, brush = 3, editing = false, painting = false;
+    let tool = 'brush', grid = true, rot = 0, live = false;
+    let poly = [];                  // pending polygon vertices, in panel coordinates
+    let cursor = null, last = null, undo = null, scale = 8;
+    let bus = {};                   // { map(retain, rle, zones), cmd(effect, msg) }
+    let calib = null;               // { blocks, at, step, last, hist }
+
+    const count = () => names.length;
+    // The golden angle, matching effects.py. A zone's colour depends on its id alone,
+    // so adding a rock never repaints the ones already mapped; and consecutive ids land
+    // 137 degrees apart, which matters because calibration hands neighbouring rocks
+    // consecutive ids and those are exactly the two you must not confuse.
+    const GOLDEN = 137.50776;
+    // Matching effects.py: the top zone id is reserved for the calibration probe and
+    // painted white, so the probe can travel inside the real map instead of replacing
+    // it - which is what keeps the rocks already worked out lit while you do the next.
+    const PROBE_ZONE = 31, MAX_ROCKS = 30;
+    function color(id) {
+      if (!id || id > count()) return '#14141a';
+      const h = (GOLDEN * (id - 1)) % 360;
+      const f = (n) => {
+        const k = (n + h / 60) % 6;
+        return Math.round(255 * (1 - 0.85 * Math.max(0, Math.min(k, 4 - k, 1))));
+      };
+      return '#' + [f(5), f(3), f(1)].map((v) => v.toString(16).padStart(2, '0')).join('');
+    }
+
+    // ---- the view turns; the map does not ------------------------------------
+    // A panel mounted on its side, or a person stood behind it, is a fact about
+    // where you are - not about the panel. So rotation moves the drawing surface and
+    // the bytes on the wire stay panel-native: the board never has to know, and a map
+    // drawn from behind still lights the right rock.
+    const vw = () => (rot % 180 ? H : W);
+    const vh = () => (rot % 180 ? W : H);
+    function toPanel(vx, vy) {
+      if (rot === 90) return [vy, H - 1 - vx];
+      if (rot === 180) return [W - 1 - vx, H - 1 - vy];
+      if (rot === 270) return [W - 1 - vy, vx];
+      return [vx, vy];
+    }
+    function toView(px, py) {
+      if (rot === 90) return [H - 1 - py, px];
+      if (rot === 180) return [W - 1 - px, H - 1 - py];
+      if (rot === 270) return [py, W - 1 - px];
+      return [px, py];
+    }
+
+    // ---- polygons -------------------------------------------------------------
+    function inside(x, y, pts) {
+      // Even-odd crossings. Vertices and test points are both pixel centres, so
+      // clicking a pixel puts that pixel inside - which is what the click looked
+      // like it meant.
+      let on = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const ay = pts[i][1], by = pts[j][1];
+        if ((ay > y) === (by > y)) continue;
+        if (x < pts[i][0] + (y - ay) / (by - ay) * (pts[j][0] - pts[i][0])) on = !on;
+      }
+      return on;
+    }
+    function rasterize(pts) {
+      const mask = new Uint8Array(W * H);
+      let x0 = W, x1 = 0, y0 = H, y1 = 0;
+      for (const q of pts) {
+        if (q[0] < x0) x0 = q[0];
+        if (q[0] > x1) x1 = q[0];
+        if (q[1] < y0) y0 = q[1];
+        if (q[1] > y1) y1 = q[1];
+      }
+      for (let y = Math.max(0, y0); y <= Math.min(H - 1, y1); y++)
+        for (let x = Math.max(0, x0); x <= Math.min(W - 1, x1); x++)
+          if (inside(x, y, pts)) mask[y * W + x] = 1;
+      // The crossing test is half-open, so the edges you clicked on land outside it -
+      // a square drawn corner to corner came back one row and one column short.
+      // Stamping the outline puts every vertex and every edge pixel back, which is
+      // what clicking them looked like it meant.
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) edge(mask, pts[j], pts[i]);
+      return mask;
+    }
+    function edge(mask, a, b) {
+      const dx = b[0] - a[0], dy = b[1] - a[1];
+      const n = Math.max(Math.abs(dx), Math.abs(dy));
+      for (let k = 0; k <= n; k++) {
+        const x = Math.round(a[0] + (n ? dx * k / n : 0));
+        const y = Math.round(a[1] + (n ? dy * k / n : 0));
+        if (x >= 0 && x < W && y >= 0 && y < H) mask[y * W + x] = 1;
+      }
+    }
+    // What the polygon would take if it closed here. Drawn as the cursor moves, so
+    // the shape is settled before it is committed rather than after.
+    function preview() {
+      if (tool !== 'poly' || !poly.length) return null;
+      const pts = cursor ? poly.concat([cursor]) : poly;
+      return pts.length >= 3 ? rasterize(pts) : null;
+    }
+    function closePoly() {
+      if (poly.length >= 3) {
+        snapshot();
+        const mask = rasterize(poly);
+        for (let i = 0; i < mask.length; i++) if (mask[i]) data[i] = current;
+        poly = []; cursor = null;
+        render(); renderList(); pushLive();
+        return;
+      }
+      poly = []; cursor = null; render();
+    }
+
+    // ---- drawing --------------------------------------------------------------
+    function fit() {
+      const st = $('zstage');
+      if (!st || !st.clientWidth) return;
+      scale = Math.max(2, Math.floor(Math.min(st.clientWidth / vw(), st.clientHeight / vh())));
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      cv.style.width = vw() * scale + 'px';
+      cv.style.height = vh() * scale + 'px';
+      cv.width = Math.round(vw() * scale * dpr);
+      cv.height = Math.round(vh() * scale * dpr);
+      render();
+    }
+
+    function render() {
+      const w = vw(), h = vh(), ctx = cv.getContext('2d');
+      off.width = w; off.height = h;
+      const octx = off.getContext('2d');
+      const img = octx.createImageData(w, h), d = img.data;
+      const pv = preview();
+      for (let vy = 0; vy < h; vy++) {
+        for (let vx = 0; vx < w; vx++) {
+          const pt = toPanel(vx, vy), i = pt[1] * W + pt[0], o = (vy * w + vx) * 4;
+          const ghost = pv && pv[i];
+          const c = color(ghost ? current : data[i]);
+          let r = parseInt(c.slice(1, 3), 16), g = parseInt(c.slice(3, 5), 16), b = parseInt(c.slice(5, 7), 16);
+          if (ghost) { r = (r + 255) >> 1; g = (g + 255) >> 1; b = (b + 255) >> 1; }
+          d[o] = r; d[o + 1] = g; d[o + 2] = b; d[o + 3] = 255;
+        }
+      }
+      octx.putImageData(img, 0, 0);
+
+      ctx.setTransform(cv.width / (w * scale), 0, 0, cv.height / (h * scale), 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      ctx.clearRect(0, 0, w * scale, h * scale);
+      ctx.drawImage(off, 0, 0, w * scale, h * scale);
+
+      if (grid && scale >= 5) {
+        ctx.lineWidth = 1;
+        for (let x = 0; x <= w; x++) {
+          ctx.strokeStyle = x % 8 ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.20)';
+          ctx.beginPath(); ctx.moveTo(x * scale + .5, 0); ctx.lineTo(x * scale + .5, h * scale); ctx.stroke();
+        }
+        for (let y = 0; y <= h; y++) {
+          ctx.strokeStyle = y % 8 ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.20)';
+          ctx.beginPath(); ctx.moveTo(0, y * scale + .5); ctx.lineTo(w * scale, y * scale + .5); ctx.stroke();
+        }
+      }
+
+      if (calib && calib.blocks[calib.at]) {
+        const b = calib.blocks[calib.at];
+        const a = toView(b[0], b[1]), z = toView(b[0] + b[2] - 1, b[1] + b[3] - 1);
+        const x0 = Math.min(a[0], z[0]) * scale, y0 = Math.min(a[1], z[1]) * scale;
+        const x1 = (Math.max(a[0], z[0]) + 1) * scale, y1 = (Math.max(a[1], z[1]) + 1) * scale;
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(x0, y0, x1 - x0, y1 - y0);      // the pixel that is lit, as lit
+        ctx.strokeStyle = '#3ddc84'; ctx.lineWidth = 2;
+        ctx.strokeRect(x0 - 2, y0 - 2, x1 - x0 + 4, y1 - y0 + 4);
+      }
+
+      if (poly.length) {
+        const at = (q) => { const v = toView(q[0], q[1]); return [(v[0] + .5) * scale, (v[1] + .5) * scale]; };
+        const pts = poly.map(at);
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+        ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+        for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k][0], pts[k][1]);
+        if (cursor) { const c = at(cursor); ctx.lineTo(c[0], c[1]); }
+        if (pts.length + (cursor ? 1 : 0) >= 3) ctx.lineTo(pts[0][0], pts[0][1]);
+        ctx.stroke(); ctx.setLineDash([]);
+        pts.forEach((q, k) => {
+          ctx.fillStyle = k ? '#fff' : '#3ddc84';
+          ctx.beginPath(); ctx.arc(q[0], q[1], k ? 2.5 : 4.5, 0, 7); ctx.fill();
+        });
+      }
+    }
+
+    function chrome() {
+      $('ztbrush').classList.toggle('on', tool === 'brush');
+      $('ztpoly').classList.toggle('on', tool === 'poly');
+      $('zgrid').classList.toggle('on', grid);
+      $('zlive').classList.toggle('on', live);
+      $('zrotv').textContent = rot + '\u00b0';
+      $('zbrushv').textContent = brush;
+      $('zbrush').value = brush;
+    }
+
+    function readout(p) {
+      const el = $('zread');
+      if (!p) { el.textContent = '\u2014'; return; }
+      const id = data[p[1] * W + p[0]];
+      el.textContent = p[0] + ',' + p[1] + '  ' + (id ? names[id - 1] || ('zone ' + id) : 'unassigned');
+    }
+
+    // ---- painting -------------------------------------------------------------
+    function pointer(ev) {
+      const r = cv.getBoundingClientRect();
+      const t = ev.touches && ev.touches.length ? ev.touches[0] : ev;
+      const vx = Math.floor((t.clientX - r.left) / r.width * vw());
+      const vy = Math.floor((t.clientY - r.top) / r.height * vh());
+      if (vx < 0 || vy < 0 || vx >= vw() || vy >= vh()) return null;
+      return toPanel(vx, vy);
+    }
+    function dab(cx, cy) {
+      const half = (brush - 1) / 2;
+      for (let y = Math.round(cy - half); y <= Math.round(cy + half); y++)
+        for (let x = Math.round(cx - half); x <= Math.round(cx + half); x++)
+          if (x >= 0 && x < W && y >= 0 && y < H) data[y * W + x] = current;
+    }
+    function stroke(p) {
+      // Join up to the previous sample. At twenty screen pixels each, a quick drag
+      // skips whole runs of panel pixels, and the gaps stay invisible until the rock
+      // turns out to have a hole in it.
+      if (last) {
+        const dx = p[0] - last[0], dy = p[1] - last[1];
+        const n = Math.max(Math.abs(dx), Math.abs(dy));
+        for (let k = 1; k <= n; k++) dab(Math.round(last[0] + dx * k / n), Math.round(last[1] + dy * k / n));
+      } else dab(p[0], p[1]);
+      last = p;
+    }
+
+    function snapshot() { undo = { data: data.slice(), names: names.slice() }; }
+    const zoneList = () => names.map((n, i) => ({ id: i + 1, name: n }));
+
+    // ---- live to the panel ----------------------------------------------------
+    // The reason to have this at all: a rock either lights up or it does not, and
+    // finding that out one save at a time is a slow way to draw a map.
+    let liveAt = 0, liveTimer = null;
+    function pushLive() {
+      if (!live || !bus.map || calib) return;     // the probe owns the panel
+      const now = Date.now();
+      if (now - liveAt >= 300) { liveAt = now; bus.map(false); return; }
+      if (!liveTimer) liveTimer = setTimeout(() => {
+        liveTimer = null; liveAt = Date.now(); bus.map(false);
+      }, 300);
+    }
+
+    function renderList() {
+      const el = $('zlist');
+      const tally = new Array(count() + 1).fill(0);
+      for (const v of data) if (v <= count()) tally[v]++;
+      el.innerHTML = names.map((n, i) => {
+        const id = i + 1;
+        return '<span class="zchip' + (id === current ? ' on' : '') + '" data-z="' + id + '">' +
+          '<span class="sw" style="background:' + color(id) + '"></span>' +
+          '<span class="nm">' + n + '</span><span class="n">' + tally[id] + 'px</span>' +
+          '<span class="x" data-del="' + id + '">&#x2715;</span></span>';
+      }).join('') + '<span class="zchip' + (current === 0 ? ' on' : '') + '" data-z="0">' +
+        '<span class="sw" style="background:#14141a"></span><span class="nm">unassigned</span>' +
+        '<span class="n">' + tally[0] + 'px</span></span>';
+      el.querySelectorAll('[data-z]').forEach((c) => c.addEventListener('click', (e) => {
+        if (e.target.dataset.del) return;
+        current = +c.dataset.z; poly = []; cursor = null; render(); renderList();
+      }));
+      el.querySelectorAll('[data-del]').forEach((c) => c.addEventListener('click', (e) => {
+        e.stopPropagation(); remove(+c.dataset.del);
+      }));
+    }
+
+    function remove(id) {
+      snapshot();
+      names.splice(id - 1, 1);
+      for (let i = 0; i < data.length; i++) {
+        if (data[i] === id) data[i] = 0;
+        else if (data[i] > id) data[i] -= 1;      // ids stay contiguous
+      }
+      if (current > count()) current = count();
+      render(); renderList(); pushLive();
+    }
+
+    // ---- calibration: ask the rocks, do not guess --------------------------
+    // A zone map is a claim about the world - this pixel lights that rock - and the
+    // only way to check a claim like that is to light the pixel and go and look. So
+    // this walks the panel a block at a time, lighting one white, and writes down the
+    // answer. Everything here exists to cut the number of keystrokes, because at one
+    // pixel at a time a 64x32 panel is 2048 questions.
+
+    function blocksFor(step) {
+      const out = [], cols = Math.ceil(W / step), rows = Math.ceil(H / step);
+      for (let by = 0; by < rows; by++) {
+        for (let k = 0; k < cols; k++) {
+          // Serpentine, so the next block is always next to this one on the panel and
+          // "same as the last" is right far more often than it would be raster order.
+          const bx = by % 2 ? cols - 1 - k : k;
+          out.push([bx * step, by * step,
+                    Math.min(step, W - bx * step), Math.min(step, H - by * step)]);
+        }
+      }
+      return out;
+    }
+
+    function probeMask() {
+      const b = calib.blocks[calib.at], m = new Uint8Array(W * H);
+      for (let y = b[1]; y < b[1] + b[3]; y++)
+        for (let x = b[0]; x < b[0] + b[2]; x++) m[y * W + x] = 1;
+      return m;
+    }
+
+    function candidates() {
+      // Zones touching the block, the one touching hardest first. A rock is a blob,
+      // so its neighbours are nearly always the answer - and the block's own pixels
+      // count, which means re-running calibration offers what is already there.
+      const b = calib.blocks[calib.at], tally = new Array(count() + 1).fill(0);
+      for (let y = b[1] - 1; y <= b[1] + b[3]; y++) {
+        for (let x = b[0] - 1; x <= b[0] + b[2]; x++) {
+          if (x < 0 || y < 0 || x >= W || y >= H) continue;
+          const id = data[y * W + x];
+          if (id && id <= count()) tally[id]++;
+        }
+      }
+      const near = [], far = [];
+      for (let id = 1; id <= count(); id++) (tally[id] ? near : far).push(id);
+      near.sort((a, z) => tally[z] - tally[a]);
+      // Zones that exist somewhere else beat zones that are still empty, so a map
+      // carrying a few unused names does not eat the number keys.
+      const size = new Array(count() + 1).fill(0);
+      for (const v of data) if (v <= count()) size[v]++;
+      far.sort((a, z) => size[z] - size[a]);
+      return { order: near.concat(far), touching: near.length };
+    }
+
+    function renderCalib() {
+      const b = calib.blocks[calib.at];
+      $('zcalat').textContent = 'block ' + (calib.at + 1) + ' / ' + calib.blocks.length +
+        '   ' + b[0] + ',' + b[1] + '   ' + calib.step + 'px' +
+        (calib.last == null ? '' : '   last: ' + (calib.last ? names[calib.last - 1] : 'none'));
+      $('zcalnote').textContent = calib.note || '';
+      $('zcalback').disabled = !calib.hist.length;
+      const c = candidates();
+      const key = (k) => '<kbd>' + k + '</kbd>';
+      let html = '<span class="zchip" data-c="new">' + key('N') +
+        '<span class="sw" style="background:' + color(count() + 1) + '"></span>' +
+        '<span class="nm">new rock</span></span>' +
+        '<span class="zchip" data-c="none">' + key('0') +
+        '<span class="sw" style="background:#14141a"></span><span class="nm">none</span></span>' +
+        '<span class="edge"></span>';
+      c.order.forEach((id, k) => {
+        if (k === c.touching && c.touching) html += '<span class="edge"></span>';
+        html += '<span class="zchip' + (id === calib.last ? ' on' : '') + '" data-c="' + id + '">' +
+          (k < 9 ? key(k + 1) : '') +
+          '<span class="sw" style="background:' + color(id) + '"></span>' +
+          '<span class="nm">' + names[id - 1] + '</span></span>';
+      });
+      const el = $('zcallist');
+      el.innerHTML = html;
+      calib.keys = c.order;
+      el.querySelectorAll('[data-c]').forEach((n) => n.addEventListener('click', () => {
+        const v = n.dataset.c;
+        if (v === 'new') newRock(); else answer(v === 'none' ? 0 : +v);
+      }));
+    }
+
+    function probe() {
+      if (calib.at >= calib.blocks.length) { endCalib(true); return; }
+      if (bus.map) {
+        // The whole map, with this one block swapped for the reserved id. Sent
+        // unretained: a probe is a question, not a fact about the camp, and it must
+        // not be what a board finds waiting for it after a power cut.
+        const m = probeMask(), shown = data.slice();
+        for (let i = 0; i < m.length; i++) if (m[i]) shown[i] = PROBE_ZONE;
+        bus.map(false, encode(shown), zoneList().concat([{ id: PROBE_ZONE, name: 'probe' }]));
+      }
+      autosave();
+      renderCalib(); render();
+    }
+
+    // Where you had got to, kept per panel. Only the cursor lives here: the map
+    // itself belongs on the retained topic, and two places claiming to hold the same
+    // map is how you end up with the wrong one.
+    const cursorKey = () => 'campbus.calib.' + (bus.node ? bus.node() : 'matrix');
+    function saveCursor() {
+      if (!calib) return;
+      try {
+        localStorage.setItem(cursorKey(), JSON.stringify(
+          { step: calib.step, at: calib.at, ts: Date.now() }));
+      } catch (e) { /* private window, blocked storage: calibration still works */ }
+    }
+    function loadCursor(step) {
+      try {
+        const c = JSON.parse(localStorage.getItem(cursorKey()) || 'null');
+        return c && c.step === step ? c : null;   // a different block size is a new walk
+      } catch (e) { return null; }
+    }
+
+    // Answering blocks is data entry about the physical world, and losing an hour of
+    // it to a stray refresh would be unforgivable - so the map goes to the retained
+    // topic every so often as well as when you ask.
+    const AUTOSAVE_EVERY = 20;
+    function autosave() {
+      if (!calib || !calib.at || calib.at % AUTOSAVE_EVERY || calib.at === calib.saved) return;
+      calib.saved = calib.at;
+      saveMap('autosaved at block ' + calib.at);
+    }
+    function saveMap(note) {
+      if (bus.map) bus.map(true);                 // the clean map, no probe in it
+      saveCursor();
+      if (calib) { calib.note = note; renderCalib(); }
+    }
+
+    function beginCalib(step, fresh) {
+      const c = fresh ? null : loadCursor(step);
+      calib = { blocks: blocksFor(step), at: 0, step: step, last: null, hist: [],
+                keys: [], saved: 0, note: '' };
+      if (c && c.at > 0 && c.at < calib.blocks.length) {
+        calib.at = c.at;
+        calib.note = 'resumed at block ' + (c.at + 1);
+      }
+      $('zcalbar').hidden = false;
+      $('zcalib').classList.add('on');
+      $('zcalstep').disabled = true;
+      if (bus.cmd) bus.cmd('rainbow', { color: '#ffffff', intensity: 1, seconds: 0 });
+      probe();
+    }
+
+    function endCalib(save) {
+      if (save) saveMap('');
+      else saveCursor();
+      calib = null;
+      $('zcalbar').hidden = true;
+      $('zcalib').classList.remove('on');
+      $('zcalstep').disabled = false;
+      // Put the real map back, and colour it, so the rocks show what was just learned.
+      if (bus.map) bus.map(false);
+      if (bus.cmd) bus.cmd('rainbow', { color: '#ff0000', intensity: 1, seconds: 0 });
+      if (bus.ended) bus.ended();                 // so the button can offer to resume
+      render(); renderList();
+    }
+
+    function answer(id, keepHistory) {
+      if (!keepHistory) calib.hist.push({ data: data.slice(), names: names.slice(), at: calib.at, last: calib.last });
+      const m = probeMask();
+      for (let i = 0; i < m.length; i++) if (m[i]) data[i] = id;
+      calib.last = id; calib.at++;
+      renderList(); probe();
+    }
+    function newRock() {
+      if (count() >= MAX_ROCKS) return;
+      calib.hist.push({ data: data.slice(), names: names.slice(), at: calib.at, last: calib.last });
+      names.push('rock ' + (count() + 1));
+      answer(count(), true);
+    }
+    function backCalib() {
+      const h = calib.hist.pop();
+      if (!h) return;
+      data = h.data; names = h.names; calib.at = h.at; calib.last = h.last;
+      renderList(); probe();
+    }
+
+    function calibKey(k, e) {
+      if (k === 'Escape') { endCalib(false); return true; }
+      if (k === 's' || k === 'S') { endCalib(true); return true; }
+      if (k === 'Backspace') { backCalib(); return true; }
+      if (k === 'Enter') { if (calib.last != null) answer(calib.last); return true; }
+      if (k === 'n' || k === 'N') { newRock(); return true; }
+      if (k === '0' || k === ' ') { answer(0); return true; }
+      if (k >= '1' && k <= '9') {
+        const id = calib.keys[+k - 1];
+        if (id) answer(id);
+        return true;
+      }
+      return false;
+    }
+
+    // ---- the wire format: run-length, because zones are blobs -----------------
+    function encode(src) {
+      const a = src || data;
+      const runs = [];
+      let v = a[0], n = 0;
+      for (let i = 0; i < a.length; i++) {
+        if (a[i] === v) { n++; continue; }
+        runs.push([v, n]); v = a[i]; n = 1;
+      }
+      runs.push([v, n]);
+      return runs;
+    }
+    let loaded = false;
+    function decode(msg) {
+      if (!msg || msg.w !== W || msg.h !== H || !Array.isArray(msg.rle)) return false;
+      // While you are drawing, the editor is the authority. Without this the config
+      // you just published comes straight back and overwrites the work in progress -
+      // and with Live on, that is every few hundred milliseconds.
+      if (editing && loaded) return false;
+      loaded = true;
+      const out = new Uint8Array(W * H);
+      let i = 0, top = 0;
+      for (const run of msg.rle) {
+        for (let k = 0; k < run[1] && i < out.length; k++) out[i++] = run[0];
+        if (run[0] > top) top = run[0];
+      }
+      if (i < out.length) return false;
+      data = out;
+      names = (msg.zones && msg.zones.length === top)
+        ? msg.zones.map((z) => z.name || ('zone ' + z.id))
+        : Array.from({ length: top }, (_, k) => 'rock ' + (k + 1));
+      current = Math.min(current, top) || (top ? 1 : 0);
+      if (editing) { render(); renderList(); }
+      return true;
+    }
+
+    function setEditing(on) {
+      editing = on;
+      $('zoverlay').hidden = !on;
+      document.body.style.overflow = on ? 'hidden' : '';
+      if (!on) { poly = []; cursor = null; return; }
+      if (!names.length) names = ['rock 1'];
+      if (!current) current = 1;
+      chrome(); fit(); renderList();
+      if (bus.ended) bus.ended();
+    }
+
+    // ---- input ----------------------------------------------------------------
+    function press(p) {
+      if (calib) return;                    // calibration is asking; answer it first
+      if (tool === 'poly') {
+        const first = poly[0];
+        if (first && poly.length >= 3 && Math.abs(p[0] - first[0]) <= 1 && Math.abs(p[1] - first[1]) <= 1) {
+          closePoly();                          // back on the first point: enclose it
+        } else { poly.push(p); render(); }
+        return;
+      }
+      snapshot(); painting = true; last = null; stroke(p); render(); pushLive();
+    }
+    function release() {
+      if (!painting) return;
+      painting = false; last = null; renderList(); pushLive();
+    }
+
+    cv.addEventListener('mousedown', (e) => { const p = pointer(e); if (p) press(p); });
+    cv.addEventListener('mousemove', (e) => {
+      const p = pointer(e);
+      readout(p);
+      if (painting && p) { stroke(p); render(); pushLive(); return; }
+      if (tool === 'poly' && poly.length && p && (!cursor || p[0] !== cursor[0] || p[1] !== cursor[1])) {
+        cursor = p; render();
+      }
+    });
+    cv.addEventListener('mouseleave', () => { readout(null); if (cursor) { cursor = null; render(); } });
+    cv.addEventListener('dblclick', (e) => { if (tool === 'poly') { e.preventDefault(); closePoly(); } });
+    window.addEventListener('mouseup', release);
+    cv.addEventListener('touchstart', (e) => {
+      const p = pointer(e); if (!p) return; e.preventDefault(); press(p);
+    }, { passive: false });
+    cv.addEventListener('touchmove', (e) => {
+      if (!painting) return;
+      const p = pointer(e); if (!p) return;
+      e.preventDefault(); stroke(p); render(); pushLive();
+    }, { passive: false });
+    window.addEventListener('touchend', release);
+    window.addEventListener('resize', () => { if (editing) fit(); });
+
+    document.addEventListener('keydown', (e) => {
+      if (!editing) return;
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+      const k = e.key;
+      if (calib) { if (calibKey(k, e)) e.preventDefault(); return; }
+      if (k === 'Escape') { if (poly.length) { poly = []; cursor = null; render(); } else setEditing(false); }
+      else if (k === 'Enter') closePoly();
+      else if (k >= '0' && k <= '9') {
+        const id = +k;
+        if (id <= count()) { current = id; poly = []; cursor = null; render(); renderList(); }
+      } else if (k === 'b' || k === 'B') api.setTool('brush');
+      else if (k === 'p' || k === 'P') api.setTool('poly');
+      else if (k === 'g' || k === 'G') api.toggleGrid();
+      else if (k === 'r' || k === 'R') api.rotate(e.shiftKey ? -90 : 90);
+      else if (k === '[') api.setBrush(brush - 1);
+      else if (k === ']') api.setBrush(brush + 1);
+      else if ((k === 'z' || k === 'Z') && (e.ctrlKey || e.metaKey)) api.undo();
+      else return;
+      e.preventDefault();
+    });
+
+    const api = {
+      get editing() { return editing; },
+      get count() { return count(); },
+      get names() { return names; },
+      get live() { return live; },
+      setEditing, encode, decode, color,
+      setBus(b) { bus = b; },
+      zoneList,
+      startCalib(step, fresh) { beginCalib(step, fresh); },
+      stopCalib(save) { if (calib) endCalib(save); },
+      stepBack() { if (calib) backCalib(); },
+      get calibrating() { return !!calib; },
+      resumePoint(step) { const c = loadCursor(step); return c ? c.at : 0; },
+      setTool(t) { tool = t; poly = []; cursor = null; chrome(); render(); },
+      toggleGrid() { grid = !grid; chrome(); render(); },
+      toggleLive() { live = !live; chrome(); if (live) pushLive(); return live; },
+      rotate(deg) { rot = (rot + deg + 360) % 360; poly = []; cursor = null; chrome(); fit(); },
+      setBrush(v) { brush = Math.max(1, Math.min(10, +v || 1)); chrome(); },
+      addZone() {
+        if (count() >= MAX_ROCKS) return;  // zone * LEVELS + texture has to fit in a byte
+        snapshot(); names.push('rock ' + (count() + 1)); current = count();
+        render(); renderList();
+      },
+      clearAll() { snapshot(); data.fill(0); render(); renderList(); pushLive(); },
+      undo() {
+        if (!undo) return;
+        const was = { data: data.slice(), names: names.slice() };
+        data = undo.data; names = undo.names; undo = was;      // undo undoes itself
+        if (current > count()) current = count();
+        render(); renderList(); pushLive();
+      },
+    };
+    return api;
+  })();
+
+  (function loop() {
+    try { if (!ZONES.editing) MX.draw(performance.now() / 1000); } catch (e) {}
+    requestAnimationFrame(loop);
+  })();
+
+  function sendMatrix(heading) {
+    const fx = $('mxfx').value;
+    const msg = { color: $('mxcolor').value, intensity: +$('mxint').value, from: 'sim_devices' };
+    if (fx === 'wipe' || fx === 'sweep') { msg.heading = heading; msg.seconds = 1; }
+    if (fx === 'flash') msg.ms = 1200;
+    if (fx === 'pulse' || fx === 'color') msg.seconds = 3;
+    pub('cmd/matrix/' + fx, msg);
+    $('rosemid').textContent = (fx === 'wipe' || fx === 'sweep') ? heading + '\u00b0' : fx;
+  }
+
+  function connect() {
+    if (client) { try { client.end(true); } catch (e) {} }
+    const url = $('url').value.trim(); setConn('connecting ' + url + ' ...');
+    client = mqtt.connect(url, { clientId: nodeId, clean: true, keepalive: 20, reconnectPeriod: 2000,
+      will: { topic: `node/${nodeId}/status`, payload: JSON.stringify({ online: false, ts: 0 }), retain: true } });
+    client.on('connect', () => { setConn('connected ' + url, 'ok'); pub(`node/${nodeId}/status`, { online: true, ip: 'browser', fw: 'sim-devices-0.1', uptime: 0 }, true); client.subscribe(['cmd/resolume/#', 'cmd/kitchen/#', 'cmd/matrix/#', 'booth/dj',
+        'config/zones/+']); });
+    client.on('close', () => setConn('disconnected', 'bad'));
+    client.on('error', (e) => setConn('error: ' + e.message, 'bad'));
+    client.on('message', (topic, buf) => {
+      let m; try { m = JSON.parse(buf.toString()); } catch (e) { return; }
+      log(topic, m);
+      if (topic === 'cmd/resolume/clip') setClip(m);
+      if (topic === 'cmd/kitchen/bell') ringBell(m);
+      if (topic.startsWith('cmd/matrix/')) MX.submit(topic.slice(11), m, performance.now() / 1000);
+      if (topic.startsWith('config/zones/')) ZONES.decode(m);
+    });
+  }
+  $('connect').addEventListener('click', connect);
+  $('checkin').addEventListener('click', () => pub('booth/dj', { artist: $('artist').value.trim() || 'Unknown DJ', slot: null, since: Date.now(), timer_end: Date.now() + 45 * 60000, logo: null }, true));
+  $('checkout').addEventListener('click', () => pub('booth/dj', { artist: null, since: Date.now() }, true));
+  $('foodcall').addEventListener('click', () => pub('kitchen/foodcall', { meal: 'dinner', soft: false }));
+  $('foodsoft').addEventListener('click', () => pub('kitchen/foodcall', { meal: 'midnight snack', soft: true }));
+  document.querySelectorAll('#rose button').forEach((b) => b.addEventListener('click', () => sendMatrix(+b.dataset.h)));
+  $('mxint').addEventListener('input', () => { $('mxintv').textContent = (+$('mxint').value).toFixed(2); });
+  $('mxclear').addEventListener('click', () => pub('cmd/matrix/wipe', { color: '#000000', seconds: 0, from: 'sim_devices' }));
+  $('mxedit').addEventListener('click', () => ZONES.setEditing(true));
+  $('zdone').addEventListener('click', () => ZONES.setEditing(false));
+  $('zadd').addEventListener('click', () => ZONES.addZone());
+  $('zclear').addEventListener('click', () => ZONES.clearAll());
+  $('zundo').addEventListener('click', () => ZONES.undo());
+  $('ztbrush').addEventListener('click', () => ZONES.setTool('brush'));
+  $('ztpoly').addEventListener('click', () => ZONES.setTool('poly'));
+  $('zgrid').addEventListener('click', () => ZONES.toggleGrid());
+  $('zrotl').addEventListener('click', () => ZONES.rotate(-90));
+  $('zrotr').addEventListener('click', () => ZONES.rotate(90));
+  $('zbrush').addEventListener('input', () => ZONES.setBrush($('zbrush').value));
+
+  function publishZones(retain, rle, zones) {
+    const node = $('znode').value.trim() || 'matrix_01';
+    pub('config/zones/' + node, {
+      w: 64, h: 32,
+      rle: rle || ZONES.encode(),
+      zones: zones || ZONES.zoneList(),
+    }, retain);
+    return node;
+  }
+  ZONES.setBus({
+    map: publishZones,
+    node: () => $('znode').value.trim() || 'matrix_01',
+    ended: () => calibHint(),
+    cmd: (effect, msg) => pub('cmd/matrix/' + effect, Object.assign({ from: 'sim_devices' }, msg)),
+  });
+  $('zcalib').addEventListener('click', () => {
+    if (ZONES.calibrating) return;
+    ZONES.startCalib(+$('zcalstep').value, false);
+  });
+  $('zcalback').addEventListener('click', () => ZONES.stepBack());
+  $('zcalsave').addEventListener('click', () => ZONES.stopCalib(true));
+  // Hoisted, because setBus wires it before the definition below is reached.
+
+  $('zcalrestart').addEventListener('click', () => ZONES.startCalib(+$('zcalstep').value, true));
+  function calibHint() {
+    const at = ZONES.resumePoint(+$('zcalstep').value);
+    $('zcalib').textContent = at ? 'Resume (' + (at + 1) + ')' : 'Calibrate';
+  }
+  $('zcalstep').addEventListener('change', calibHint);
+  $('znode').addEventListener('change', calibHint);
+  calibHint();
+  $('zsave').addEventListener('click', () => {
+    log('config/zones/' + publishZones(true), { zones: ZONES.count, runs: ZONES.encode().length, retained: true });
+  });
+  // Live is the only thing here that publishes while you are still drawing, so it
+  // goes out unretained: the map left on the broker stays the one you meant to save.
+  $('zlive').addEventListener('click', () => {
+    if (!ZONES.toggleLive()) return;
+    pub('cmd/matrix/rainbow', { color: '#ff0000', intensity: 1, seconds: 0, from: 'sim_devices' });
+  });
+  // `seconds: 0` holds the wheel still, so a static rainbow *is* the debug view -
+  // the editor and the show effect are the same code path.
+  $('zshow').addEventListener('click', () => pub('cmd/matrix/rainbow', { color: '#ff0000', intensity: 1, seconds: 0, from: 'sim_devices' }));
+  $('zcycle').addEventListener('click', () => pub('cmd/matrix/rainbow', { color: '#ff0000', intensity: 1, seconds: 12, from: 'sim_devices' }));
+  $('zoff').addEventListener('click', () => pub('cmd/matrix/rainbow', { intensity: 0, from: 'sim_devices' }));
+  connect();
+})();
+</script>
+</body>
+</html>

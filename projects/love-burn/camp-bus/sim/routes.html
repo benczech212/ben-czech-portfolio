@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Routes</title>
+<!-- Routes: map input devices to output devices and decide what each action turns into.
+     Reads the live rule list from the mapping engine (mapping/rules, retained), edits it here, and writes it
+     back with mapping/set; the engine validates, rewrites booth/mappings.yaml and hot-reloads. Rules that
+     the engine rejects come back on mapping/error and nothing changes. -->
+<script src="vendor/mqtt.min.js"></script>
+<script src="shared.js"></script>
+<link rel="stylesheet" href="ui.css">
+<style>
+  :root { --bg:#0b0f12; --panel:#131a1f; --ink:#e6edf1; --dim:#7d8f9a; --ok:#4dffa6; --bad:#ff5252; --acc:#4de0ff; --warn:#ffb454; --in:#8fd3ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font: 14px/1.4 system-ui, sans-serif; }
+  header { display:flex; gap:10px; align-items:center; padding:8px 16px; background:var(--panel); border-bottom:1px solid #222; flex-wrap:wrap; position:sticky; top:0; z-index:5; }
+  header h1 { font-size:15px; margin:0 8px 0 0; }
+  header a { color:var(--dim); font-size:12px; text-decoration:none; }
+  header input[type=text] { background:#000; color:var(--ink); border:1px solid #333; padding:4px 8px; border-radius:4px; width:190px; }
+  .btn { background:#26262e; color:var(--ink); border:1px solid #363640; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:13px; }
+  .btn:hover { background:#30303a; } .btn:disabled { opacity:.4; cursor:default; }
+  .btn.pri { background:#2d4a7a; border-color:var(--acc); } .btn.danger { border-color:#7a2d2d; }
+  .btn.sm { padding:3px 8px; font-size:12px; }
+  #conn { font-size:12px; color:var(--dim); } #conn.ok { color:var(--ok); } #conn.bad { color:var(--bad); }
+  #engine { font-size:12px; color:var(--dim); } #engine.err { color:var(--bad); } #engine.dirty { color:var(--warn); }
+  main { display:grid; grid-template-columns: 230px minmax(0, 1fr) 230px; gap:12px; padding:12px 16px; align-items:start; }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+  section { background:var(--panel); border:1px solid #222; border-radius:10px; padding:10px 12px; }
+ h2 { font-size:13px; letter-spacing:-.005em; color:var(--dim); margin:0 0 8px; display:flex; justify-content:space-between; align-items:center; }
+  h2 small { text-transform:none; letter-spacing:0; font-weight:400; }
+  .g { color:var(--dim); font-size:12px; }
+  .dev { display:flex; align-items:center; gap:8px; padding:5px 6px; border-radius:6px; cursor:pointer; font-size:13px; }
+  .dev:hover { background:#1c1c24; } .dev.on { background:#22283a; outline:1px solid #34405e; }
+  .dev .dot { width:7px; height:7px; border-radius:50%; background:#333; flex:none; } .dev .dot.live { background:var(--ok); box-shadow:0 0 6px var(--ok); }
+  .dev .n { margin-left:auto; color:var(--dim); font-size:11px; }
+ .grp { color:var(--dim); font-size:13px; letter-spacing:-.005em; margin:8px 0 2px 6px; }
+  table.mx { border-collapse:collapse; font-size:12px; width:100%; }
+  .mx th { color:var(--dim); font-weight:500; padding:3px 4px; text-align:center; font-size:11px; }
+  .mx th.r { text-align:left; }
+  .mx td { border:1px solid #222; text-align:center; padding:0; height:26px; min-width:34px; cursor:pointer; color:var(--ink); }
+  .mx td:hover { background:#1e1e28; } .mx td.has { background:#1d2a3d; font-weight:600; } .mx td.has.dis { color:var(--dim); font-weight:400; }
+  .mx td.on { outline:2px solid var(--acc); outline-offset:-2px; }
+  .mx td .plus { color:#333; } .mx td:hover .plus { color:var(--acc); }
+  .rule { border:1px solid #26262e; border-radius:8px; padding:8px 10px; margin:6px 0; display:grid; grid-template-columns: auto 1fr auto; gap:8px 10px; align-items:center; transition: background .5s; }
+  .rule.fired { background:#2a3a24; transition:none; }
+  .ghead { display:flex; align-items:center; gap:10px; margin:14px 0 4px; padding:4px 8px; border-left:3px solid #34405e; background:#111116; border-radius:0 6px 6px 0; cursor:pointer; user-select:none; }
+  .ghead b { font-size:13px; } .ghead .g { flex:1; } .ghead .tri { color:var(--dim); font-size:11px; width:12px; }
+  .ghead.closed + .gbody { display:none; }
+  .rule.dis { opacity:.5; }
+  .rule .name { font-weight:600; font-size:13px; }
+  .rule .flow { grid-column: 2; display:flex; gap:6px; flex-wrap:wrap; align-items:center; font-size:12px; }
+  .chip { background:#1e1e26; border:1px solid #30303a; border-radius:12px; padding:1px 9px; white-space:nowrap; }
+  .chip.in { border-color:#2e4a5c; color:var(--in); } .chip.out { border-color:#5c4a2e; color:var(--warn); } .chip.x { color:var(--dim); }
+  .arrow { color:var(--dim); }
+  .rule .act { grid-column: 3; grid-row: 1 / span 2; display:flex; gap:4px; flex-direction:column; }
+  .rule .fires { color:var(--dim); font-size:11px; }
+  #log { font: 12px/1.5 ui-monospace, Consolas, monospace; color:#aab; max-height:180px; overflow:auto; white-space:pre; margin-top:8px; }
+  #log .in { color:var(--in); } #log .cmd { color:var(--warn); } #log .sys { color:var(--dim); } #log .err { color:var(--bad); }
+  #search { background:#000; color:var(--ink); border:1px solid #333; padding:4px 8px; border-radius:4px; width:200px; font-size:12px; }
+  /* editor drawer */
+  #editor { position:fixed; top:0; right:0; height:100vh; width:min(520px, 100vw); background:#101014; border-left:1px solid #2a2a34; box-shadow:-10px 0 40px rgba(0,0,0,.6); z-index:10; overflow:auto; padding:14px 16px; display:none; }
+  #editor.open { display:block; }
+  #editor h3 { margin:0 0 10px; font-size:15px; }
+  .f { margin:8px 0; } .f label { display:block; color:var(--dim); font-size:13px; letter-spacing:-.005em; margin-bottom:3px; }
+  .f input[type=text], .f input[type=number], .f select, .f textarea { width:100%; background:#000; color:var(--ink); border:1px solid #333; padding:5px 8px; border-radius:4px; font: 13px/1.4 ui-monospace, Consolas, monospace; }
+  .f select { font-family: system-ui, sans-serif; }
+  .f textarea { min-height:64px; resize:vertical; }
+  .f.bad textarea, .f.bad input { border-color:var(--bad); }
+  .two { display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
+  .out { border:1px solid #26262e; border-radius:8px; padding:8px 10px; margin:8px 0; background:#0c0c10; }
+  .out .topic { color:var(--warn); font: 12px ui-monospace, Consolas, monospace; margin:4px 0; }
+  .fields { color:var(--dim); font-size:11px; font-family: ui-monospace, Consolas, monospace; margin-top:3px; }
+  .rowb { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:12px; }
+  .err { color:var(--bad); font-size:12px; margin-top:6px; min-height:1.2em; }
+  .hint { color:var(--dim); font-size:12px; margin:6px 0; }
+  .views { display:flex; gap:4px; } .views .btn.on { background:#2d4a7a; border-color:var(--acc); }
+  #graph { width:100%; display:block; background:#08080b; border-radius:8px; border:1px solid #1e1e26; }
+  #graphwrap { display:none; } #graphwrap.on { display:block; } #matrixwrap.off { display:none; }
+</style>
+</head>
+<body>
+<header>
+  <nav id="campnav"></nav>
+  <input id="url" type="text" value="" spellcheck="false">
+  <button class="btn" id="connect">Connect</button>
+  <span id="conn">disconnected</span>
+  <span style="flex:1"></span>
+  <span id="engine">waiting for the mapping engine&hellip;</span>
+  <button class="btn" id="new">+ New route</button>
+  <button class="btn" id="revert" disabled title="throw away unapplied edits">Revert</button>
+  <button class="btn pri" id="apply" disabled title="publish mapping/set: the engine validates, rewrites mappings.yaml and reloads">Apply to engine</button>
+  <button class="btn" id="download" title="download the rule list as mappings.yaml">YAML</button>
+</header>
+<main>
+  <section>
+    <h2>Inputs <small id="incount"></small></h2>
+    <div id="inputs"></div>
+    <div class="hint">Click to filter. Green dot = seen on the bus in the last 5 s.</div>
+  </section>
+  <section>
+    <h2><span>Routes <small id="viewhint">rows = inputs, columns = outputs, cells = how many rules connect them (click a cell to filter, an empty one to add)</small></span><span class="views"><button class="btn sm" data-view="matrix">Matrix</button><button class="btn sm" data-view="graph">Graph</button></span></h2>
+    <div id="matrixwrap" style="overflow:auto"><table class="mx" id="matrix"></table></div>
+    <div id="graphwrap"><canvas id="graph" height="360"></canvas></div>
+    <h2 style="margin-top:14px"><span>Rules <small id="rulecount"></small></span><span><input id="search" type="text" placeholder="filter by name / topic"> <button class="btn sm" id="clear">show all</button></span></h2>
+    <div id="rules"></div>
+    <h2 style="margin-top:14px">Activity <small>inputs in blue, what the engine sent in orange; the rule that fired lights up above</small></h2>
+    <div id="log"></div>
+  </section>
+  <section>
+    <h2>Outputs <small id="outcount"></small></h2>
+    <div id="outputs"></div>
+    <div class="hint">Effects each target understands are in <code>docs/SCHEMA.md</code>. Rules can only write to <code>cmd/</code> and <code>display/</code>.</div>
+  </section>
+</main>
+<div id="editor"></div>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+
+  // ------------------------------------------------------------ CATALOGUE (what exists on the bus; SCHEMA.md is canonical)
+  const LL = { lat: 25.7368, lon: -80.1547 };
+  const PROP_FIELDS = ['prop', 'prop_id', 'gesture', 'intensity', 'color', 'heading', 'spin_dir', 'lat', 'lon', 'acc_m'];
+  const propDev = (id, label, propId, color, actions) => ({ id, group: 'Props', label, topic: 'prop/+', base: { prop: id }, key: 'gesture', actions, prop: true, fields: PROP_FIELDS,
+    sampleTopic: `prop/${propId}`, sample: { prop: id, prop_id: propId, intensity: 0.8, color, heading: 45, spin_dir: null, ...LL, acc_m: 3, via: 'routes' } });
+  const PADS = [['amanita', 'kick', 36, '#ff3b3b'], ['chanterelle', 'snare', 38, '#ffb300'], ['indigo_milk', 'closed hat', 42, '#3d7bff'], ['ghost', 'tom', 45, '#4dffa6'], ['violet_coral', 'clap', 39, '#b04dff'], ['pink_oyster', 'ride', 51, '#ff4da6']];
+  const toyDev = (id, label, actions, fields = ['toy', 'event', 'value']) => ({ id, group: 'Toys', label, topic: `toy/${id}`, base: {}, also: { }, key: 'event', actions, fields, sampleTopic: `toy/${id}`, sample: { toy: id, value: 1 } });
+  const INPUT_DEVICES = [
+    toyDev('big_red_button', 'Big Red Button', [{ v: 'press' }, { v: 'hold', sample: { value: 2.5 } }, { v: 'release' }]),
+    toyDev('lever', 'Lever ("DO NOT PULL")', [{ v: 'pull' }]),
+    toyDev('crank', 'Crank', [{ v: 'rate', sample: { value: 2.0 } }]),
+    toyDev('dial_a_vibe', 'Dial-a-vibe', [{ v: 'mode', sample: { value: 'party' } }]),
+    toyDev('fader_wall', 'Fader wall', [{ v: 'level', sample: { value: 0.5, i: 0 } }], ['toy', 'event', 'value', 'i']),
+    propDev('staff', 'Staff', 'staff_01', '#ff4000', [{ v: 'slam' }, { v: 'spin', spiral: true, sample: { spin_dir: 1 } }, { v: 'swing', cone: 70 }]),
+    propDev('wand', 'Wand', 'wand_01', '#00c8ff', [{ v: 'flick', cone: 25 }, { v: 'circle' }]),
+    propDev('whip', 'Whip', 'whip_01', '#ff2d95', [{ v: 'crack', cone: 12 }, { v: 'lash', cone: 140 }]),
+    propDev('drum', 'Drum', 'drum_01', '#ffd400', [{ v: 'hit' }, { v: 'roll' }]),
+    { id: 'mycelium', group: 'Instruments', label: 'Sonic Mycelium Cluster', topic: 'instrument/+', base: { instrument: 'mycelium' }, also: { event: 'hit' }, key: 'pad', instrument: true,
+      actions: PADS.map(([pad, drum, note, color]) => ({ v: pad, label: `${pad} (${drum})`, sample: { note, color, pad_i: PADS.findIndex((p) => p[0] === pad) } })),
+      fields: ['instrument', 'instrument_id', 'pad', 'pad_i', 'event', 'velocity', 'note', 'color', 'lat', 'lon'],
+      sampleTopic: 'instrument/mycelium_01', sample: { instrument: 'mycelium', instrument_id: 'mycelium_01', pad: 'amanita', pad_i: 0, event: 'hit', velocity: 0.8, note: 36, color: '#ff3b3b', ...LL, acc_m: 2, via: 'routes' } },
+    { id: 'geode', group: 'Instruments', label: 'Crystal Geode Synth', topic: 'instrument/+', base: { instrument: 'geode' }, key: 'event', instrument: true,
+      actions: [{ v: 'touch' }, { v: 'hold', sample: { value: 0.7 } }, { v: 'release', sample: { velocity: 0, value: 0 } }],
+      fields: ['instrument', 'instrument_id', 'pad', 'pad_i', 'event', 'velocity', 'value', 'raw', 'baseline', 'note', 'color', 'lat', 'lon'],
+      sampleTopic: 'instrument/geode_01', sample: { instrument: 'geode', instrument_id: 'geode_01', pad: 'amethyst', pad_i: 0, event: 'touch', velocity: 0.6, value: 0.6, raw: 1780, baseline: 1240, note: 60, color: '#b04dff', ...LL, acc_m: 2, via: 'routes' } },
+    { id: 'plant', group: 'Instruments', label: 'Monstera Piezo Plant', topic: 'instrument/+', base: { instrument: 'plant' }, key: 'event', instrument: true,
+      actions: [{ v: 'bend', sample: { value: 0.5 } }, { v: 'release', sample: { velocity: 0.8, value: 0 } }, { v: 'hit', sample: { velocity: 0.3, value: 0.3 } }],
+      fields: ['instrument', 'instrument_id', 'pad', 'pad_i', 'event', 'velocity', 'value', 'note', 'ch', 'color', 'lat', 'lon'],
+      sampleTopic: 'instrument/plant_01', sample: { instrument: 'plant', instrument_id: 'plant_01', pad: 'leaf_1', pad_i: 0, event: 'release', velocity: 0.8, value: 0, note: 36, ch: 3, color: '#3ddc84', ...LL, acc_m: 2, via: 'routes' } },
+    { id: 'tubes', group: 'Instruments', label: 'Water Chord Tubes', topic: 'instrument/+', base: { instrument: 'tubes' }, key: 'event', instrument: true,
+      actions: [{ v: 'touch' }, { v: 'hold', sample: { value: 0.7 } }, { v: 'release', sample: { velocity: 0, value: 0 } }],
+      fields: ['instrument', 'instrument_id', 'pad', 'pad_i', 'event', 'velocity', 'value', 'raw', 'baseline', 'note', 'ch', 'color', 'lat', 'lon'],
+      sampleTopic: 'instrument/tubes_01', sample: { instrument: 'tubes', instrument_id: 'tubes_01', pad: 'tube_1', pad_i: 0, event: 'touch', velocity: 0.7, value: 0.7, raw: 2030, baseline: 980, note: 48, ch: 4, color: '#4de0ff', ...LL, acc_m: 2, via: 'routes' } },
+    { id: 'midi', group: 'MIDI', label: 'MIDI pads / Playtron', topic: 'midi/+', base: {}, key: null, fields: ['note', 'vel', 'ch', 'on'], sampleTopic: 'midi/playtron', sample: { note: 60, vel: 100, ch: 1, on: true } },
+    { id: 'dj', group: 'Booth', label: 'DJ check-in', topic: 'booth/dj', base: {}, key: null, fields: ['artist', 'slot', 'since', 'timer_end', 'logo'], sampleTopic: 'booth/dj', sample: { artist: 'SideQuest', slot: null, since: Date.now(), timer_end: Date.now() + 2700000, logo: null }, retain: true },
+    { id: 'foodcall', group: 'Kitchen', label: 'Food call', topic: 'kitchen/foodcall', base: {}, key: null, fields: ['meal', 'soft'], sampleTopic: 'kitchen/foodcall', sample: { meal: 'dinner', soft: false } },
+  ];
+  const OTHER_IN = { id: '_other', group: 'Other', label: 'Other topic', topic: '', base: {}, key: null, fields: [] };
+  const TARGETS = [
+    { id: 'crystals', label: 'Crystals', prefix: 'cmd/crystals/', effects: ['flash', 'pulse', 'color', 'charge', 'mode'], paint: true },
+    { id: 'hallway',  label: 'Space hallway', prefix: 'cmd/hallway/', effects: ['sweep', 'shockwave', 'comet', 'rings', 'wipe', 'warp', 'spiral', 'rain', 'breathe', 'speed', 'flash', 'pulse', 'color'] },
+    { id: 'mycelium', label: 'Mycelium UV beds', prefix: 'cmd/mycelium/', effects: ['flash', 'pulse', 'color', 'charge'] },
+    { id: 'geode',    label: 'Geode COBs', prefix: 'cmd/geode/', effects: ['flash', 'pulse', 'color', 'charge'] },
+    { id: 'plant',    label: 'Plant leaf LEDs', prefix: 'cmd/plant/', effects: ['flash', 'pulse', 'color', 'charge'] },
+    { id: 'tubes',    label: 'Tube base pucks', prefix: 'cmd/tubes/', effects: ['flash', 'pulse', 'color', 'charge'] },
+    { id: 'matrix',   label: 'Matrix panel', prefix: 'cmd/matrix/', effects: ['wipe', 'sweep', 'flash', 'pulse', 'color', 'charge'] },
+    { id: 'all',      label: 'Everything', prefix: 'cmd/all/', effects: ['flash', 'pulse', 'color', 'mode'], paint: true },
+    { id: 'resolume', label: 'Resolume', prefix: 'cmd/resolume/', effects: ['clip'] },
+    { id: 'kitchen',  label: 'Kitchen bell', prefix: 'cmd/kitchen/', effects: ['bell'] },
+    { id: 'display',  label: 'Displays', prefix: 'display/', effects: ['banner', 'mode'] },
+  ];
+  const OTHER_OUT = { id: '_other', label: 'Other topic', prefix: '', effects: [] };
+  const EFFECT_BASE = { flash: { ms: 1200 }, pulse: { seconds: 3 }, color: { seconds: 4 }, charge: {}, mode: { mode: 'party' }, sweep: { speed: 1.5 }, shockwave: {}, comet: {}, rings: { seconds: 2, count: 3 },
+    wipe: { seconds: 4 }, warp: { seconds: 3 }, spiral: { seconds: 3 }, rain: { seconds: 4 }, breathe: { seconds: 3 }, speed: { value: 1 }, clip: { name: 'Camp Logo', fallback: 'Camp Logo' }, bell: { soft: false }, banner: { text: 'Hello camp', level: 'takeover' } };
+  // a sensible starting payload for output `effect` on `target` when the input is `dev` doing `action`
+  function template(dev, action, target, effect) {
+    const p = clone(EFFECT_BASE[effect] || {});
+    const act = dev && dev.actions ? dev.actions.find((a) => a.v === action) : null;
+    if (['clip', 'bell', 'banner', 'speed', 'mode'].includes(effect)) {
+      if (effect === 'mode' && action === 'mode') p.mode = '{value}';
+      if (effect === 'speed' && action === 'rate') p.value = '{value}';
+      if (effect === 'clip' && dev && dev.id === 'dj') p.name = '{artist}';
+      if (effect === 'bell' && dev && dev.id === 'foodcall') p.soft = '{soft}';
+      if (effect === 'banner' && dev && dev.id === 'foodcall') p.text = "FOOD'S UP - {meal}!";
+      return p;
+    }
+    if (dev && dev.prop) Object.assign(p, { intensity: '{intensity}', color: '{color}', from: '{prop_id}', origin: { lat: '{lat}', lon: '{lon}' }, speed_mps: 6, range_m: 60 });
+    else if (dev && dev.instrument) Object.assign(p, { intensity: action === 'hold' || action === 'bend' ? '{value}' : '{velocity}', color: '{color}', from: '{instrument_id}', origin: { lat: '{lat}', lon: '{lon}' }, ...(target && (target.id === 'crystals' || target.id === 'all') ? { nearest: 4, combo: false } : { falloff: 'none' }), instant: true });
+    else if (dev && dev.id === 'midi') Object.assign(p, { intensity: '{vel}', color: '#8fd3ff' });
+    else p.color = '#ff4000';
+    if (act && act.cone) Object.assign(p, { shape: 'cone', heading: '{heading}', cone_deg: act.cone });
+    if (act && act.spiral) Object.assign(p, { shape: 'spiral', heading: '{heading}', spin_dir: '{spin_dir}', turn_s: 2, falloff: 'none' });
+    // The matrix panel fills *along* `heading`, so a directional effect on it wants one
+    // whether or not the gesture happened to be a cone. A prop already carries a real
+    // compass heading, so pointing the staff aims the fill with no extra field.
+    if (target && target.id === 'matrix' && (effect === 'wipe' || effect === 'sweep')) {
+      p.seconds = 1;
+      p.heading = dev && dev.prop ? '{heading}' : 0;
+    }
+    if (target && target.paint && dev && (dev.prop || dev.instrument)) p.paint = 1;
+    return p;
+  }
+
+  // ------------------------------------------------------------ RULE <-> CATALOGUE
+  function topicMatches(filter, topic) {                  // MQTT filter match (+ and #)
+    const f = filter.split('/'), t = topic.split('/');
+    for (let i = 0; i < f.length; i++) { if (f[i] === '#') return true; if (i >= t.length) return false; if (f[i] !== '+' && f[i] !== t[i]) return false; }
+    return f.length === t.length;
+  }
+  function deviceOf(rule) {                               // which catalogue input a rule listens to (+ its action + extra fields)
+    const w = rule.when || {};
+    for (const d of INPUT_DEVICES) {
+      if (!w.topic || !topicMatches(w.topic, d.sampleTopic)) continue;
+      const baseKeys = Object.keys(d.base || {});
+      if (baseKeys.some((k) => w[k] !== d.base[k])) continue;     // props share prop/+, so the base field must be there and agree
+      const skip = new Set(['topic', ...baseKeys, d.key].filter(Boolean));
+      const extra = Object.fromEntries(Object.entries(w).filter(([k]) => !skip.has(k)));
+      return { dev: d, action: d.key && w[d.key] != null ? String(w[d.key]) : null, extra };
+    }
+    return { dev: OTHER_IN, action: null, extra: Object.fromEntries(Object.entries(w).filter(([k]) => k !== 'topic')) };
+  }
+  function targetOf(topic) { const t = TARGETS.find((x) => topic.startsWith(x.prefix)); return t ? { target: t, effect: topic.slice(t.prefix.length) } : { target: OTHER_OUT, effect: topic }; }
+  const inLabel = (r) => { const { dev, action, extra } = deviceOf(r); const ex = Object.keys(extra).length ? ' ' + Object.entries(extra).map(([k, v]) => `${k}=${v}`).join(' ') : ''; return dev === OTHER_IN ? `${r.when.topic}${ex}` : `${dev.label}${action ? ' · ' + action : dev.key ? ' · any ' + dev.key : ''}${ex}`; };
+  const ruleMatches = (r, topic, msg) => r.enabled !== false && r.when && r.when.topic && topicMatches(r.when.topic, topic) && Object.entries(r.when).every(([k, v]) => k === 'topic' || msg[k] === v);
+
+  // ------------------------------------------------------------ STATE
+  let rules = [], engineRules = null, extraSubs = [], dirty = false, engineFile = 'mappings.yaml';
+  let filter = { dev: null, target: null };
+  const seen = { in: {}, out: {} };                        // device id -> last time seen (s)
+  const fires = new Map();                                 // rule name -> count this session
+  const now = () => performance.now() / 1000;
+  function setDirty(d) { dirty = d; $('apply').disabled = !d || !engineRules; $('revert').disabled = !d; renderEngine(); }
+  function renderEngine() {
+    const el = $('engine');
+    if (!engineRules) { el.textContent = 'no mapping engine seen yet (start it: docker compose --profile sim up)'; el.className = 'err'; return; }
+    el.className = dirty ? 'dirty' : ''; el.textContent = dirty ? `${rules.length} rules, edits not applied` : `engine: ${engineRules.length} rules live from ${engineFile}`;
+  }
+
+  // ------------------------------------------------------------ RENDER: inputs / outputs / matrix / rules
+  function renderSides() {
+    const t = now(), byGroup = {};
+    for (const d of INPUT_DEVICES) (byGroup[d.group] = byGroup[d.group] || []).push(d);
+    const usedOther = rules.some((r) => deviceOf(r).dev === OTHER_IN);
+    const count = (d) => rules.filter((r) => deviceOf(r).dev === d).length;
+    $('inputs').innerHTML = Object.entries(byGroup).map(([g, ds]) => `<div class="grp">${esc(g)}</div>` + ds.map((d) => devRow(d, count(d), seen.in[d.id], t)).join('')).join('') + (usedOther ? `<div class="grp">Other</div>` + devRow(OTHER_IN, count(OTHER_IN), 0, t) : '');
+    const countT = (x) => rules.filter((r) => (r.then || []).some((o) => targetOf(o.topic).target === x)).length;
+    const usedOtherOut = rules.some((r) => (r.then || []).some((o) => targetOf(o.topic).target === OTHER_OUT));
+    $('outputs').innerHTML = TARGETS.map((x) => devRow(x, countT(x), seen.out[x.id], t, true)).join('') + (usedOtherOut ? devRow(OTHER_OUT, countT(OTHER_OUT), 0, t, true) : '');
+    $('incount').textContent = `${INPUT_DEVICES.length} known`; $('outcount').textContent = `${TARGETS.length} targets`;
+    document.querySelectorAll('#inputs .dev').forEach((el) => el.addEventListener('click', () => { filter.dev = filter.dev && filter.dev.id === el.dataset.id ? null : (INPUT_DEVICES.find((d) => d.id === el.dataset.id) || OTHER_IN); renderAll(); }));
+    document.querySelectorAll('#outputs .dev').forEach((el) => el.addEventListener('click', () => { filter.target = filter.target && filter.target.id === el.dataset.id ? null : (TARGETS.find((d) => d.id === el.dataset.id) || OTHER_OUT); renderAll(); }));
+  }
+  const devRow = (d, n, at, t, out) => `<div class="dev ${(out ? filter.target : filter.dev) === d ? 'on' : ''}" data-id="${d.id}" title="${esc(out ? d.prefix + '*' : d.topic)}"><span class="dot ${at && t - at < 5 ? 'live' : ''}"></span><span>${esc(d.label)}</span><span class="n">${n || ''}</span></div>`;
+  function renderMatrix() {
+    const ins = [...INPUT_DEVICES, OTHER_IN], outs = [...TARGETS, OTHER_OUT];
+    const cell = (d, x) => { const rs = rules.filter((r) => deviceOf(r).dev === d && (r.then || []).some((o) => targetOf(o.topic).target === x)); return { n: rs.length, en: rs.filter((r) => r.enabled !== false).length }; };
+    const showIn = ins.filter((d) => d !== OTHER_IN || rules.some((r) => deviceOf(r).dev === OTHER_IN));
+    const showOut = outs.filter((x) => x !== OTHER_OUT || rules.some((r) => (r.then || []).some((o) => targetOf(o.topic).target === OTHER_OUT)));
+    $('matrix').innerHTML = `<tr><th class="r"></th>${showOut.map((x) => `<th title="${esc(x.prefix)}*">${esc(x.label)}</th>`).join('')}</tr>` +
+      showIn.map((d) => `<tr><th class="r">${esc(d.label)}</th>${showOut.map((x) => { const c = cell(d, x), on = filter.dev === d && filter.target === x; return `<td class="${c.n ? 'has' : ''} ${c.n && !c.en ? 'dis' : ''} ${on ? 'on' : ''}" data-d="${d.id}" data-x="${x.id}" title="${c.n ? `${c.n} rule${c.n > 1 ? 's' : ''} (${c.en} enabled)` : 'add a route'}">${c.n ? (c.en === c.n ? c.n : `${c.en}/${c.n}`) : '<span class="plus">+</span>'}</td>`; }).join('')}</tr>`).join('');
+    $('matrix').querySelectorAll('td').forEach((td) => td.addEventListener('click', () => {
+      const d = INPUT_DEVICES.find((x) => x.id === td.dataset.d) || OTHER_IN, x = TARGETS.find((y) => y.id === td.dataset.x) || OTHER_OUT;
+      if (!td.classList.contains('has')) { openEditor(null, { dev: d, target: x }); return; }
+      const same = filter.dev === d && filter.target === x; filter = same ? { dev: null, target: null } : { dev: d, target: x }; renderAll();
+    }));
+  }
+  function visibleRules() {
+    const q = $('search').value.trim().toLowerCase();
+    return rules.map((r, i) => ({ r, i })).filter(({ r }) => (!filter.dev || deviceOf(r).dev === filter.dev) && (!filter.target || (r.then || []).some((o) => targetOf(o.topic).target === filter.target))
+      && (!q || r.name.toLowerCase().includes(q) || (r.group || '').toLowerCase().includes(q) || JSON.stringify(r.when).toLowerCase().includes(q) || (r.then || []).some((o) => o.topic.toLowerCase().includes(q))));
+  }
+  const groupOf = (r) => (r.group || '').trim() || 'Ungrouped';
+  const groupOrder = (list) => { const seen = []; for (const r of list) if (!seen.includes(groupOf(r))) seen.push(groupOf(r)); return seen; };
+  let closedGroups = new Set(); try { closedGroups = new Set(JSON.parse(localStorage.getItem('campbus.sim.routes.closed') || '[]')); } catch (e) {}
+  const saveClosed = () => { try { localStorage.setItem('campbus.sim.routes.closed', JSON.stringify([...closedGroups])); } catch (e) {} };
+  function renderRules() {
+    const vis = visibleRules();
+    $('rulecount').textContent = `${vis.length} of ${rules.length}${filter.dev || filter.target ? ' (filtered)' : ''}`;
+    const card = ({ r, i }) => `<div class="rule ${r.enabled === false ? 'dis' : ''}" data-i="${i}">
+        <label title="enabled"><input type="checkbox" data-en="${i}" ${r.enabled === false ? '' : 'checked'}></label>
+        <div class="name">${esc(r.name)} <span class="fires">${fires.get(r.name) ? `fired ${fires.get(r.name)}x` : ''}</span></div>
+        <div class="flow"><span class="chip in" title="${esc(JSON.stringify(r.when))}">${esc(inLabel(r))}</span><span class="arrow">&rarr;</span>${(r.then || []).map((o) => `<span class="chip out" title="${esc(JSON.stringify(o.payload || {}))}">${esc(o.topic)}${o.retain ? ' (retained)' : ''}</span>`).join('')}${r.throttle_ms ? `<span class="chip x">throttle ${r.throttle_ms} ms</span>` : ''}</div>
+        <div class="act"><button class="btn sm" data-edit="${i}">Edit</button><button class="btn sm" data-test="${i}" title="publish a sample input that matches this rule">Test</button><button class="btn sm" data-dup="${i}" title="duplicate">&#x2398;</button><button class="btn sm danger" data-del="${i}" title="delete">&#x2715;</button></div>
+      </div>`;
+    const groups = groupOrder(vis.map((v) => v.r));
+    $('rules').innerHTML = groups.map((g) => { const items = vis.filter((v) => groupOf(v.r) === g), on = items.filter((v) => v.r.enabled !== false).length;
+      return `<div class="ghead ${closedGroups.has(g) ? 'closed' : ''}" data-g="${esc(g)}"><span class="tri">${closedGroups.has(g) ? '\u25b8' : '\u25be'}</span><b>${esc(g)}</b><span class="g">${items.length} rule${items.length === 1 ? '' : 's'}, ${on} on</span><label title="enable / disable the whole group" onclick="event.stopPropagation()"><input type="checkbox" data-gen="${esc(g)}" ${on === items.length ? 'checked' : ''}></label><button class="btn sm" data-gadd="${esc(g)}" title="add a route in this group">+</button></div><div class="gbody">${items.map(card).join('')}</div>`; }).join('')
+      || '<div class="g" style="padding:10px">no rules match - add one with "+ New route" or click a + in the matrix</div>';
+    $('rules').querySelectorAll('.ghead').forEach((h) => h.addEventListener('click', () => { const g = h.dataset.g; if (closedGroups.has(g)) closedGroups.delete(g); else closedGroups.add(g); saveClosed(); renderRules(); }));
+    $('rules').querySelectorAll('[data-gen]').forEach((c) => c.addEventListener('change', () => { for (const r of rules) if (groupOf(r) === c.dataset.gen) { if (c.checked) delete r.enabled; else r.enabled = false; } setDirty(true); renderAll(); }));
+    $('rules').querySelectorAll('[data-gadd]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); openEditor(null, { group: b.dataset.gadd === 'Ungrouped' ? '' : b.dataset.gadd }); }));
+    $('rules').querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => openEditor(+b.dataset.edit)));
+    $('rules').querySelectorAll('[data-test]').forEach((b) => b.addEventListener('click', () => testRule(rules[+b.dataset.test])));
+    $('rules').querySelectorAll('[data-dup]').forEach((b) => b.addEventListener('click', () => { const c = clone(rules[+b.dataset.dup]); c.name += ' (copy)'; rules.splice(+b.dataset.dup + 1, 0, c); setDirty(true); renderAll(); }));
+    $('rules').querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => { rules.splice(+b.dataset.del, 1); setDirty(true); renderAll(); }));
+    $('rules').querySelectorAll('[data-en]').forEach((c) => c.addEventListener('change', () => { const r = rules[+c.dataset.en]; if (c.checked) delete r.enabled; else r.enabled = false; setDirty(true); renderAll(); }));
+  }
+  function renderAll() { renderSides(); renderMatrix(); renderRules(); if (view === 'graph') layoutGraph(); }
+  $('search').addEventListener('input', renderRules);
+  $('clear').addEventListener('click', () => { filter = { dev: null, target: null }; $('search').value = ''; renderAll(); });
+  setInterval(renderSides, 1000);                          // keeps the "seen" dots honest
+
+  // ------------------------------------------------------------ GRAPH VIEW (nodes: inputs -> rules -> outputs; pulses when data flows)
+  const gcv = $('graph'), gctx = gcv.getContext('2d');
+  let view = 'matrix'; try { view = localStorage.getItem('campbus.sim.routes.view') || 'matrix'; } catch (e) {}
+  let G = null; const pulses = [], glow = { in: new Map(), rule: new Map(), out: new Map() };
+  function setView(v) {
+    view = v; try { localStorage.setItem('campbus.sim.routes.view', v); } catch (e) {}
+    document.querySelectorAll('[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
+    $('graphwrap').classList.toggle('on', v === 'graph'); $('matrixwrap').classList.toggle('off', v === 'graph');
+    $('viewhint').textContent = v === 'graph' ? 'inputs -> rules -> outputs, rules boxed by group; a dot travels each wire when a message flows (blue = input, orange = command). Click a rule to edit it, a device to filter; right-click an input or rule to fire a test.' : 'rows = inputs, columns = outputs, cells = how many rules connect them (click a cell to filter, an empty one to add)';
+    if (v === 'graph') { layoutGraph(); requestAnimationFrame(drawGraph); }
+  }
+  document.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
+  function layoutGraph() {
+    const devs = [...INPUT_DEVICES, OTHER_IN].filter((d) => rules.some((r) => deviceOf(r).dev === d));
+    const outs = [...TARGETS, OTHER_OUT].filter((x) => rules.some((r) => (r.then || []).some((o) => targetOf(o.topic).target === x)));
+    const groups = groupOrder(rules), ordered = groups.flatMap((g) => rules.filter((r) => groupOf(r) === g));
+    const W = Math.max(600, gcv.clientWidth || 800), rowH = 30, gap = 22;
+    const H = Math.max(devs.length * rowH, outs.length * rowH, ordered.length * rowH + (groups.length - 1) * gap + groups.length * 14) + 40;
+    gcv.width = W; gcv.height = H;
+    const devW = 170, ruleW = Math.min(340, W * 0.36), outW = 150;
+    const col = (list, x, w) => list.map((item, i) => ({ item, x, y: 20 + (H - 40) * (list.length === 1 ? 0.5 : i / (list.length - 1)), w }));
+    // rules: stacked by group, each group boxed, the whole stack centred vertically
+    const stackH = ordered.length * rowH + (groups.length - 1) * gap + groups.length * 14;
+    let y = 20 + (H - 40 - stackH) / 2 + 14; const ruleNodes = [], boxes = [];
+    for (const g of groups) { const top = y - 14; for (const r of rules.filter((x) => groupOf(x) === g)) { ruleNodes.push({ item: r, x: W / 2, y: y + rowH / 2 - 4, w: ruleW }); y += rowH; } boxes.push({ g, x: W / 2 - ruleW / 2 - 8, y: top, w: ruleW + 16, h: y - top + 2 }); y += gap + 14; }
+    G = { W, H, devs: col(devs, 12 + devW / 2, devW), rules: ruleNodes, boxes, outs: col(outs, W - 12 - outW / 2, outW), edges: [] };
+    ordered.forEach((r, i) => {
+      const dn = G.devs.find((n) => n.item === deviceOf(r).dev), rn = G.rules[i];
+      if (dn) G.edges.push({ a: dn, b: rn, kind: 'in', rule: r });
+      for (const t of new Set((r.then || []).map((o) => targetOf(o.topic).target))) { const on = G.outs.find((n) => n.item === t); if (on) G.edges.push({ a: rn, b: on, kind: 'out', rule: r }); }
+    });
+  }
+  const bez = (e) => { const x0 = e.a.x + e.a.w / 2, x1 = e.b.x - e.b.w / 2, mx = (x0 + x1) / 2; return [x0, e.a.y, mx, e.a.y, mx, e.b.y, x1, e.b.y]; };
+  const bezAt = (c, u) => { const k = 1 - u; return [k * k * k * c[0] + 3 * k * k * u * c[2] + 3 * k * u * u * c[4] + u * u * u * c[6], k * k * k * c[1] + 3 * k * k * u * c[3] + 3 * k * u * u * c[5] + u * u * u * c[7]]; };
+  function flow(rule, color) {                                   // a message matched `rule`: run a dot in, then out along every output wire
+    if (!G) return; const t = now(), i = rules.indexOf(rule); if (i < 0) return;
+    glow.rule.set(rule.name, t);
+    if (pulses.length > 300) pulses.splice(0, pulses.length - 300);   // a hidden tab gets no frames to prune them; don't let holds at 8 Hz pile up
+    for (const e of G.edges.filter((x) => x.rule === rule)) pulses.push({ e, t0: e.kind === 'in' ? t : t + 0.35, dur: 0.45, color: e.kind === 'in' ? (color || '#8fd3ff') : (color || '#ffb454') });
+  }
+  const rr = (x, y, w, h, r) => { gctx.beginPath(); gctx.roundRect(x, y, w, h, r); };
+  function drawGraph() {
+    if (view !== 'graph') return; if (!G) layoutGraph();
+    const t = now(), W = G.W, H = G.H; gctx.clearRect(0, 0, W, H);
+    for (const b of G.boxes) { gctx.fillStyle = 'rgba(52,64,94,0.10)'; gctx.strokeStyle = 'rgba(52,64,94,0.6)'; gctx.lineWidth = 1; rr(b.x, b.y, b.w, b.h, 8); gctx.fill(); gctx.stroke(); gctx.fillStyle = '#7a8ab0'; gctx.font = 'bold 10px system-ui'; gctx.textAlign = 'left'; gctx.textBaseline = 'alphabetic'; gctx.fillText(b.g.toUpperCase(), b.x + 8, b.y + 11); }
+    const dim = (r) => (filter.dev && deviceOf(r).dev !== filter.dev) || (filter.target && !(r.then || []).some((o) => targetOf(o.topic).target === filter.target));
+    const glowK = (map, key, dur = 0.8) => { const at = map.get(key); return at == null ? 0 : Math.max(0, 1 - (t - at) / dur); };
+    for (const e of G.edges) {
+      const c = bez(e), off = e.rule.enabled === false || dim(e.rule), k = glowK(glow.rule, e.rule.name, 1.2);
+      gctx.strokeStyle = e.kind === 'in' ? `rgba(143,211,255,${off ? 0.08 : 0.25 + 0.6 * k})` : `rgba(255,180,84,${off ? 0.08 : 0.25 + 0.6 * k})`; gctx.lineWidth = 1 + 1.5 * k;
+      gctx.beginPath(); gctx.moveTo(c[0], c[1]); gctx.bezierCurveTo(c[2], c[3], c[4], c[5], c[6], c[7]); gctx.stroke();
+    }
+    for (let i = pulses.length - 1; i >= 0; i--) {
+      const p = pulses[i], u = (t - p.t0) / p.dur; if (u > 1) { pulses.splice(i, 1); continue; } if (u < 0) continue;
+      const [x, y] = bezAt(bez(p.e), u); gctx.fillStyle = p.color; gctx.shadowColor = p.color; gctx.shadowBlur = 12; gctx.beginPath(); gctx.arc(x, y, 5, 0, 6.283); gctx.fill(); gctx.shadowBlur = 0;
+    }
+    const node = (n, label, base, k, on, off, sub) => {
+      const h = 22, x = n.x - n.w / 2, y = n.y - h / 2;
+      gctx.fillStyle = off ? '#101014' : on ? '#22304a' : '#15151b'; rr(x, y, n.w, h, 6); gctx.fill();
+      gctx.strokeStyle = k > 0 ? `rgba(${base},${0.3 + 0.7 * k})` : on ? 'rgba(110,168,255,0.9)' : off ? '#1c1c24' : '#2c2c36'; gctx.lineWidth = 1 + 1.5 * k; gctx.stroke();
+      if (k > 0) { gctx.fillStyle = `rgba(${base},${0.18 * k})`; rr(x, y, n.w, h, 6); gctx.fill(); }
+      gctx.fillStyle = off ? '#4a4a55' : '#e8e8ee'; gctx.font = '11px system-ui'; gctx.textAlign = 'center'; gctx.textBaseline = 'middle';
+      let s = label; while (s.length > 3 && gctx.measureText(s).width > n.w - 14) s = s.slice(0, -2); if (s !== label) s += '\u2026';
+      gctx.fillText(s, n.x, n.y + (sub ? -1 : 0));
+    };
+    for (const n of G.devs) node(n, n.item === OTHER_IN ? 'other topics' : n.item.label, '143,211,255', glowK(glow.in, n.item.id), filter.dev === n.item, filter.dev && filter.dev !== n.item);
+    G.rules.forEach((n, i) => node(n, n.item.name, '61,220,132', glowK(glow.rule, n.item.name), false, n.item.enabled === false || dim(n.item)));
+    for (const n of G.outs) node(n, n.item === OTHER_OUT ? 'other topics' : n.item.label, '255,180,84', glowK(glow.out, n.item.id), filter.target === n.item, filter.target && filter.target !== n.item);
+    gctx.fillStyle = '#556'; gctx.font = '10px system-ui'; gctx.textAlign = 'left'; gctx.textBaseline = 'alphabetic';
+    gctx.fillText('INPUTS', 12, 11); gctx.textAlign = 'center'; gctx.fillText('RULES', W / 2, 11); gctx.textAlign = 'right'; gctx.fillText('OUTPUTS', W - 12, 11);
+    requestAnimationFrame(drawGraph);
+  }
+  const gHit = (x, y) => { if (!G) return null; for (const [kind, list] of [['dev', G.devs], ['rule', G.rules], ['out', G.outs]]) for (const n of list) if (Math.abs(x - n.x) <= n.w / 2 && Math.abs(y - n.y) <= 11) return { kind, n }; return null; };
+  const gXY = (ev) => { const r = gcv.getBoundingClientRect(); return [(ev.clientX - r.left) * gcv.width / r.width, (ev.clientY - r.top) * gcv.height / r.height]; };
+  gcv.addEventListener('pointermove', (ev) => { gcv.style.cursor = gHit(...gXY(ev)) ? 'pointer' : 'default'; });
+  gcv.addEventListener('contextmenu', (ev) => ev.preventDefault());
+  gcv.addEventListener('pointerdown', (ev) => {
+    const h = gHit(...gXY(ev)); if (!h) return;
+    if (ev.button === 2) {                                        // right-click = fire a test through the real engine
+      if (h.kind === 'rule') testRule(h.n.item);
+      else if (h.kind === 'dev' && h.n.item !== OTHER_IN) testDevice(h.n.item);
+      else if (h.kind === 'out') { const r = rules.find((x) => (x.then || []).some((o) => targetOf(o.topic).target === h.n.item)); if (r) testRule(r); }
+      return;
+    }
+    if (h.kind === 'rule') openEditor(rules.indexOf(h.n.item));
+    else if (h.kind === 'dev') { filter.dev = filter.dev === h.n.item ? null : h.n.item; renderAll(); }
+    else { filter.target = filter.target === h.n.item ? null : h.n.item; renderAll(); }
+  });
+  window.addEventListener('resize', () => { if (view === 'graph') layoutGraph(); });
+
+  // ------------------------------------------------------------ EDITOR
+  let ed = null;                                           // { idx|null, dev, action, extra, outs: [{target, effect, topic, payload(text), retain, auto}] }
+  function openEditor(idx, preset) {
+    if (idx != null) {
+      const r = rules[idx], d = deviceOf(r);
+      ed = { idx, name: r.name, group: r.group || '', dev: d.dev, customTopic: r.when.topic, action: d.action, extra: d.extra, throttle: r.throttle_ms || 0, enabled: r.enabled !== false,
+        outs: (r.then || []).map((o) => { const t = targetOf(o.topic); return { target: t.target, effect: t.effect, customTopic: o.topic, payload: JSON.stringify(o.payload || {}, null, 1).replace(/\n\s*/g, ' '), retain: !!o.retain, auto: false }; }) };
+    } else {
+      const dev = (preset && preset.dev) || INPUT_DEVICES[0], target = (preset && preset.target) || TARGETS[0];
+      const action = dev.actions ? dev.actions[0].v : null, effect = target.effects[0] || '';
+      ed = { idx: null, name: '', group: (preset && preset.group) || (filter.dev && rules.find((r) => deviceOf(r).dev === filter.dev) || {}).group || '', dev, customTopic: dev.topic || 'toy/something', action, extra: clone(dev.also || {}), throttle: 0, enabled: true, outs: [] };
+      ed.outs.push(newOut(target, effect));
+    }
+    renderEditor();
+    $('editor').classList.add('open');
+  }
+  const newOut = (target, effect) => ({ target, effect, customTopic: target.prefix + effect, payload: JSON.stringify(template(ed.dev, ed.action, target, effect)).replace(/,/g, ', ').replace(/:/g, ': '), retain: false, auto: true });
+  const outTopic = (o) => o.target === OTHER_OUT ? o.customTopic : o.target.prefix + o.effect;
+  function renderEditor() {
+    const dev = ed.dev, devOpts = [...INPUT_DEVICES, OTHER_IN].map((d) => `<option value="${d.id}" ${d === dev ? 'selected' : ''}>${esc(d.group)}: ${esc(d.label)}</option>`).join('');
+    const actOpts = dev.key ? `<option value="">any ${esc(dev.key)}</option>` + dev.actions.map((a) => `<option value="${esc(a.v)}" ${a.v === ed.action ? 'selected' : ''}>${esc(a.label || a.v)}</option>`).join('') : '';
+    $('editor').innerHTML = `<h3>${ed.idx == null ? 'New route' : 'Edit route'}</h3>
+      <div class="two"><div class="f"><label>Name</label><input type="text" id="e-name" value="${esc(ed.name)}" placeholder="what this route does, in words"></div>
+      <div class="f"><label>Group</label><input type="text" id="e-group" list="e-groups" value="${esc(ed.group || '')}" placeholder="e.g. Props, Toys, Friday set"><datalist id="e-groups">${groupOrder(rules).filter((g) => g !== 'Ungrouped').map((g) => `<option value="${esc(g)}">`).join('')}</datalist></div></div>
+      <div class="f"><label>When this input&hellip;</label><select id="e-dev">${devOpts}</select>
+        ${dev === OTHER_IN ? `<input type="text" id="e-topic" value="${esc(ed.customTopic)}" placeholder="topic filter, e.g. toy/+ or midi/playtron" style="margin-top:6px">` : `<div class="fields">topic ${esc(dev.topic)}${Object.keys(dev.base || {}).length ? ' · ' + Object.entries(dev.base).map(([k, v]) => `${k}=${v}`).join(' ') : ''} &middot; fields you can use in payloads: ${dev.fields.map((f) => `{${f}}`).join(' ')}</div>`}</div>
+      ${dev.key ? `<div class="f"><label>&hellip;does this (${esc(dev.key)})</label><select id="e-act">${actOpts}</select></div>` : ''}
+      <div class="f" id="f-extra"><label>Extra fields that must match (JSON object; optional)</label><textarea id="e-extra" rows="2">${esc(JSON.stringify(ed.extra || {}))}</textarea></div>
+      <div class="two"><div class="f"><label>Throttle (ms, 0 = none)</label><input type="number" id="e-thr" min="0" step="10" value="${ed.throttle}"></div><div class="f"><label>Enabled</label><label style="text-transform:none;font-size:13px;color:var(--ink)"><input type="checkbox" id="e-en" ${ed.enabled ? 'checked' : ''}> route is live</label></div></div>
+      <div class="f"><label>&hellip;then send</label></div>
+      <div id="e-outs">${ed.outs.map((o, i) => outRow(o, i)).join('')}</div>
+      <button class="btn sm" id="e-addout">+ another output</button>
+      <div class="err" id="e-err"></div>
+      <div class="rowb"><button class="btn pri" id="e-save">${ed.idx == null ? 'Add route' : 'Save'}</button><button class="btn" id="e-cancel">Cancel</button><button class="btn" id="e-test" title="publish a sample input matching this route (as saved)">Test</button><span style="flex:1"></span>${ed.idx != null ? '<button class="btn danger" id="e-del">Delete</button>' : ''}</div>
+      <div class="hint">Payload strings like <code>"{intensity}"</code> are filled from the input message (a whole-string placeholder keeps its type). Casts from props carry <code>origin</code>, <code>speed_mps</code>, <code>range_m</code>, <code>shape</code>/<code>heading</code>/<code>cone_deg</code>, <code>from</code> and <code>paint</code>; fixed instruments use <code>nearest: N</code> (only the N closest crystals) and <code>instant: true</code> (no ripple delay) instead; see SCHEMA.md.</div>`;
+    $('e-dev').addEventListener('change', (e) => { ed.dev = INPUT_DEVICES.find((d) => d.id === e.target.value) || OTHER_IN; ed.action = ed.dev.actions ? ed.dev.actions[0].v : null; ed.extra = clone(ed.dev.also || {}); ed.customTopic = ed.dev.topic || ed.customTopic; refill(); renderEditor(); });
+    if ($('e-act')) $('e-act').addEventListener('change', (e) => { ed.action = e.target.value || null; refill(); renderEditor(); });
+    if ($('e-topic')) $('e-topic').addEventListener('input', (e) => { ed.customTopic = e.target.value; });
+    $('e-name').addEventListener('input', (e) => { ed.name = e.target.value; });
+    $('e-group').addEventListener('input', (e) => { ed.group = e.target.value; });
+    $('e-extra').addEventListener('input', (e) => { try { ed.extra = JSON.parse(e.target.value || '{}'); $('f-extra').classList.remove('bad'); } catch (err) { $('f-extra').classList.add('bad'); } });
+    $('e-thr').addEventListener('input', (e) => { ed.throttle = +e.target.value || 0; });
+    $('e-en').addEventListener('change', (e) => { ed.enabled = e.target.checked; });
+    ed.outs.forEach((o, i) => {
+      $(`o-t-${i}`).addEventListener('change', (e) => { o.target = TARGETS.find((t) => t.id === e.target.value) || OTHER_OUT; o.effect = o.target.effects[0] || o.effect; o.customTopic = o.target === OTHER_OUT ? 'cmd/' : o.target.prefix + o.effect; if (o.auto) o.payload = newOut(o.target, o.effect).payload; renderEditor(); });
+      if ($(`o-e-${i}`)) $(`o-e-${i}`).addEventListener('change', (e) => { o.effect = e.target.value; if (o.auto) o.payload = newOut(o.target, o.effect).payload; renderEditor(); });
+      if ($(`o-c-${i}`)) $(`o-c-${i}`).addEventListener('input', (e) => { o.customTopic = e.target.value; });
+      $(`o-p-${i}`).addEventListener('input', (e) => { o.payload = e.target.value; o.auto = false; try { JSON.parse(o.payload); $(`o-f-${i}`).classList.remove('bad'); } catch (err) { $(`o-f-${i}`).classList.add('bad'); } });
+      $(`o-r-${i}`).addEventListener('change', (e) => { o.retain = e.target.checked; });
+      $(`o-x-${i}`).addEventListener('click', () => { ed.outs.splice(i, 1); renderEditor(); });
+      $(`o-reset-${i}`).addEventListener('click', () => { o.payload = newOut(o.target, o.effect).payload; o.auto = true; renderEditor(); });
+    });
+    $('e-addout').addEventListener('click', () => { ed.outs.push(newOut(TARGETS[0], TARGETS[0].effects[0])); renderEditor(); });
+    $('e-save').addEventListener('click', saveEditor);
+    $('e-cancel').addEventListener('click', () => $('editor').classList.remove('open'));
+    $('e-test').addEventListener('click', () => { const r = buildRule(); if (r) testRule(r); });
+    if ($('e-del')) $('e-del').addEventListener('click', () => { rules.splice(ed.idx, 1); setDirty(true); $('editor').classList.remove('open'); renderAll(); });
+  }
+  function refill() { for (const o of ed.outs) if (o.auto) o.payload = newOut(o.target, o.effect).payload; }
+  const outRow = (o, i) => `<div class="out" id="o-f-${i}">
+      <div class="two"><div class="f"><label>Target</label><select id="o-t-${i}">${[...TARGETS, OTHER_OUT].map((t) => `<option value="${t.id}" ${t === o.target ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select></div>
+      <div class="f"><label>Effect</label>${o.target === OTHER_OUT ? `<input type="text" id="o-c-${i}" value="${esc(o.customTopic)}" placeholder="cmd/<target>/<effect>">` : `<select id="o-e-${i}">${o.target.effects.map((e) => `<option ${e === o.effect ? 'selected' : ''}>${e}</option>`).join('')}${o.target.effects.includes(o.effect) ? '' : `<option selected>${esc(o.effect)}</option>`}</select>`}</div></div>
+      <div class="topic">${esc(outTopic(o))}</div>
+      <div class="f"><label>Payload (JSON) <a href="#" id="o-reset-${i}" style="color:var(--acc);text-transform:none;letter-spacing:0">reset to template</a></label><textarea id="o-p-${i}" rows="3">${esc(o.payload)}</textarea></div>
+      <div style="display:flex;gap:10px;align-items:center"><label style="font-size:12px"><input type="checkbox" id="o-r-${i}" ${o.retain ? 'checked' : ''}> retained</label><span style="flex:1"></span><button class="btn sm danger" id="o-x-${i}">remove output</button></div></div>`;
+  function buildRule() {                                   // -> rule object from the editor, or null (error shown)
+    const err = (m) => { $('e-err').textContent = m; return null; };
+    const when = { topic: ed.dev === OTHER_IN ? (ed.customTopic || '').trim() : ed.dev.topic };
+    if (!when.topic) return err('the input needs a topic filter');
+    Object.assign(when, ed.dev.base || {});
+    let extra; try { extra = JSON.parse($('e-extra').value || '{}'); } catch (e) { return err('extra match fields must be a JSON object'); }
+    if (!extra || typeof extra !== 'object' || Array.isArray(extra)) return err('extra match fields must be a JSON object');
+    Object.assign(when, extra);
+    if (ed.dev.key && ed.action) when[ed.dev.key] = ed.action;
+    if (!ed.outs.length) return err('add at least one output');
+    const then = [];
+    for (const o of ed.outs) {
+      const topic = outTopic(o).trim();
+      if (!/^(cmd|display)\//.test(topic) || topic.split('/').length < 2 || topic.endsWith('/')) return err(`output topic ${topic || '(empty)'} must look like cmd/<target>/<effect> or display/<what>`);
+      if (topicMatches(when.topic, topic)) return err(`output ${topic} would re-trigger its own input (loop)`);
+      let payload; try { payload = JSON.parse(o.payload || '{}'); } catch (e) { return err(`payload for ${topic} is not valid JSON`); }
+      then.push({ topic, payload, ...(o.retain ? { retain: true } : {}) });
+    }
+    const r = { name: (ed.name || '').trim() || `${inLabel({ when })} -> ${then.map((o) => o.topic).join(' + ')}`, when, then };
+    if ((ed.group || '').trim()) r.group = ed.group.trim();
+    if (ed.throttle > 0) r.throttle_ms = Math.round(ed.throttle);
+    if (!ed.enabled) r.enabled = false;
+    $('e-err').textContent = ''; return r;
+  }
+  function saveEditor() { const r = buildRule(); if (!r) return; if (ed.idx == null) rules.push(r); else rules[ed.idx] = r; setDirty(true); $('editor').classList.remove('open'); renderAll(); }
+  $('new').addEventListener('click', () => openEditor(null, { dev: filter.dev || undefined, target: filter.target || undefined }));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('editor').classList.remove('open'); });
+
+  // ------------------------------------------------------------ TEST / APPLY / YAML
+  function testDevice(dev) {                               // fire the device's first action, whatever rules exist for it
+    const when = { topic: dev.topic, ...(dev.base || {}), ...(dev.also || {}) }; if (dev.key) when[dev.key] = dev.actions[0].v;
+    testRule({ when, then: [] });
+  }
+  function testRule(r) {
+    const { dev } = deviceOf(r), fields = Object.fromEntries(Object.entries(r.when).filter(([k]) => k !== 'topic'));
+    let topic, payload;
+    if (dev !== OTHER_IN) {
+      payload = { ...clone(dev.sample), ...fields };
+      const act = dev.key && dev.actions.find((a) => a.v === fields[dev.key]); if (act && act.sample) Object.assign(payload, act.sample, fields);
+      if (dev.key && !fields[dev.key]) payload[dev.key] = dev.actions[0].v;
+      topic = dev.sampleTopic;
+    } else { topic = r.when.topic.replace(/[+#]/g, 'test'); payload = { ...fields }; }
+    pub(topic, payload, !!dev.retain);
+    log('sys', `test: published ${topic} ${JSON.stringify(payload)}`);
+  }
+  $('apply').addEventListener('click', () => { if (!client || !client.connected) return; pub('mapping/set', { rules, subscribe: extraSubs, by: 'routes.html' }); log('sys', `mapping/set -> ${rules.length} rules; waiting for the engine`); $('apply').disabled = true; });
+  $('revert').addEventListener('click', () => { if (engineRules) { rules = clone(engineRules); setDirty(false); renderAll(); } });
+  function toYaml() {                                      // same compact style as booth/mapping_engine.py dump_rules
+    const j = (v) => JSON.stringify(v), out = ['# Camp Bus mapping table - downloaded from the Routes page ' + new Date().toISOString().slice(0, 16).replace('T', ' ') + '.', '# Drop it in as booth/mappings.yaml; the engine hot-reloads. Contract: docs/SCHEMA.md.', ''];
+    if (extraSubs.length) out.push('subscribe: ' + j(extraSubs));
+    out.push('rules:');
+    for (const r of rules) { out.push('  - name: ' + j(r.name)); if (r.group) out.push('    group: ' + j(r.group)); if (r.enabled === false) out.push('    enabled: false'); if (r.throttle_ms) out.push(`    throttle_ms: ${r.throttle_ms}`); out.push('    when: ' + j(r.when)); out.push('    then:'); for (const o of r.then) out.push('      - ' + j(o)); out.push(''); }
+    return out.join('\n');
+  }
+  $('download').addEventListener('click', () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([toYaml()], { type: 'text/yaml' })); a.download = 'mappings.yaml'; a.click(); });
+
+  // ------------------------------------------------------------ BUS
+  let client = null;
+  const nodeId = 'sim_routes_' + Math.random().toString(36).slice(2, 8);
+  $('url').value = Camp.Settings.brokerUrl();
+  function setConn(text, cls) { const c = $('conn'); c.textContent = text; c.className = cls || ''; }
+  function pub(topic, payload, retain = false) { if (!client || !client.connected) return; if (!('ts' in payload)) payload.ts = Date.now(); client.publish(topic, JSON.stringify(payload), { retain, qos: 0 }); }
+  function log(kind, text) { const el = $('log'); const line = document.createElement('div'); line.className = kind; line.textContent = `${new Date().toLocaleTimeString()}  ${text}`; el.prepend(line); while (el.childNodes.length > 120) el.removeChild(el.lastChild); }
+  const INPUT_ROOTS = ['toy/#', 'prop/#', 'staff/#', 'instrument/#', 'midi/#', 'kitchen/#', 'booth/#', 'dj/#'];
+  function connect() {
+    if (client) { try { client.end(true); } catch (e) {} }
+    const url = $('url').value.trim(); setConn('connecting ' + url + ' ...');
+    client = mqtt.connect(url, { clientId: nodeId, clean: true, keepalive: 20, reconnectPeriod: 2000 });
+    client.on('connect', () => { setConn('connected ' + url, 'ok'); client.subscribe(['mapping/#', 'cmd/#', 'display/#', ...INPUT_ROOTS]); });
+    client.on('close', () => setConn('disconnected', 'bad'));
+    client.on('error', (e) => setConn('error: ' + e.message, 'bad'));
+    client.on('message', (topic, buf) => {
+      let m; try { m = JSON.parse(buf.toString()); } catch (e) { return; }
+      const t = now();
+      if (topic === 'mapping/rules') { engineRules = m.rules || []; extraSubs = m.subscribe || []; engineFile = m.file || engineFile; if (!dirty) rules = clone(engineRules); setDirty(false); log('sys', `engine: ${engineRules.length} rules live`); renderAll(); return; }
+      if (topic === 'mapping/error') { log('err', `engine rejected the edit: ${m.error}`); setDirty(true); $('engine').textContent = `rejected: ${m.error}`; $('engine').className = 'err'; return; }
+      if (topic === 'mapping/loaded') return;
+      if (topic === 'mapping/set') return;
+      if (topic.startsWith('cmd/') || topic.startsWith('display/')) { const { target } = targetOf(topic); seen.out[target.id] = t; glow.out.set(target.id, t); log('cmd', `< ${topic} ${JSON.stringify(m)}`); return; }
+      // an input: which devices and rules does it hit?
+      for (const d of INPUT_DEVICES) if (topicMatches(d.topic, topic) && Object.entries(d.base || {}).every(([k, v]) => m[k] === v)) { seen.in[d.id] = t; glow.in.set(d.id, t); }
+      const hit = rules.map((r, i) => [r, i]).filter(([r]) => ruleMatches(r, topic, m));
+      for (const [r, i] of hit) { fires.set(r.name, (fires.get(r.name) || 0) + 1); flow(r, typeof m.color === 'string' ? m.color : null); const el = $('rules').querySelector(`[data-i="${i}"]`); if (el) { el.classList.add('fired'); setTimeout(() => el.classList.remove('fired'), 700); } }
+      if (!hit.length && !rules.some((r) => deviceOf(r).dev !== OTHER_IN)) seen.in._other = t;
+      log('in', `> ${topic} ${JSON.stringify(m)}${hit.length ? `   [${hit.map(([r]) => r.name).join('; ')}]` : '   [no rule]'}`);
+    });
+  }
+  $('connect').addEventListener('click', connect);
+  renderAll(); renderEngine(); setView(view);
+  connect();
+  window.__routes = { get rules() { return rules; }, set rules(v) { rules = v; setDirty(true); renderAll(); }, get engineRules() { return engineRules; }, get dirty() { return dirty; }, deviceOf, targetOf, template, topicMatches, ruleMatches, openEditor, buildRule, testRule, testDevice, groupOf, toYaml, apply: () => $('apply').click(), INPUT_DEVICES, TARGETS, setView, get graph() { return G; }, get pulses() { return pulses; }, flow };
+})();
+</script>
+</body>
+</html>

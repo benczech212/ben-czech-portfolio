@@ -1,0 +1,33 @@
+# Plex Media Server on the NAS (Docker compose project "plex").
+# Media comes from MEDIA_DIR on the NAS (the same folder the PC sees as MEDIA_ROOT in dashboard/config.py); Plex only
+# reads it.
+#
+# Settings: an env file next to this compose file (create it yourself; never commit it) with
+#   PLEX_VERSION   image tag: pin to the version you've tested (required, no "latest")
+#   PUID, PGID     the NAS user/group that owns the media folders (from `id <user>` on the NAS)
+#   MEDIA_DIR      the media folder on the NAS, holding Movies, TV Shows and Music (default /volume1/data/Media)
+#   DOCKER_DIR     the NAS's docker share (default /volume1/docker)
+#   TZ             time zone (default Etc/UTC)
+#
+# First start only: PLEX_CLAIM links the server to your Plex account. Get a claim token at https://plex.tv/claim,
+# put it in the env file, start, then remove it (it expires after 4 minutes). Don't paste it into a chat.
+services:
+  plex:
+    image: lscr.io/linuxserver/plex:${PLEX_VERSION:?pin to the version you've tested}   # pin to the version you've tested
+    container_name: plex
+    network_mode: host                 # Plex finds devices on the home network and serves on port 32400
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID:-1000}             # the NAS user that owns the media folders
+      - PGID=${PGID:-10}
+      - TZ=${TZ:-Etc/UTC}
+      - VERSION=docker
+      - PLEX_CLAIM=${PLEX_CLAIM:-}     # first start only
+    devices:
+      - /dev/dri:/dev/dri              # Intel Quick Sync: hardware transcoding (Plex Pass)
+    volumes:
+      - ${DOCKER_DIR:-/volume1/docker}/plex/config:/config          # Plex database, posters, watch history
+      - ${DOCKER_DIR:-/volume1/docker}/plex/transcode:/transcode    # temporary files while converting for a device
+      - "${MEDIA_DIR:-/volume1/data/Media}/Movies:/media/Movies:ro"
+      - "${MEDIA_DIR:-/volume1/data/Media}/TV Shows:/media/TV Shows:ro"
+      - "${MEDIA_DIR:-/volume1/data/Media}/Music:/media/Music:ro"

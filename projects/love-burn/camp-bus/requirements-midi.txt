@@ -1,0 +1,4 @@
+# extra for tools/midi_bridge.py (runs natively on the Ableton laptop, not in the Docker image)
+-r requirements.txt
+mido>=1.3
+python-rtmidi>=1.5

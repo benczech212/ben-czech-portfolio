@@ -1,0 +1,10 @@
+apiVersion: 1
+providers:
+  - name: exhibit
+    folder: Exhibit
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    updateIntervalSeconds: 30
+    options:
+      path: C:\dev\leepa_rattner_exhibit_2026\monitoring\grafana\dashboards

@@ -1,0 +1,56 @@
+# Camp Bus broker ACL (example) — copy to /etc/mosquitto/campbus.acl on the booth Pi.
+# Used with bus/mosquitto.conf (allow_anonymous false + password_file). Not used by the
+# anonymous dev profile (bus/mosquitto.dev.conf).
+#
+# Accounts (create each with `mosquitto_passwd /etc/mosquitto/campbus.passwd <name>`):
+#   engine   the mapping engine (booth/mapping_engine.py). Routes inputs to cmd/#, applies mapping/set.
+#   booth    the booth operator: routes page, camp-mode / vibe controls, game master.
+#   audio    the audio analyser / fake_beat: publishes audio/*.
+#   bridge   instrument bridges (tools/midi_bridge.py, ESP-NOW-to-MQTT bridge).
+#   <node_id>  one account per device (crystal_07, staff_01, matrix_01, ...): username == node_id.
+#
+# Python services pick their account from CAMPBUS_USER / CAMPBUS_PASSWORD (clients/python/campbus).
+#
+# Mosquitto checks `user` blocks for the named account and `pattern` lines for everyone
+# (%u = username, %c = client id). Anything not granted is denied.
+
+# --- everyone: read the whole bus, publish their own lifecycle / position / input topics
+pattern read #
+pattern write node/%u/#
+pattern write map/%u
+pattern write prop/%u
+pattern write toy/%u
+pattern write instrument/%u
+
+# --- the only accounts allowed to drive devices or rewrite the routing rules
+user engine
+topic readwrite cmd/#
+topic readwrite mapping/#
+topic readwrite crystal/#
+topic readwrite game/#
+topic readwrite display/#
+topic readwrite node/#
+
+user booth
+topic readwrite cmd/#
+topic readwrite mapping/#
+topic readwrite camp/#
+topic readwrite vibe/#
+topic readwrite booth/#
+topic readwrite game/#
+topic readwrite display/#
+topic readwrite config/#
+topic readwrite cal/#
+topic readwrite kitchen/#
+topic readwrite map/#
+
+# --- audio analysis
+user audio
+topic write audio/#
+
+# --- instrument / prop bridges republish on behalf of many devices
+user bridge
+topic write instrument/#
+topic write prop/#
+topic write midi/#
+topic write toy/#

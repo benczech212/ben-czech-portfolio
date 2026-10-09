@@ -1,0 +1,13 @@
+# Copy to exhibit.local.yaml (gitignored) for per-machine overrides.
+# Only include the keys you want to change; everything merges over exhibit.yaml.
+
+admin:
+  password:                           # required for the Admin page: fill in; keep this file out of git
+
+apps:
+  resolume:
+    composition: C:\Users\me\Documents\Resolume Arena\Compositions\Dev.avc
+    advanced_output: SPC Final Flip
+    ready: { type: process }           # dev box without the Arena webserver enabled
+  touchdesigner:
+    enabled: false

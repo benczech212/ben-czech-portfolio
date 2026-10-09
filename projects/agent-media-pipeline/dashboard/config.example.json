@@ -1,0 +1,30 @@
+{
+  "DASHBOARD_PORT": 8765,
+  "WORK_DIR": "C:\\media-pipeline\\work",
+  "FFMPEG_DIR": "C:\\tools\\ffmpeg\\bin",
+  "RCLONE": "",
+
+  "NAS_DATA": "N:\\",
+  "MEDIA_ROOT": "N:\\Media",
+  "NAS_RECYCLE": "N:\\#recycle",
+  "NAS_DOCKER_SHARE": "\\\\nas\\docker",
+
+  "CLIENT_LIBRARY": "N:\\Client Media Library",
+  "CLIENT_LIBRARY_REMOTE": "gdrive:Client Media Library",
+  "UPLOAD_FILTER": "\\\\nas\\docker\\rclone-uploader\\filter.txt",
+  "UPLOAD_LOG": "\\\\nas\\docker\\rclone-uploader\\upload.log",
+  "OFFSITE_LOG": "\\\\nas\\docker\\kopia\\offsite-logs\\offsite.log",
+  "DUPES_DIR": "N:\\_duplicates to review",
+  "DUPES_SOURCE_ROOT": "N:\\Library Backup",
+  "DXV_QUEUE": "C:\\media-pipeline\\work\\dxv_queue.csv",
+  "DXV_LOG": "C:\\media-pipeline\\work\\convert.log",
+
+  "FAILING_DRIVE": "E:",
+  "RESCUE_ROOT": "N:\\Rescue",
+
+  "PLEX_LOCAL_URL": "http://127.0.0.1:32400",
+  "PLEX_NAS_URL": "http://nas.local:32400",
+
+  "KEEP_TITLES": [],
+  "TASTE_KEEP": {}
+}

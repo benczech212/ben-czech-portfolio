@@ -1,0 +1,229 @@
+# Camp Bus mapping table — the ONLY thing that decides what an input controls.
+# Hot-reloaded by booth/mapping_engine.py the moment you save. A bad edit is
+# rejected with an error and the previous rules stay live.
+#
+# rule:
+#   name:        human label (shows up in mapping/loaded and the dashboard)
+#   group:       optional label to file rules under (the Routes page lists and draws them by group)
+#   when:        topic = MQTT filter (+ and # wildcards ok); any other key must
+#                equal that field in the incoming payload
+#   then:        list of outputs; each has topic + payload (+ retain: true)
+#                payload strings like "{value}" are replaced by the input field
+#                (whole-string placeholders keep the original type, so "{value}"
+#                stays a number; "Hi {artist}!" becomes text)
+#   throttle_ms: optional; drop repeats of this rule inside the window
+#
+# Outputs go to cmd/<target>/<effect> (or display/*). Never to toy/, staff/, etc.
+
+rules:
+  - name: big red button -> hallway sweep + crystals flash
+    group: Toys
+    when: { topic: "toy/big_red_button", event: "press" }
+    then:
+      - { topic: "cmd/hallway/sweep",   payload: { color: "#ff4000", speed: 1.5 } }
+      - { topic: "cmd/crystals/flash",  payload: { color: "#ffffff", ms: 300 } }
+
+  - name: big red button hold -> everything pulses
+    group: Toys
+    when: { topic: "toy/big_red_button", event: "hold" }
+    then:
+      - { topic: "cmd/all/pulse", payload: { color: "#ff4000", seconds: "{value}" } }
+
+  - name: lever -> hallway warp
+    group: Toys
+    when: { topic: "toy/lever", event: "pull" }
+    then:
+      - { topic: "cmd/hallway/warp", payload: { color: "#8fd3ff", seconds: 3 } }
+      - { topic: "cmd/hallway/rings", payload: { color: "#ffffff", seconds: 2.5, count: 2 } }
+
+  - name: crank -> tunnel speed
+    group: Toys
+    when: { topic: "toy/crank", event: "rate" }
+    throttle_ms: 100
+    then:
+      - { topic: "cmd/hallway/speed", payload: { value: "{value}" } }
+
+  - name: dial-a-vibe -> global mode
+    group: Toys
+    when: { topic: "toy/dial_a_vibe", event: "mode" }
+    then:
+      - { topic: "cmd/all/mode", payload: { mode: "{value}" } }
+
+  # Handheld props (staff, wand, drum) publish the same action payload on prop/<prop_id>:
+  # {prop, prop_id, gesture, intensity, color, heading, spin_dir, lat, lon}. Responders mix the colour in
+  # by intensity, delay by distance / speed_mps (a ripple), fade gently to 40% at range_m (unless the cast
+  # is perfect, intensity 1.0), apply the cast shape from `heading`, and - when two different props land on
+  # the same node within combo_ms - play a combo animation of both colours. `from` = prop_id is required
+  # on every prop output so responders can tell props apart. `paint` = weight of the effect in the Paint the
+  # Camp game (energy per crystal = effective intensity x paint); whole-camp effects carry less per crystal.
+
+  # STAFF - the big gestures
+  - name: "staff slam -> circle: hallway shockwave + crystals flash"
+    group: Props
+    when: { topic: "prop/+", prop: staff, gesture: slam }
+    then:
+      - { topic: "cmd/hallway/shockwave", payload: { intensity: "{intensity}", color: "{color}", from: "{prop_id}", origin: { lat: "{lat}", lon: "{lon}" }, speed_mps: 6, range_m: 60 } }
+      - { topic: "cmd/crystals/flash",    payload: { intensity: "{intensity}", color: "{color}", from: "{prop_id}", ms: 2500, paint: 0.22, origin: { lat: "{lat}", lon: "{lon}" }, speed_mps: 6, range_m: 60 } }
+
+  - name: "staff spin -> spiral: crystals charge sweeping around the staff (rotation only, every crystal, no falloff)"
+    group: Props
+    when: { topic: "prop/+", prop: staff, gesture: spin }
+    then:
+      - { topic: "cmd/crystals/charge", payload: { intensity: "{intensity}", color: "{color}", from: "{prop_id}", origin: { lat: "{lat}", lon: "{lon}" }, shape: spiral, heading: "{heading}", spin_dir: "{spin_dir}", turn_s: 2, falloff: none, paint: 0.16 } }
+      - { topic: "cmd/hallway/spiral",  payload: { intensity: "{intensity}", color: "{color}", from: "{prop_id}", seconds: 3, spin_dir: "{spin_dir}", origin: { lat: "{lat}", lon: "{lon}" }, falloff: none } }
+
+  - name: "staff swing -> cone: tint everything the staff points at"
+    group: Props
+    when: { topic: "prop/+", prop: staff, gesture: swing }
+    then:
+      - { topic: "cmd/all/color", payload: { intensity: "{intensity}", color: "{color}", from: "{prop_id}", seconds: 6, origin: { lat: "{lat}", lon: "{lon}" }, speed_mps: 14, range_m: 60, shape: cone, heading: "{heading}", cone_deg: 70, paint: 1.49 } }
+      - { topic: "cmd/hallway/wipe",  payload: { intensity: "{intensity}", color: "{color}", from: "{prop_id}", seconds: 4, origin: { lat: "{lat}", lon: "{lon}" }, speed_mps: 14, range_m: 60, shape: cone, heading: "{heading}", cone_deg: 70 } }
+
+  # WAND - precise and quick
+  - name: "wand flick -> bolt: narrow fast cone of flash"
+    group: Props
+    when: { topic: "prop/+", prop: wand, gesture: flick }
+    then:
+      - { topic: "cmd/crystals/flash", payload: { intensity: "{intensity}", color: "{color}", from: "{prop_id}", ms: 1200, origin: { lat: "{lat}", lon: "{lon}" }, speed_mps: 14, range_m: 80, shape: cone, heading: "{heading}", cone_deg: 25, paint: 3.88 } }
+      - { topic: "cmd/hallway/comet",  payload: { intensity: "{intensity}", color: "{color}", from: "{prop_id}", origin: { lat: "{lat}", lon: "{lon}" }, speed_mps: 14, range_m: 80, shape: cone, heading: "{heading}", cone_deg: 25 } }
+
+  - name: "wand circle -> orb: slow pulse close around the caster"
+    group: Props
+    when: { topic: "prop/+", prop: wand, gesture: circle }
+    then:
+      - { topic: "cmd/crystals/pulse", payload: { intensity: "{intensity}", color: "{color}", from: "{prop_id}", seconds: 3, origin: { lat: "{lat}", lon: "{lon}" }, speed_mps: 6, range_m: 18, cutoff_m: 18, paint: 1.03 } }
+      - { topic: "cmd/hallway/rain",   payload: { intensity: "{intensity}", color: "{color}", from: "{prop_id}", seconds: 4, origin: { lat: "{lat}", lon: "{lon}" }, speed_mps: 6, range_m: 18, cutoff_m: 30 } }
+
+  # WHIP - the needle and the arc
+  - name: "whip crack -> needle: 12 degree cone at 30 m/s, far"
+    group: Props
+    when: { topic: "prop/+", prop: whip, gesture: crack }
+    then:
+      - { topic: "cmd/crystals/flash", payload: { intensity: "{intensity}", color: "{color}", from: "{prop_id}", ms: 900, origin: { lat: "{lat}", lon: "{lon}" }, speed_mps: 30, range_m: 80, shape: cone, heading: "{heading}", cone_deg: 12, paint: 8.0 } }
+      - { topic: "cmd/hallway/rings", payload: { intensity: "{intensity}", color: "{color}", from: "{prop_id}", seconds: 1.5, count: 3, origin: { lat: "{lat}", lon: "{lon}" }, speed_mps: 30, range_m: 80, shape: cone, heading: "{heading}", cone_deg: 12 } }
+
+  - name: "whip lash -> arc: 140 degree cone within 25 m"
+    group: Props
+    when: { topic: "prop/+", prop: whip, gesture: lash }
+    then:
+      - { topic: "cmd/crystals/color", payload: { intensity: "{intensity}", color: "{color}", from: "{prop_id}", seconds: 3, origin: { lat: "{lat}", lon: "{lon}" }, speed_mps: 12, range_m: 25, cutoff_m: 25, shape: cone, heading: "{heading}", cone_deg: 140, paint: 2.02 } }
+      - { topic: "cmd/hallway/sweep", payload: { intensity: "{intensity}", color: "{color}", from: "{prop_id}", origin: { lat: "{lat}", lon: "{lon}" }, speed_mps: 12, range_m: 25, cutoff_m: 25, shape: cone, heading: "{heading}", cone_deg: 140 } }
+
+  # DRUM - slow and heavy
+  - name: "drum hit -> heavy wave: everything pulses, slowly, far"
+    group: Props
+    when: { topic: "prop/+", prop: drum, gesture: hit }
+    then:
+      - { topic: "cmd/all/pulse", payload: { intensity: "{intensity}", color: "{color}", from: "{prop_id}", seconds: 2.5, origin: { lat: "{lat}", lon: "{lon}" }, speed_mps: 4, range_m: 90, paint: 0.19 } }
+      - { topic: "cmd/hallway/breathe", payload: { intensity: "{intensity}", color: "{color}", from: "{prop_id}", seconds: 3, origin: { lat: "{lat}", lon: "{lon}" }, speed_mps: 4, range_m: 90 } }
+
+  - name: drum roll -> steady charge on everything nearby
+    group: Props
+    when: { topic: "prop/+", prop: drum, gesture: roll }
+    then:
+      - { topic: "cmd/crystals/charge", payload: { intensity: "{intensity}", color: "{color}", from: "{prop_id}", origin: { lat: "{lat}", lon: "{lon}" }, speed_mps: 4, range_m: 40, cutoff_m: 40, paint: 0.3 } }
+
+  # TOUCH INSTRUMENTS (sim/instruments.html). Every event publishes instrument/<instrument_id> =
+  # {instrument, instrument_id, pad, pad_i, event, velocity, value, note, ch, color, lat, lon}. Instruments stand still,
+  # so their routes use `nearest: N` (only the N crystals closest to the instrument react, full strength) and
+  # `instant: true` (no propagation delay): the crystals around an instrument answer it the moment it is played
+  # (Ben, 2026-09-21). `from` is the whole instrument, so a drummed pattern locks those crystals to its tempo
+  # (rhythm rule) and a prop landing within 500 ms of a hit makes a combo.
+  - name: "mycelium hit -> crystals flash in that mushroom's colour, rippling out from the cluster"
+    group: Mycelium
+    when: { topic: "instrument/+", instrument: mycelium, event: hit }
+    then:
+      - { topic: "cmd/crystals/flash", payload: { intensity: "{velocity}", color: "{color}", from: "{instrument_id}", ms: 900, origin: { lat: "{lat}", lon: "{lon}" }, nearest: 4, instant: true, combo: false, paint: 0.6 } }
+
+  - name: "mycelium kick (amanita) -> hallway breathes"
+    group: Mycelium
+    when: { topic: "instrument/+", instrument: mycelium, event: hit, pad: amanita }
+    then:
+      - { topic: "cmd/hallway/breathe", payload: { intensity: "{velocity}", color: "{color}", from: "{instrument_id}", seconds: 1.2, origin: { lat: "{lat}", lon: "{lon}" }, instant: true, falloff: none } }
+
+  - name: "mycelium snare (chanterelle) -> hallway rings"
+    group: Mycelium
+    when: { topic: "instrument/+", instrument: mycelium, event: hit, pad: chanterelle }
+    then:
+      - { topic: "cmd/hallway/rings", payload: { intensity: "{velocity}", color: "{color}", from: "{instrument_id}", seconds: 1.2, count: 2, origin: { lat: "{lat}", lon: "{lon}" }, instant: true, falloff: none } }
+
+  # Crystal Geode Synth (capacitive touch): touch = a tint in the geode's colour, strength = how well the person couples
+  # to the brass frame; hold keeps charging the nearby crystals with the live reading (throttled); release does nothing.
+  - name: "geode touch -> crystals tint in the geode's colour by touch strength"
+    group: Geodes
+    when: { topic: "instrument/+", instrument: geode, event: touch }
+    then:
+      - { topic: "cmd/crystals/color", payload: { intensity: "{velocity}", color: "{color}", from: "{instrument_id}", seconds: 5, origin: { lat: "{lat}", lon: "{lon}" }, nearest: 3, instant: true, combo: false, paint: 0.8 } }
+      - { topic: "cmd/hallway/rain",   payload: { intensity: "{velocity}", color: "{color}", from: "{instrument_id}", seconds: 3, origin: { lat: "{lat}", lon: "{lon}" }, instant: true, falloff: none } }
+
+  - name: "geode hold -> crystals nearby keep charging with the live reading"
+    group: Geodes
+    when: { topic: "instrument/+", instrument: geode, event: hold }
+    throttle_ms: 250
+    then:
+      - { topic: "cmd/crystals/charge", payload: { intensity: "{value}", color: "{color}", from: "{instrument_id}", origin: { lat: "{lat}", lon: "{lon}" }, nearest: 3, instant: true, combo: false, paint: 0.1 } }
+
+  # Monstera Piezo Plant: working a leaf tints the crystals near the plant with the flex; letting it snap back sends a
+  # slow heavy bass wave (like the drum) across camp scaled by the spike.
+  - name: "plant bend -> crystals near the plant follow the leaf's flex"
+    group: Plant
+    when: { topic: "instrument/+", instrument: plant, event: bend }
+    throttle_ms: 250
+    then:
+      - { topic: "cmd/crystals/color", payload: { intensity: "{value}", color: "{color}", from: "{instrument_id}", seconds: 1.5, origin: { lat: "{lat}", lon: "{lon}" }, nearest: 3, instant: true, combo: false, paint: 0.1 } }
+
+  - name: "plant release -> bass wave: everything pulses slowly, scaled by the snap"
+    group: Plant
+    when: { topic: "instrument/+", instrument: plant, event: release }
+    then:
+      - { topic: "cmd/all/pulse", payload: { intensity: "{velocity}", color: "{color}", from: "{instrument_id}", seconds: 2.5, origin: { lat: "{lat}", lon: "{lon}" }, nearest: 6, instant: true, combo: false, paint: 0.4 } }
+
+  # Water Chord Tubes (capacitive through the water): a hand in a tube is a ripple - the crystals standing by the
+  # tubes pulse in that tube's colour and rings run down the hallway; holding keeps charging them with the live reading.
+  - name: "tubes touch -> ripple: crystals by the tubes pulse + hallway rings"
+    group: Tubes
+    when: { topic: "instrument/+", instrument: tubes, event: touch }
+    then:
+      - { topic: "cmd/crystals/pulse", payload: { intensity: "{velocity}", color: "{color}", from: "{instrument_id}", seconds: 4, origin: { lat: "{lat}", lon: "{lon}" }, nearest: 3, instant: true, combo: false, paint: 0.8 } }
+      - { topic: "cmd/hallway/rings",  payload: { intensity: "{velocity}", color: "{color}", from: "{instrument_id}", seconds: 2, count: 3, origin: { lat: "{lat}", lon: "{lon}" }, instant: true, falloff: none } }
+
+  - name: "tubes hold -> crystals nearby keep charging with the live water reading"
+    group: Tubes
+    when: { topic: "instrument/+", instrument: tubes, event: hold }
+    throttle_ms: 250
+    then:
+      - { topic: "cmd/crystals/charge", payload: { intensity: "{value}", color: "{color}", from: "{instrument_id}", origin: { lat: "{lat}", lon: "{lon}" }, nearest: 3, instant: true, combo: false, paint: 0.1 } }
+
+  - name: DJ check-in -> Resolume logo clip + displays to now-playing
+    group: Booth
+    when: { topic: "booth/dj" }
+    then:
+      - { topic: "cmd/resolume/clip", payload: { name: "{artist}", fallback: "Camp Logo" } }
+      - { topic: "display/mode",      payload: { mode: "nowplaying" }, retain: true }
+
+  - name: food call -> bell + takeover banner on every display
+    group: Booth
+    when: { topic: "kitchen/foodcall" }
+    then:
+      - { topic: "cmd/kitchen/bell", payload: { soft: "{soft}" } }
+      - { topic: "display/banner",   payload: { text: "FOOD'S UP - {meal}!", level: "takeover" }, retain: true }
+
+  # FACADE - Ben's lotus / flower-of-life DJ facade (Pixelblaze, 1215 px, 2D camera map).
+  # Bridge: projects/dj-facade/tools/facade_bridge.py. Also hears every cmd/all/* (mode, color, pulse...).
+  - name: "big red button -> facade sweep"
+    group: Facade
+    when: { topic: "toy/big_red_button", event: "press" }
+    then:
+      - { topic: "cmd/facade/sweep", payload: { color: "#ff4000", speed: 1.5 } }
+
+  - name: "staff slam -> facade shockwave from the centre"
+    group: Facade
+    when: { topic: "prop/+", prop: staff, gesture: slam }
+    then:
+      - { topic: "cmd/facade/shockwave", payload: { intensity: "{intensity}", color: "{color}", from: "{prop_id}", origin: { lat: "{lat}", lon: "{lon}" }, speed_mps: 6, range_m: 60 } }
+
+  - name: "mycelium hit -> facade flashes the mushroom's colour"
+    group: Facade
+    when: { topic: "instrument/+", instrument: mycelium, event: hit }
+    then:
+      - { topic: "cmd/facade/flash", payload: { intensity: "{velocity}", color: "{color}", from: "{instrument_id}", ms: 600, instant: true, combo: false } }

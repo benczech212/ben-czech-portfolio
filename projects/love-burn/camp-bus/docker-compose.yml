@@ -1,0 +1,114 @@
+# Camp Bus on Docker - no boards required.
+#
+#   docker compose up -d                       broker only (mosquitto :1883 mqtt, :9001 websockets)
+#   docker compose --profile sim up            broker + fake audio + mapping engine + mock devices
+#   docker compose --profile sim up -d && docker compose logs -f devices mapping   (watch effects)
+#   docker compose run --rm input press big_red_button                             (fire an input)
+#   docker compose run --rm input run sim/scenarios/smoke.yaml                     (validate the flow)
+#   docker compose --profile sim down
+#
+# Code is bind-mounted, so editing booth/mappings.yaml hot-reloads inside the container.
+# From the host, the broker is localhost:1883 / ws://localhost:9001 (open sim/dashboard.html).
+#
+# SECURITY: this is the DEV profile. The broker runs bus/mosquitto.dev.conf (anonymous, no ACL)
+# so the browser sim and mock devices can connect without credentials. Use it on a trusted
+# machine/network only. The booth Pi runs bus/mosquitto.conf (password file + bus/acl.example).
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: campbus-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./bus/mosquitto.dev.conf:/mosquitto/config/mosquitto.conf:ro   # anonymous DEV profile
+      - mosquitto-data:/mosquitto/data
+
+  # Web UI: landing page + Virtual Camp + Bus Console at http://localhost:8080
+  # (static files from ./sim; the pages talk to the broker's websocket port themselves)
+  web:
+    image: nginx:alpine
+    container_name: campbus-web
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./sim:/usr/share/nginx/html:ro
+      - ./bus/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on: [clips]
+
+  # Clip server (dev only): "Record clip" in the sim PUTs the video here; files land in ./clips/
+  clips:
+    image: python:3.12-slim
+    container_name: campbus-clips
+    restart: unless-stopped
+    volumes:
+      - ./tools/clipserver.py:/app/clipserver.py:ro
+      - ./clips:/clips
+    # Listen on the compose network only (no `ports:`); nginx is the sole way in.
+    environment: { CLIPS_BIND: 0.0.0.0 }
+    command: python /app/clipserver.py
+
+  fake-beat:
+    build: .
+    image: campbus
+    profiles: ["sim"]
+    depends_on: [mosquitto]
+    restart: unless-stopped
+    volumes: [".:/app"]
+    command: python tools/fake_beat.py --quiet --bpm 124
+
+  mapping:
+    build: .
+    image: campbus
+    profiles: ["sim"]
+    depends_on: [mosquitto]
+    restart: unless-stopped
+    volumes: [".:/app"]
+    command: python booth/mapping_engine.py
+
+  devices:
+    build: .
+    image: campbus
+    profiles: ["sim"]
+    depends_on: [mosquitto]
+    restart: unless-stopped
+    volumes: [".:/app"]
+    # Every mock serves its own console the way a real device is expected to; the ports are
+    # published so the Devices page can link to them from the host browser, and CAMPBUS_UI_HOST
+    # is what each node advertises as `ui` (its container IP would be unreachable from outside).
+    ports:
+      - "8101-8110:8101-8110"
+    environment: { CAMPBUS_UI_HOST: localhost }
+    command: python sim/devices.py
+
+  # one-shot: `docker compose run --rm input <args>`  (not started by `up`)
+  input:
+    build: .
+    image: campbus
+    profiles: ["tools"]
+    depends_on: [mosquitto]
+    volumes: [".:/app"]
+    entrypoint: ["python", "sim/inputs.py"]
+
+  # one-shot: `docker compose run --rm test` - runs against its OWN throwaway broker so the
+  # live sim (mapping engine + devices) can't double-route or steal client ids mid-test.
+  test:
+    build: .
+    image: campbus
+    profiles: ["tools"]
+    depends_on: [mosquitto-test]
+    environment: { CAMPBUS_HOST: mosquitto-test }
+    volumes: [".:/app"]
+    entrypoint: ["sh", "-c", "pip install -q -r requirements-dev.txt && pytest -q"]
+
+  mosquitto-test:
+    image: eclipse-mosquitto:2
+    profiles: ["tools"]
+    volumes:
+      - ./bus/mosquitto.dev.conf:/mosquitto/config/mosquitto.conf:ro   # anonymous DEV profile
+
+volumes:
+  mosquitto-data: {}

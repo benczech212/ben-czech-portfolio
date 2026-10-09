@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPS</title>
+<!--
+  Live plot of whatever is publishing a position on map/<node_id>, for judging a real GPS module.
+
+  Two views of the same data:
+
+    Grid - a local metre grid around a reference fix. The instrument for judging the module:
+           scatter in metres, drift over minutes, whether walking 10 m looks like 10 m. At camp
+           scale a world map is one stationary dot, so this stays the default.
+    Map  - real coordinates on satellite/street tiles, for "is it actually where I am".
+
+  The map needs internet TODAY. The camp LAN has none (handbook/01-architecture.md), so the page
+  looks for a locally served tile pack first (sim/tiles/manifest.json) and falls back to online
+  layers. Building that pack is a licensing question before it is a coding one - see
+  nodes/staff_pi/README.md. Leaflet itself is vendored, so the page still loads with no internet;
+  only the tiles go missing.
+
+  Subscribes:  map/+          (positions, retained - the staff Pi publishes its own with --track)
+               prop/+         (casts, so you can see where each one was thrown from)
+               config/origin  (retained camp origin, settable from this page)
+-->
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="vendor/mqtt.min.js"></script>
+<script src="shared.js"></script>
+<link rel="stylesheet" href="ui.css">
+<style>
+  :root { --bg:#0b0f12; --panel:#131a1f; --ink:#e6edf1; --dim:#7d8f9a; --ok:#4dffa6; --bad:#ff5252; --acc:#4de0ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font: 14px/1.4 system-ui, sans-serif; }
+  header { display:flex; gap:12px; align-items:center; padding:8px 16px; background:var(--panel); border-bottom:1px solid #222; flex-wrap:wrap; }
+  header input[type=text] { background:#000; color:var(--ink); border:1px solid #333; padding:4px 8px; border-radius:4px; width:190px; }
+  .btn { background:#26262e; color:var(--ink); border:1px solid #363640; padding:5px 11px; border-radius:6px; cursor:pointer; font-size:13px; }
+  .btn:hover { background:#31313b; }
+  #conn { font-size:12px; color:var(--dim); } #conn.ok { color:var(--ok); } #conn.bad { color:var(--bad); }
+  main { display:grid; grid-template-columns: 1fr 330px; gap:12px; padding:12px 16px; align-items:start; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  /* Grid children default to min-width:auto; without this the plot column would refuse to
+     shrink below its content on a narrow window and shove the readouts off-screen. */
+  main > section { min-width: 0; }
+  section { background:var(--panel); border:1px solid #222; border-radius:10px; padding:10px 12px; }
+ h2 { font-size:13px; letter-spacing:-.005em; color:var(--dim); margin:0 0 8px; display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  h2 small { text-transform:none; letter-spacing:0; font-weight:400; }
+  #wrap { position:relative; }
+  canvas, #map { width:100%; height:min(62vh, 620px); display:block; border-radius:8px; background:#07070a; border:1px solid #1d1d24; }
+  #map { z-index:0; }                                  /* keep tiles under the nav, not over it */
+  .leaflet-container { background:#07070a; font: 12px system-ui, sans-serif; }
+  .leaflet-control-attribution { background:rgba(10,10,12,.8) !important; color:#7c7c88 !important; font-size:10px !important; }
+  .leaflet-control-attribution a { color:#9a9aa8 !important; }
+  .seg { display:inline-flex; border:1px solid #363640; border-radius:6px; overflow:hidden; }
+  .seg button { background:#1a1a20; color:var(--dim); border:0; padding:5px 12px; cursor:pointer; font-size:12px; }
+  .seg button.on { background:#2d4a7a; color:#fff; }
+  .hidden { display:none !important; }
+  .kv { display:grid; grid-template-columns: auto 1fr; gap:3px 10px; font: 12px/1.6 ui-monospace, Consolas, monospace; }
+  .kv b { color:var(--dim); font-weight:400; }
+  .kv span { color:var(--ink); text-align:right; }
+  .kv span.big { font-size:14px; color:var(--acc); }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+  .note { color:var(--dim); font-size:11.5px; line-height:1.5; margin-top:8px; }
+  .warn { color:#ffb300; }
+  select { background:#000; color:var(--ink); border:1px solid #333; padding:4px 8px; border-radius:4px; }
+  #nofix { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; color:var(--dim); font-size:13px; padding:20px; pointer-events:none; }
+</style>
+</head>
+<body>
+<header>
+  <nav id="campnav"></nav>
+  <input id="url" type="text" value="" spellcheck="false">
+  <button class="btn" id="connect">Connect</button>
+  <span id="conn">disconnected</span>
+</header>
+<main>
+  <section>
+    <h2>Position
+      <small class="seg" id="view">
+        <button data-view="grid" class="on">Grid</button><button data-view="map">Map</button>
+      </small>
+      <small id="viewhint">metres from the reference point &middot; north is up</small>
+      <small><select id="who"></select></small>
+    </h2>
+    <div id="wrap">
+      <canvas id="plot"></canvas>
+      <div id="map" class="hidden"></div>
+      <div id="nofix">waiting for a position on <code>map/&lt;node_id&gt;</code>&hellip;<br><br>
+        On the Pi: <code>staff_node.py --host &lt;pc&gt; --track</code></div>
+    </div>
+    <div class="row">
+      <button class="btn" id="recentre">Recentre</button>
+      <button class="btn" id="clear">Clear trail</button>
+      <label style="font-size:12px;color:var(--dim)"><input type="checkbox" id="autoscale" checked> auto-zoom</label>
+      <label style="font-size:12px;color:var(--dim)" id="followwrap"><input type="checkbox" id="follow" checked> follow</label>
+      <label style="font-size:12px;color:var(--dim)">trail <input id="trail" type="range" min="20" max="2000" step="20" value="600" style="vertical-align:middle"> <span id="trailn">600</span></label>
+    </div>
+  </section>
+
+  <section>
+    <h2>Live fix</h2>
+    <div class="kv">
+      <b>lat</b><span class="big" id="lat">&ndash;</span>
+      <b>lon</b><span class="big" id="lon">&ndash;</span>
+      <b>acc_m</b><span id="acc">&ndash;</span>
+      <b>sats</b><span id="sats">&ndash;</span>
+      <b>hdop</b><span id="hdop">&ndash;</span>
+      <b>age</b><span id="age">&ndash;</span>
+      <b>rate</b><span id="rate">&ndash;</span>
+    </div>
+
+    <h2 style="margin-top:14px">Scatter <small id="nfix">0 fixes</small></h2>
+    <div class="kv">
+      <b>1&sigma; N/S</b><span id="sdn">&ndash;</span>
+      <b>1&sigma; E/W</b><span id="sde">&ndash;</span>
+      <b>max from mean</b><span id="maxd">&ndash;</span>
+      <b>mean lat</b><span id="mlat">&ndash;</span>
+      <b>mean lon</b><span id="mlon">&ndash;</span>
+    </div>
+    <div class="note">Stationary, this is the module's <b>precision</b>, not its accuracy &mdash; consumer GPS
+      is still 2&ndash;5&nbsp;m absolute and drifts with multipath over minutes. What matters for calibration is
+      that a 20&ndash;30&nbsp;s average sits well inside the spacing between camp nodes.</div>
+
+    <h2 style="margin-top:14px">Relative to camp</h2>
+    <div class="kv">
+      <b>camp origin</b><span id="origin">&ndash;</span>
+      <b>source</b><span id="originsrc">default</span>
+      <b>distance</b><span id="odist">&ndash;</span>
+    </div>
+    <div class="row">
+      <button class="btn" id="setorigin" disabled>Set camp origin here</button>
+      <button class="btn hidden" id="cancelorigin">Cancel</button>
+      <button class="btn" id="resetorigin" title="clear the retained topic and fall back to the built-in default">Reset to default</button>
+    </div>
+    <div class="note" id="originnote">Publishes retained <code>config/origin</code> from the <b>averaged</b>
+      position, not the latest fix &mdash; averaging is the whole point. Every page that places camp in the
+      world follows it, so this moves the Virtual Camp map's frame for everyone.</div>
+    <div class="note" id="farnote"></div>
+
+    <h2 style="margin-top:14px">Casts seen <small id="ncast">0</small></h2>
+    <div class="kv" id="casts"></div>
+    <div class="note">A cast with no fix carries <code>lat: null</code> and cannot be plotted &mdash; it still
+      works, just with no propagation.</div>
+  </section>
+</main>
+<script>
+  // Bus data is untrusted: anything on the LAN can publish. Escape it before it goes into
+  // innerHTML, and only let well-formed colours into style attributes.
+  const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const safeColor = (c, dflt = '#888888') => (typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c) ? c : dflt);
+(() => {
+  const $ = (id) => document.getElementById(id);
+  // Camp origin: the default is the same constant the Virtual Camp map falls back to
+  // (sim/camp.html), but retained `config/origin` overrides it for every page at once.
+  const DEFAULT_ORIGIN = { lat: 25.7367, lon: -80.1548 };
+  let ORIGIN = { ...DEFAULT_ORIGIN };
+  const M_LAT = 111320;
+  const mLon = (lat) => 111320 * Math.cos(lat * Math.PI / 180);
+
+  const nodes = new Map();      // node_id -> {lat, lon, acc_m, sats, hdop, at}
+  const casts = [];             // recent prop messages that carried a position
+  let tracked = null;           // node_id being plotted
+  let samples = [];             // {e, n, lat, lon, acc_m, t} for the tracked node
+  let ref = null;               // reference point: {lat, lon}
+  let lastAt = 0, rateEma = 0;
+
+  // ---------------------------------------------------------------- geometry
+  const toEN = (p, r) => ({ e: (p.lon - r.lon) * mLon(r.lat), n: (p.lat - r.lat) * M_LAT });
+  function dist(a, b) { const d = toEN(a, b); return Math.hypot(d.e, d.n); }
+
+  function stats() {
+    if (!samples.length) return null;
+    const n = samples.length;
+    const me = samples.reduce((s, p) => s + p.e, 0) / n;
+    const mn = samples.reduce((s, p) => s + p.n, 0) / n;
+    const ve = samples.reduce((s, p) => s + (p.e - me) ** 2, 0) / n;
+    const vn = samples.reduce((s, p) => s + (p.n - mn) ** 2, 0) / n;
+    let max = 0;
+    for (const p of samples) max = Math.max(max, Math.hypot(p.e - me, p.n - mn));
+    return { n, me, mn, sde: Math.sqrt(ve), sdn: Math.sqrt(vn), max,
+             mlat: ref.lat + mn / M_LAT, mlon: ref.lon + me / mLon(ref.lat) };
+  }
+
+  // ---------------------------------------------------------------- drawing
+  const cv = $('plot'), ctx = cv.getContext('2d');
+  function fit() {
+    const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { w: r.width, h: r.height };
+  }
+
+  // Pick a grid step that gives a readable number of lines at this zoom.
+  function niceStep(mPerPx, px) {
+    const target = px / 6 * mPerPx;
+    const pow = Math.pow(10, Math.floor(Math.log10(Math.max(1e-6, target))));
+    for (const m of [1, 2, 5, 10]) if (target <= m * pow) return m * pow;
+    return 10 * pow;
+  }
+
+  function draw() {
+    const { w, h } = fit();
+    ctx.clearRect(0, 0, w, h);
+    if (!ref || !samples.length) return;
+
+    const cx = w / 2, cy = h / 2;
+    // scale: fit every sample with margin, floor at 4 m across so one dot is not zoomed to infinity
+    let span = 4;
+    const acc = samples[samples.length - 1].acc_m || 0;
+    span = Math.max(span, acc * 2.6);                    // keep the accuracy circle inside the frame
+    for (const p of samples) span = Math.max(span, Math.abs(p.e) * 2.2, Math.abs(p.n) * 2.2);
+    if (!$('autoscale').checked) span = Math.max(span, 40);
+    const scale = Math.min(w, h) * 0.86 / span;          // px per metre
+    const X = (e) => cx + e * scale, Y = (n) => cy - n * scale;
+
+    // grid
+    const step = niceStep(1 / scale, Math.min(w, h));
+    ctx.lineWidth = 1; ctx.font = '10px ui-monospace, monospace';
+    for (let k = -20; k <= 20; k++) {
+      const gx = X(k * step), gy = Y(k * step);
+      ctx.strokeStyle = k === 0 ? '#2a2a38' : '#17171e';
+      if (gx > 0 && gx < w) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke(); }
+      if (gy > 0 && gy < h) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke(); }
+    }
+    ctx.fillStyle = '#4a4a58';
+    ctx.fillText(step >= 1 ? step + ' m' : step.toFixed(1) + ' m', X(step) + 4, cy - 4);
+    ctx.fillText('N', cx + 4, 14);
+    ctx.strokeStyle = '#2a2a38'; ctx.beginPath(); ctx.moveTo(cx, 6); ctx.lineTo(cx, 20); ctx.stroke();
+
+    const st = stats();
+    // 1-sigma ellipse around the mean: the honest picture of where this module thinks it is
+    if (st && st.n > 3) {
+      ctx.strokeStyle = 'rgba(77,224,255,.35)'; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.ellipse(X(st.me), Y(st.mn), Math.max(1, st.sde * scale), Math.max(1, st.sdn * scale), 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(77,224,255,.9)';
+      ctx.beginPath(); ctx.arc(X(st.me), Y(st.mn), 2.5, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // trail
+    ctx.strokeStyle = 'rgba(120,160,255,.35)'; ctx.lineWidth = 1; ctx.beginPath();
+    samples.forEach((p, i) => (i ? ctx.lineTo(X(p.e), Y(p.n)) : ctx.moveTo(X(p.e), Y(p.n))));
+    ctx.stroke();
+    samples.forEach((p, i) => {
+      const a = 0.12 + 0.6 * (i / samples.length);
+      ctx.fillStyle = `rgba(150,180,255,${a})`;
+      ctx.beginPath(); ctx.arc(X(p.e), Y(p.n), 1.8, 0, Math.PI * 2); ctx.fill();
+    });
+
+    // latest fix + its accuracy circle
+    const last = samples[samples.length - 1];
+    if (last) {
+      if (last.acc_m) {
+        ctx.strokeStyle = 'rgba(77,224,255,.5)'; ctx.fillStyle = 'rgba(77,224,255,.07)';
+        ctx.beginPath(); ctx.arc(X(last.e), Y(last.n), Math.max(2, last.acc_m * scale), 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+      }
+      ctx.fillStyle = '#4de0ff';
+      ctx.beginPath(); ctx.arc(X(last.e), Y(last.n), 4, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // casts thrown from a known position
+    for (const c of casts) {
+      if (c.e == null) continue;
+      const age = (Date.now() - c.t) / 1000;
+      ctx.strokeStyle = c.color || '#ff4000'; ctx.globalAlpha = Math.max(0.15, 1 - age / 120); ctx.lineWidth = 1.5;
+      const x = X(c.e), y = Y(c.n), r = 7;
+      ctx.beginPath(); ctx.moveTo(x - r, y); ctx.lineTo(x + r, y); ctx.moveTo(x, y - r); ctx.lineTo(x, y + r); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, y, r * 0.55, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function loop() {
+    // A throw in here would kill rAF for the whole page (a trap this repo has hit before),
+    // so every frame is guarded.
+    try { draw(); refreshAge(); } catch (e) { /* keep animating */ }
+    requestAnimationFrame(loop);
+  }
+
+  // ---------------------------------------------------------------- readouts
+  const fmt = (v, d = 1) => (v == null || Number.isNaN(v) ? '–' : v.toFixed(d));
+  function refreshAge() {
+    const p = nodes.get(tracked);
+    $('age').textContent = p ? fmt((Date.now() - p.at) / 1000) + ' s' : '–';
+    if (p && (Date.now() - p.at) / 1000 > 10) $('age').style.color = '#ffb300'; else $('age').style.color = '';
+  }
+  function refresh() {
+    const p = nodes.get(tracked);
+    $('nofix').style.display = samples.length ? 'none' : 'flex';
+    if (!p) return;
+    $('lat').textContent = p.lat.toFixed(6);
+    $('lon').textContent = p.lon.toFixed(6);
+    $('acc').textContent = p.acc_m != null ? fmt(p.acc_m) + ' m' : '–';
+    $('sats').textContent = p.sats != null ? p.sats : '–';
+    $('hdop').textContent = p.hdop != null ? fmt(p.hdop, 2) : '–';
+    $('rate').textContent = rateEma ? fmt(rateEma, 2) + ' Hz' : '–';
+
+    const st = stats();
+    $('nfix').textContent = samples.length + ' fixes';
+    if (st) {
+      $('sdn').textContent = fmt(st.sdn, 2) + ' m';
+      $('sde').textContent = fmt(st.sde, 2) + ' m';
+      $('maxd').textContent = fmt(st.max, 2) + ' m';
+      $('mlat').textContent = st.mlat.toFixed(6);
+      $('mlon').textContent = st.mlon.toFixed(6);
+    }
+
+    const d = dist(p, ORIGIN);
+    $('origin').textContent = ORIGIN.lat.toFixed(4) + ', ' + ORIGIN.lon.toFixed(4);
+    $('odist').textContent = d > 2000 ? (d / 1000).toFixed(1) + ' km' : fmt(d) + ' m';
+    $('farnote').innerHTML = d > 500
+      ? '<span class="warn">This is ' + (d / 1000).toFixed(0) + ' km from the camp origin</span>, so the '
+        + 'Virtual Camp map cannot show it &mdash; that map is a 40&nbsp;m grid around Virginia Key. Expected '
+        + 'when bench-testing away from site; the plot on the left is relative, so it works anywhere.'
+      : 'Within camp scale of the origin, so the Virtual Camp map can show this too.';
+  }
+
+  function renderCasts() {
+    $('ncast').textContent = casts.length;
+    $('casts').innerHTML = casts.slice(-6).reverse().map((c) =>
+      `<b style="color:${safeColor(c.color, '#ff4000')}">${esc(c.gesture)}</b><span>${c.e == null ? 'no fix' : fmt(Math.hypot(c.e, c.n)) + ' m away'}</span>`).join('');
+  }
+
+  // ---------------------------------------------------------------- map
+  // Tiles come from the internet today. At camp there is none, so the page looks for a
+  // locally served pack FIRST (sim/tiles/manifest.json, served by the same nginx as this
+  // page) and only falls back to the online layers. Building that pack is a later job -
+  // see nodes/staff_pi/README.md for why it is a licensing question, not a coding one.
+  // MAX_ZOOM is how far the map lets you go; maxNativeZoom is how deep the server actually
+  // has pixels. Past that Leaflet upscales the last real tile instead of requesting one that
+  // does not exist - blurry beats blank, and at a 40 m camp you are placing things within
+  // metres, so the extra levels earn their keep.
+  //
+  // Probed 2026-09-22 (a tile at ~2.5 kB is Esri's "no imagery here" placeholder):
+  //   Virginia Key (camp) - real imagery to z21
+  //   home test bench - real imagery to z20
+  // Native is capped at the lower of the two so neither place shows grey squares; when an
+  // offline pack is built for camp it should go to z21, which is what is actually there.
+  const MAX_ZOOM = 23;
+  const ONLINE_LAYERS = {
+    Satellite: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                 attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics', maxNativeZoom: 20 },
+    Street:    { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                 attribution: '&copy; OpenStreetMap contributors', maxNativeZoom: 19 },
+  };
+  let map = null, layersCtl = null;
+  let mMarker = null, mAcc = null, mTrail = null, mOrigin = null;
+  const mCasts = [];
+  let mapReady = false;
+
+  async function localLayers() {
+    try {
+      const r = await fetch('tiles/manifest.json', { cache: 'no-store' });
+      if (!r.ok) return null;
+      const man = await r.json();
+      if (!Array.isArray(man.layers) || !man.layers.length) return null;
+      return man;
+    } catch (e) { return null; }      // no pack served: expected until the offline job is done
+  }
+
+  async function buildMap() {
+    if (map) return;
+    map = L.map('map', { zoomControl: true, attributionControl: true, maxZoom: MAX_ZOOM, zoomSnap: 0.5 })
+           .setView([ORIGIN.lat, ORIGIN.lon], 18);
+    L.control.scale({ metric: true, imperial: false, maxWidth: 140 }).addTo(map);
+    map.on('zoomend', showZoom);
+    const layers = {};
+    const man = await localLayers();
+    if (man) {
+      for (const l of man.layers) {
+        layers[l.name + ' (offline)'] = L.tileLayer(l.url, {
+          attribution: l.attribution || 'local tile pack', minZoom: l.minZoom || 0,
+          maxNativeZoom: l.maxZoom || 19, maxZoom: MAX_ZOOM });
+      }
+      $('originnote').insertAdjacentHTML('afterend',
+        `<div class="note">Using the local tile pack (${man.layers.length} layer(s), built ${man.generated || 'unknown'}).</div>`);
+    }
+    for (const [name, cfg] of Object.entries(ONLINE_LAYERS)) {
+      layers[name] = L.tileLayer(cfg.url, { attribution: cfg.attribution,
+        maxNativeZoom: cfg.maxNativeZoom, maxZoom: MAX_ZOOM });
+    }
+    const first = Object.values(layers)[0];
+    first.addTo(map);
+    layersCtl = L.control.layers(layers, {}, { collapsed: true }).addTo(map);
+
+    mTrail = L.polyline([], { color: '#78a0ff', weight: 2, opacity: 0.6 }).addTo(map);
+    mAcc = L.circle([ORIGIN.lat, ORIGIN.lon], { radius: 0, color: '#4de0ff', weight: 1, fillOpacity: 0.08 }).addTo(map);
+    mMarker = L.circleMarker([ORIGIN.lat, ORIGIN.lon], { radius: 6, color: '#4de0ff', fillColor: '#4de0ff', fillOpacity: 1, weight: 2 }).addTo(map);
+    drawOriginMarker();
+    mapReady = true;
+    showZoom();
+    syncMap(true);
+  }
+
+  function drawOriginMarker() {
+    if (!map) return;
+    if (mOrigin) map.removeLayer(mOrigin);
+    mOrigin = L.marker([ORIGIN.lat, ORIGIN.lon], {
+      icon: L.divIcon({ className: '', iconSize: [16, 16], iconAnchor: [8, 8],
+        html: '<div style="width:14px;height:14px;border:2px solid #ffb300;border-radius:50%;box-shadow:0 0 6px #ffb300"></div>' }),
+    }).addTo(map).bindTooltip('camp origin', { direction: 'top' });
+  }
+
+  function syncMap(recentreView) {
+    if (!mapReady || !samples.length) return;
+    const last = samples[samples.length - 1];
+    const ll = [last.lat, last.lon];
+    mMarker.setLatLng(ll);
+    mAcc.setLatLng(ll).setRadius(last.acc_m || 0);
+    mTrail.setLatLngs(samples.map((p) => [p.lat, p.lon]));
+    // casts: one marker each, drawn once
+    for (let i = mCasts.length; i < casts.length; i++) {
+      const c = casts[i];
+      if (c.lat == null) { mCasts.push(null); continue; }
+      mCasts.push(L.circleMarker([c.lat, c.lon], { radius: 7, color: c.color || '#ff4000', weight: 2, fillOpacity: 0.15 })
+        .addTo(map).bindTooltip(c.gesture, { direction: 'top' }));
+    }
+    if (recentreView || $('follow').checked) map.setView(ll, map.getZoom(), { animate: false });
+  }
+
+  function showZoom() {
+    if (!map) return;
+    const z = map.getZoom();
+    const native = Math.min(...Object.values(map._layers)
+      .filter((l) => l instanceof L.TileLayer && map.hasLayer(l))
+      .map((l) => l.options.maxNativeZoom || l.options.maxZoom || 19));
+    const over = z > native;
+    $('viewhint').innerHTML = `real coordinates &middot; z${z}`
+      + (over ? ` <span class="warn">(upscaled past z${native} - blur is the tiles, not the fix)</span>` : '');
+  }
+
+  function showView(which) {
+    const isMap = which === 'map';
+    $('map').classList.toggle('hidden', !isMap);
+    $('plot').classList.toggle('hidden', isMap);
+    $('autoscale').parentElement.classList.toggle('hidden', isMap);
+    $('followwrap').classList.toggle('hidden', !isMap);
+    $('viewhint').textContent = isMap
+      ? 'real coordinates · tiles need internet today'
+      : 'metres from the reference point · north is up';
+    if (isMap && map) showZoom();
+    [...$('view').children].forEach((b) => b.classList.toggle('on', b.dataset.view === which));
+    if (isMap) {
+      buildMap().then(() => { map.invalidateSize(); showZoom(); syncMap(true); });
+    }
+  }
+
+  // ---------------------------------------------------------------- camp origin
+  let originPending = false;
+  function setOriginUI() {
+    const st = stats();
+    $('setorigin').disabled = !st;
+    $('origin').textContent = ORIGIN.lat.toFixed(6) + ', ' + ORIGIN.lon.toFixed(6);
+  }
+  function applyOrigin(o, src) {
+    ORIGIN = { lat: o.lat, lon: o.lon };
+    $('originsrc').textContent = src;
+    drawOriginMarker();
+    refresh();
+  }
+  $('setorigin').addEventListener('click', () => {
+    const st = stats(); if (!st) return;
+    if (!originPending) {
+      // Two steps on purpose: this is retained state that re-anchors camp for every page.
+      // A confirm() dialog would block the whole tab, so the button asks for itself.
+      originPending = true;
+      $('setorigin').textContent = `Confirm: ${st.mlat.toFixed(6)}, ${st.mlon.toFixed(6)}`;
+      $('setorigin').style.borderColor = '#ffb300';
+      $('cancelorigin').classList.remove('hidden');
+      return;
+    }
+    client && client.connected && client.publish('config/origin', JSON.stringify(
+      { lat: +st.mlat.toFixed(6), lon: +st.mlon.toFixed(6), acc_m: +(st.max).toFixed(1),
+        n: st.n, set_by: tracked, ts: Date.now() }), { retain: true, qos: 0 });
+    resetOriginBtn();
+  });
+  function resetOriginBtn() {
+    originPending = false;
+    $('setorigin').textContent = 'Set camp origin here';
+    $('setorigin').style.borderColor = '';
+    $('cancelorigin').classList.add('hidden');
+  }
+  $('cancelorigin').addEventListener('click', resetOriginBtn);
+  $('resetorigin').addEventListener('click', () => {
+    // An empty retained payload deletes the topic, so a page booting later gets nothing
+    // and falls back to its own default - rather than inheriting a stale camp origin.
+    if (client && client.connected) client.publish('config/origin', '', { retain: true, qos: 0 });
+    applyOrigin(DEFAULT_ORIGIN, 'default');
+    resetOriginBtn();
+  });
+
+  // ---------------------------------------------------------------- bus
+  let client = null;
+  const nodeId = 'sim_gps_' + Math.random().toString(36).slice(2, 8);
+  $('url').value = Camp.Settings.brokerUrl();
+  const setConn = (t, c) => { const el = $('conn'); el.textContent = t; el.className = c || ''; };
+
+  const PROPISH = /staff|wand|whip|drum|prop/;
+  let userPicked = false;
+  function pickTracked() {
+    const ids = [...nodes.keys()].sort();
+    const sel = $('who');
+    if (sel.options.length !== ids.length) {
+      sel.innerHTML = ids.map((i) => `<option value="${esc(i)}">${esc(i)}</option>`).join('');
+      if (tracked) sel.value = tracked;
+    }
+    if (userPicked || !ids.length) return;
+    // Retained positions arrive in whatever order the broker replays them, so the first
+    // one is usually a fixed sim node, not the thing with the GPS. Keep upgrading to a
+    // prop until the user picks for themselves.
+    const best = ids.find((i) => PROPISH.test(i)) || ids[0];
+    if (tracked !== best && (!tracked || !PROPISH.test(tracked))) {
+      tracked = best; sel.value = best; samples = []; ref = null; lastAt = 0; rateEma = 0;
+    }
+  }
+
+  function onPosition(id, m) {
+    if (typeof m.lat !== 'number' || typeof m.lon !== 'number') return;
+    const p = { lat: m.lat, lon: m.lon, acc_m: m.acc_m, sats: m.sats, hdop: m.hdop, at: Date.now() };
+    nodes.set(id, p);
+    pickTracked();
+    if (id !== tracked) return;
+
+    const now = Date.now();
+    if (lastAt) { const hz = 1000 / Math.max(1, now - lastAt); rateEma = rateEma ? rateEma * 0.8 + hz * 0.2 : hz; }
+    lastAt = now;
+
+    if (!ref) ref = { lat: p.lat, lon: p.lon };
+    const en = toEN(p, ref);
+    const prev = samples[samples.length - 1];
+    // drop exact repeats: the module restates the same fix between updates
+    if (!prev || prev.lat !== p.lat || prev.lon !== p.lon) {
+      samples.push({ ...en, lat: p.lat, lon: p.lon, acc_m: p.acc_m, t: now });
+      const cap = +$('trail').value;
+      if (samples.length > cap) samples = samples.slice(-cap);
+    }
+    refresh();
+    setOriginUI();
+    syncMap(false);
+  }
+
+  function onCast(m) {
+    const hasFix = typeof m.lat === 'number' && typeof m.lon === 'number';
+    // keep lat/lon too, or recentring has nothing to recompute from
+    const c = { gesture: m.gesture || '?', color: m.color, t: Date.now(), e: null, n: null,
+                lat: hasFix ? m.lat : null, lon: hasFix ? m.lon : null };
+    if (hasFix && ref) Object.assign(c, toEN(m, ref));
+    casts.push(c);
+    // mCasts is index-aligned with casts, so trimming one must trim the other
+    while (casts.length > 40) {
+      casts.shift();
+      const gone = mCasts.shift();
+      if (gone && map) map.removeLayer(gone);
+    }
+    renderCasts();
+    syncMap(false);
+  }
+
+  function connect() {
+    if (client) { try { client.end(true); } catch (e) {} }
+    const url = $('url').value.trim(); setConn('connecting ' + url + ' …');
+    client = mqtt.connect(url, { clientId: nodeId, clean: true, keepalive: 20, reconnectPeriod: 2000 });
+    client.on('connect', () => { setConn('connected ' + url, 'ok'); client.subscribe(['map/+', 'prop/+', 'config/origin']); });
+    client.on('close', () => setConn('disconnected', 'bad'));
+    client.on('error', (e) => setConn('error: ' + e.message, 'bad'));
+    client.on('message', (topic, buf) => {
+      const raw = buf.toString();
+      if (topic === 'config/origin' && !raw.trim()) { applyOrigin(DEFAULT_ORIGIN, 'default'); return; }
+      let m; try { m = JSON.parse(raw); } catch (e) { return; }
+      if (topic === 'config/origin') {
+        if (typeof m.lat === 'number' && typeof m.lon === 'number') {
+          applyOrigin(m, `set from ${m.set_by || 'bus'}${m.n ? ', ' + m.n + ' fixes' : ''}`);
+        }
+      } else if (topic.startsWith('map/')) onPosition(topic.slice(4), m);
+      else if (topic.startsWith('prop/')) onCast(m);
+    });
+  }
+
+  [...$('view').children].forEach((b) => b.addEventListener('click', () => showView(b.dataset.view)));
+  showView('grid');
+  $('connect').addEventListener('click', connect);
+  $('who').addEventListener('change', (e) => { userPicked = true; tracked = e.target.value; samples = []; ref = null; lastAt = 0; rateEma = 0; refresh(); });
+  $('recentre').addEventListener('click', () => {
+    const st = stats(); if (!st) return;
+    ref = { lat: st.mlat, lon: st.mlon };
+    samples = samples.map((p) => ({ ...p, ...toEN(p, ref) }));
+    for (const c of casts) if (c.lat != null) Object.assign(c, toEN({ lat: c.lat, lon: c.lon }, ref));
+  });
+  $('clear').addEventListener('click', () => {
+    samples = []; casts.length = 0; ref = null;
+    for (const c of mCasts) if (c && map) map.removeLayer(c);
+    mCasts.length = 0;
+    if (mTrail) mTrail.setLatLngs([]);
+    renderCasts(); refresh();
+  });
+  $('trail').addEventListener('input', (e) => { $('trailn').textContent = e.target.value; });
+
+  connect();
+  loop();
+
+  // Debug handle, in the spirit of camp.html's __sim: lets the console (and automated
+  // checks) drive the map without reaching into the closure.
+  window.__gps = { map: () => map, samples: () => samples, stats, origin: () => ORIGIN };
+})();
+</script>
+</body>
+</html>

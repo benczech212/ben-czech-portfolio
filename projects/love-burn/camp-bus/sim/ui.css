@@ -1,0 +1,134 @@
+/* Camp Bus — one look for every page in sim/.
+ *
+ * Palette: the ground is a cool near-black (night over the water at Virginia Key), and the
+ * three signal colours are lifted from the camp's own sculptures, so a page and the LEDs it
+ * describes speak the same language: ghost-fungus green is alive, chanterelle amber is late,
+ * aquamarine (the geodes) is anything you can touch. Red means one thing only.
+ *
+ * Status is told by BRIGHTNESS before hue — the way an annunciator panel does it, and the way
+ * the staff console already does. A lamp fades from live to late over the 30 s status heartbeat
+ * in docs/SCHEMA.md, so "how stale" is readable without reading a number.
+ *
+ * No webfonts: the camp LAN has no internet, and a page that waits on a font it will never get
+ * is worse than one that never asked.
+ */
+
+:root {
+  --ground:#0b0f12;
+  --panel:#131a1f;
+  --raise:#18222a;          /* a panel on a panel: rows, inputs, wells */
+  --rule:#1f2a31;
+  --rule-lit:#2c3b45;
+  --ink:#e6edf1;
+  --mute:#7d8f9a;
+  --live:#4dffa6;
+  --stale:#ffb300;
+  --down:#ff5252;
+  --act:#4de0ff;
+
+  --mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --pad:16px;
+  --r:12px;                 /* panels */
+  --r-sm:8px;               /* controls */
+}
+
+*, *::before, *::after { box-sizing:border-box; }
+
+body {
+  margin:0;
+  background:var(--ground);
+  color:var(--ink);
+  font:15px/1.55 var(--sans);
+  -webkit-text-size-adjust:100%;
+}
+
+/* Type: sentence case, tight tracking as it gets bigger, numbers that never jitter. */
+h1 { font-size:26px; font-weight:650; letter-spacing:-.022em; margin:0; }
+h2 { font-size:15px; font-weight:600; letter-spacing:-.01em; margin:0 0 10px; }
+h3 { font-size:13px; font-weight:600; margin:0 0 6px; }
+p { margin:0 0 12px; max-width:72ch; }
+a { color:var(--act); text-decoration-color:color-mix(in srgb, var(--act) 40%, transparent); text-underline-offset:2px; }
+a:hover { text-decoration-color:currentColor; }
+code, .num, .mono { font-family:var(--mono); font-variant-numeric:tabular-nums; }
+code { background:var(--raise); border-radius:4px; padding:1px 5px; font-size:.92em; }
+.mute { color:var(--mute); }
+.small { font-size:13px; }
+
+:where(a, button, input, select, summary):focus-visible {
+  outline:2px solid var(--act); outline-offset:2px; border-radius:2px;
+}
+
+/* ---------------------------------------------------------------- navigation
+ * One row of pages, the current one underlined. The old version grouped them under
+ * tracked-out caps labels (PLAY / CONTROL / BOOTH / DEBUG); the groups are now just
+ * hairline separators, which say the same thing without shouting it.
+ */
+.campnav { display:flex; align-items:center; gap:2px; flex-wrap:wrap; font-size:13.5px; }
+.campnav .brand {
+  font-weight:650; font-size:15px; color:var(--ink); text-decoration:none;
+  letter-spacing:-.02em; margin-right:12px; white-space:nowrap;
+}
+.campnav .grp { display:inline-flex; align-items:center; gap:2px; }
+.campnav .grp + .grp { margin-left:10px; padding-left:12px; border-left:1px solid var(--rule); }
+.campnav a:not(.brand) {
+  color:var(--mute); text-decoration:none; padding:5px 9px; border-radius:var(--r-sm);
+  border-bottom:2px solid transparent; white-space:nowrap;
+}
+.campnav a:not(.brand):hover { color:var(--ink); background:var(--raise); }
+.campnav a.on { color:var(--ink); border-bottom-color:var(--act); border-radius:var(--r-sm) var(--r-sm) 0 0; }
+
+/* ---------------------------------------------------------------- page chrome */
+.topbar {
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  padding:10px var(--pad); background:var(--panel); border-bottom:1px solid var(--rule);
+}
+.topbar .spacer { flex:1 1 auto; }
+.page { max-width:1180px; margin:0 auto; padding:26px var(--pad) 64px; }
+.page.narrow { max-width:780px; }
+
+/* ---------------------------------------------------------------- surfaces */
+.panel { background:var(--panel); border:1px solid var(--rule); border-radius:var(--r); padding:14px 16px; }
+.panel + .panel { margin-top:12px; }
+
+/* ---------------------------------------------------------------- controls */
+.btn {
+  font:inherit; font-size:13.5px; color:var(--ink); background:var(--raise);
+  border:1px solid var(--rule-lit); border-radius:var(--r-sm); padding:6px 12px; cursor:pointer;
+}
+.btn:hover { border-color:var(--act); color:var(--act); }
+.btn.quiet { background:transparent; }
+.btn.on { color:var(--ground); background:var(--act); border-color:var(--act); }
+.btn[disabled] { opacity:.45; cursor:default; }
+.field {
+  font:inherit; font-size:13.5px; color:var(--ink); background:var(--ground);
+  border:1px solid var(--rule-lit); border-radius:var(--r-sm); padding:6px 9px;
+}
+
+/* ---------------------------------------------------------------- the lamp
+ * .lamp carries a --fresh from 1 (heard just now) to 0 (gone quiet); brightness does
+ * the talking and the hue only shifts once a node is properly late.
+ */
+.lamp {
+  --fresh:1;
+  width:10px; height:10px; border-radius:50%; flex:none; display:inline-block;
+  background:currentColor; color:var(--down);
+  box-shadow:0 0 calc(4px + 8px * var(--fresh)) currentColor;
+  opacity:calc(.35 + .65 * var(--fresh));
+}
+.lamp.live { color:var(--live); }
+.lamp.late { color:var(--stale); }
+.lamp.gone { color:var(--down); }
+.lamp.never { background:transparent; color:var(--rule-lit); box-shadow:none; opacity:1;
+              border:1.5px solid currentColor; }
+@media (prefers-reduced-motion:no-preference) { .lamp { transition:color .4s, opacity .4s, box-shadow .4s; } }
+
+.conn { font-size:12.5px; color:var(--mute); font-family:var(--mono); }
+.conn.ok { color:var(--live); } .conn.bad { color:var(--down); }
+
+/* ---------------------------------------------------------------- data tables */
+table.data { width:100%; border-collapse:collapse; font-size:13.5px; }
+table.data th { text-align:left; font-weight:500; color:var(--mute); font-size:12px; padding:0 10px 6px 0; }
+table.data td { padding:7px 10px 7px 0; border-top:1px solid var(--rule); vertical-align:baseline; }
+table.data td.num, table.data th.num { text-align:right; font-family:var(--mono); font-variant-numeric:tabular-nums; }

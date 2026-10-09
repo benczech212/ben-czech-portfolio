@@ -1,0 +1,57 @@
+# Lean WordPress stack for a 1 GB e2-micro: Caddy (HTTPS) -> PHP-FPM WordPress -> MariaDB.
+services:
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+    volumes:
+      - db:/var/lib/mysql
+      - ./mariadb.cnf:/etc/mysql/conf.d/lowmem.cnf:ro
+    mem_limit: 320m
+
+  wordpress:
+    image: wordpress:php8.3-fpm-alpine
+    restart: unless-stopped
+    depends_on: [db]
+    env_file: .env
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_MEMORY_LIMIT', '256M');
+        define('DISABLE_WP_CRON', true);
+        define('WP_ENVIRONMENT_TYPE', 'staging');
+    volumes:
+      - wp:/var/www/html
+      - ./php.ini:/usr/local/etc/php/conf.d/zz-custom.ini:ro
+      - ./www.conf:/usr/local/etc/php-fpm.d/zz-pool.conf:ro
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [wordpress]
+    env_file: .env
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - wp:/var/www/html:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  cli:
+    image: wordpress:cli-php8.3
+    profiles: [tools]
+    user: "82:82"
+    env_file: .env
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DB_USER: wordpress
+    volumes:
+      - wp:/var/www/html
+
+volumes: {db: {}, wp: {}, caddy_data: {}, caddy_config: {}}

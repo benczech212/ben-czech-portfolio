@@ -1,0 +1,449 @@
+# Exhibit macro config (example). Copy it first:  cp exhibit.example.yaml exhibit.yaml
+# Machine-specific overrides and the admin password go in exhibit.local.yaml
+# (same structure, deep-merged on top, gitignored). See docs/PLAN.md.
+# Replace <kiosk-user> in the paths below with the kiosk's Windows account (paths are not env-expanded).
+
+defaults:
+  ready_timeout: 60        # seconds an app may take to become ready
+  kill_grace: 8            # seconds to wait for a graceful close before force-killing
+
+# Daily schedule: Windows scheduled tasks created by `exhibit schedule install` (macro: HH:MM).
+schedule:
+  pause: "19:00"
+  wake:  "07:00"
+
+# Idle / engaged mode. Any detected input (future controllers, panel control changes, POST /api/input)
+# switches to "engaged" and runs the `engaged` macro; after idle_seconds without input the `idle`
+# macro runs. Both macros are plain step lists, so the behaviour can grow without code changes.
+engagement:
+  idle_seconds: 30
+  on_engaged: engaged
+  on_idle: idle
+  panel_controls_count: true          # touching Synesthesia controls on the panel counts as input
+  # Long idle: after this many seconds with no input at all, `on_reset` puts Synesthesia and
+  # Arena back to their defaults so the next visitor starts from a clean look.
+  reset_seconds: 600                  # 10 minutes
+  on_reset: reset_defaults
+
+# Control panel UI (client/panel.html). Times are seconds.
+panel:
+  idle_seconds: 90                    # no touch / controller input for this long -> screensaver
+  tutorial: true                      # run the overlay tour every time the screensaver is dismissed
+  slide_seconds: 7                    # how long each screensaver message stays up
+  slides:
+    - { title: "Control the visuals from here!", sub: "This screen drives the projections around you." }
+    - { title: "Move the mouse to get started", sub: "Or just touch the screen." }
+    - { title: "Use the XBOX controller!", sub: "Sticks bend the scene, triggers push it further." }
+    - { title: "Try the SpaceMouse", sub: "Push, pull and twist the puck to fly through the visuals." }
+    - { title: "Every scene plays differently", sub: "The controls change with the artwork on the wall." }
+    - { title: "Tell us what you think", sub: "Thumbs up or down — the exhibit is listening." }
+
+# Visitor inputs. Everything arrives as OSC on inputs.osc_port as /input/<source>/<control> <value>:
+#   xbox / spacemouse  → src/inputs.py (the `inputs` app) bridges the USB devices
+#   td                 → TouchDesigner (camera AI: person positions) sends directly, e.g. /input/td/person_x 0.63
+#   pi                 → Raspberry Pi sensors send directly
+# Every message marks the exhibit "engaged" (see engagement:). Mappings route controls to targets:
+#   mode: absolute (input range → 0..1), relative (deflection nudges the target: rate per second),
+#         button (rising edge → macro or value)
+#   to:   { synesthesia: { bank, name[, sub] } } | { synesthesia: { scene_control_index: N } } (Nth control of
+#         whatever scene is playing) | { osc: { target, address[, int] } } | { music: volume } | { macro: name }
+inputs:
+  osc_port: 9004
+  deadzone: 0.05
+  # Source IPs allowed to send /input/* (default: this PC only). Add the Pi / TouchDesigner box if they
+  # send from another machine, e.g. [127.0.0.1, 192.0.2.60].
+  allowed_sources: [127.0.0.1]
+  # Per-scene schemes (input_schemes.yaml, `exhibit schemes generate`): each scene assigns its own controls to the
+  # gesture slots x (left/right), y (fwd/back), z (push/pull), yaw (twist), pitch, roll, left, right.
+  # A mapping with `to: { scheme: <slot> }` follows whatever scene is playing; buttons honour the slot's
+  # action (toggle flips the control, momentary holds a bang while pressed).
+  schemes_file: input_schemes.yaml
+  # relative mappings: `rate` = how much of the 0..1 range per second at full deflection (2.0 = full sweep in 0.5 s);
+  # `curve` > 1 is an expo response (fine near centre, fast at the edges); `gain` scales the input first.
+  mappings:
+    # SpaceMouse: 6 axes + 2 buttons -> the scene's scheme slots; a light touch is ~0.2-0.4, so gain 1.5 + expo curve
+    - { match: /input/spacemouse/x,     mode: relative, rate: 2.0, gain: 1.5, curve: 1.4, to: { scheme: x } }
+    - { match: /input/spacemouse/y,     mode: relative, rate: 2.0, gain: 1.5, curve: 1.4, to: { scheme: y } }
+    - { match: /input/spacemouse/z,     mode: relative, rate: 2.0, gain: 1.5, curve: 1.4, to: { scheme: z } }
+    - { match: /input/spacemouse/yaw,   mode: relative, rate: 2.0, gain: 1.5, curve: 1.4, to: { scheme: yaw } }
+    - { match: /input/spacemouse/pitch, mode: relative, rate: 2.0, gain: 1.5, curve: 1.4, to: { scheme: pitch } }
+    - { match: /input/spacemouse/roll,  mode: relative, rate: 2.0, gain: 1.5, curve: 1.4, to: { scheme: roll } }
+    - { match: /input/spacemouse/btn_0, mode: button, to: { scheme: left } }
+    - { match: /input/spacemouse/btn_1, mode: button, to: { scheme: right } }
+    # Xbox: sticks = x/y and yaw/pitch, triggers = push (RT) / pull (LT), A/B = left/right buttons, RB = next scene, X = transition, Y = next track
+    - { match: /input/xbox/lx, mode: relative, rate: 2.0, curve: 1.5, to: { scheme: x } }
+    - { match: /input/xbox/ly, mode: relative, rate: 2.0, curve: 1.5, to: { scheme: y } }
+    - { match: /input/xbox/rx, mode: relative, rate: 2.0, curve: 1.5, to: { scheme: yaw } }
+    - { match: /input/xbox/ry, mode: relative, rate: 2.0, curve: 1.5, to: { scheme: pitch } }
+    - { match: /input/xbox/rt, mode: relative, rate: 1.5, to: { scheme: z } }
+    - { match: /input/xbox/lt, mode: relative, rate: 1.5, invert: true, to: { scheme: z } }
+    - { match: /input/xbox/btn_a,  mode: button, to: { scheme: left } }
+    - { match: /input/xbox/btn_b,  mode: button, to: { scheme: right } }
+    - { match: /input/xbox/btn_rb, mode: button, to: { macro: syn_next } }
+    - { match: /input/xbox/btn_x,  mode: button, to: { synesthesia: { bank: meta, name: transition } } }
+    - { match: /input/xbox/btn_y,  mode: button, to: { macro: music_next } }
+    # TouchDesigner camera AI (positions already 0..1): person x → hue, person y → brightness (placeholders)
+    - { match: /input/td/person_x, mode: absolute, range: [0, 1], to: { synesthesia: { bank: meta, name: hue } } }
+    - { match: /input/td/person_y, mode: absolute, range: [0, 1], out: [0.3, 0.8], to: { synesthesia: { bank: meta, name: brightness } } }
+
+# Control-panel admin: the Admin page asks for this password; an unlock lasts session_minutes of
+# inactivity and is required for the listed macros, launching/killing apps, and leaving fullscreen.
+# set admin.password in exhibit.local.yaml (gitignored); never put it in this file.
+admin:
+  session_minutes: 15
+  protected_macros: [restart, shutdown, flip_output, monitoring_stop, hide_panel]
+  # App actions the visitor panel may call without admin (anything else under /api/action and /api/music
+  # needs an unlock). Omit to use this default.
+  # public_actions: { resolume: [column, master, speed, simple, full, defaults], music: [play, pause, next, prev, shuffle] }
+
+# Analytics: the control server exposes Prometheus metrics at /metrics, writes every event as
+# NDJSON under data/events/, mirrors them into data/exhibit.db (SQLite) and pushes them to Loki.
+telemetry:
+  sample_interval_seconds: 5
+  loki: { url: http://127.0.0.1:3100, enabled: true }
+
+# Where we SEND OSC (host/port), and where each app sends OSC back TO us (listen).
+osc:
+  resolume:      { host: 127.0.0.1, port: 7000 }
+  synesthesia:   { host: 127.0.0.1, port: 12000, listen: 12001 }
+  touchdesigner: { host: 127.0.0.1, port: 9002,  listen: 9003 }
+
+apps:
+  # Audio mixer. Windows default playback → VoiceMeeter virtual input (Strip 3) → A1 (projector HDMI)
+  # and B1 (virtual out, what Synesthesia listens to). The `settings` script and `windows_audio`
+  # block are re-applied at every boot so a stray slider or device change cannot silence the show.
+  voicemeeter:
+    type: voicemeeter
+    exe: C:\Program Files (x86)\VB\Voicemeeter\voicemeeter.exe
+    process: voicemeeter.exe
+    ready: { type: driver, timeout: 30 }
+    settings: |
+      Strip[0].label = "Not Used";  Strip[0].A1 = 0; Strip[0].B1 = 0; Strip[0].mute = 1
+      Strip[1].label = "Not Used";  Strip[1].A1 = 0; Strip[1].B1 = 0; Strip[1].mute = 1
+      Strip[2].label = "PC / Music"; Strip[2].A1 = 1; Strip[2].B1 = 1; Strip[2].gain = 0; Strip[2].mute = 0
+      Bus[0].device.wdm = "Headphones (Realtek(R) Audio)"
+      Bus[0].mute = 0                      # gain is not pinned here: `output` owns it (see below)
+      Bus[1].gain = 0; Bus[1].mute = 0
+    # The panel's volume fader drives this bus's fader gain. max_db is the exhibit's ceiling —
+    # the fader maps 0..1 onto min_db..max_db, so the room can never be turned up past max_db.
+    # Raise max_db when the real speakers go in; -20 dB suits the desk headphones.
+    output:
+      bus: 0                               # 0 = A1 (the physical out), 1 = B1
+      name: A1
+      min_db: -60                          # fader at 0 = silent
+      max_db: -20                          # fader at 100% = -20 dB
+      boot_volume: 0.7                     # applied by the boot macro (≈ -32 dB)
+    windows_audio:
+      playback: Voicemeeter Input (VB-Audio Voicemeeter VAIO)            # apps play into Strip 3
+      playback_communications: Voicemeeter Input (VB-Audio Voicemeeter VAIO)
+      recording: Voicemeeter Out B1 (VB-Audio Voicemeeter VAIO)          # apps that capture "default mic" get the mix
+      recording_communications: Voicemeeter Out B1 (VB-Audio Voicemeeter VAIO)
+      hide:                                                              # unused endpoints from the VAIO driver pack
+        playback:  [Voicemeeter In 1, Voicemeeter In 2, Voicemeeter In 3, Voicemeeter In 4, Voicemeeter In 5,
+                    Voicemeeter VAIO3 Input, Voicemeeter AUX Input, Speakers (Realtek]
+        recording: [Voicemeeter Out A1, Voicemeeter Out A2, Voicemeeter Out A3, Voicemeeter Out A4, Voicemeeter Out A5,
+                    Voicemeeter Out B2, Voicemeeter Out B3]
+
+  # Keeps Windows from sleeping / blanking the displays (which on this domain PC ends at the
+  # lock screen). A detached process asserting SetThreadExecutionState; runs all day and night.
+  keepalive:
+    type: keepalive
+    display: true                      # also keep the displays on (projectors show black during pause anyway)
+    interval: 30
+
+  # Control-panel web server (client/panel.html + JSON API). Bound to 127.0.0.1. To reach it from a
+  # phone/tablet on the LAN you must change the bind address in src/server.js AND list the host names
+  # it is reached by here; requests with any other Host/Origin header are refused (403).
+  control:
+    type: control
+    port: 9876
+    # allowed_hosts: [192.0.2.50]
+
+  # The operator GUI: a kiosk Chrome window on display 1 showing the control panel. Its
+  # "Hide panel" button closes it; "Show Control Panel.bat" (run show_panel) brings it back.
+  panel:
+    type: chrome
+    exe: C:\Program Files\Google\Chrome\Application\chrome.exe
+    user_data_dir: C:\dev\exhibit-panel-profile
+    url: http://127.0.0.1:9876/
+    app_mode: true
+    kiosk: true
+    debug_port: 9223
+    window: { x: 0, y: 0, width: 1920, height: 1080 }
+    ready: { type: http, timeout: 30 }
+
+  # Monitoring stack (portable installs under C:\dev\tools\monitoring, see monitoring\install.ps1).
+  # Prometheus scrapes the control server; Loki stores the event stream; Grafana shows both
+  # at http://127.0.0.1:3000 (dashboard "Exhibit Overview"; sign in, admin password from GF_SECURITY_ADMIN_PASSWORD).
+  windows_exporter:                  # CPU / memory / disk / network / per-process for Prometheus (:9182)
+    type: generic
+    exe: C:\dev\tools\monitoring\windows_exporter\windows_exporter.exe
+    process: windows_exporter.exe
+    hide_console: true
+    args: ["--web.listen-address=127.0.0.1:9182",
+           "--collectors.enabled=cpu,cpu_info,memory,logical_disk,physical_disk,net,os,system,process,thermalzone",
+           "--collector.process.include=Arena|Synesthesia|youtube-music.*|node|voicemeeter|chrome|prometheus|loki|grafana|python|windows_exporter"]
+    ready: { type: http, url: http://127.0.0.1:9182/health, timeout: 30 }
+  prometheus:
+    type: generic
+    exe: C:\dev\tools\monitoring\prometheus\prometheus.exe
+    process: prometheus.exe
+    hide_console: true
+    args: ["--config.file=C:\\dev\\leepa_rattner_exhibit_2026\\monitoring\\prometheus.yml",
+           "--storage.tsdb.path=C:\\dev\\tools\\monitoring\\data\\prometheus",
+           "--storage.tsdb.retention.time=400d", "--web.listen-address=127.0.0.1:9090", "--web.enable-lifecycle"]
+    ready: { type: http, url: http://127.0.0.1:9090/-/ready, timeout: 30 }
+  loki:
+    type: generic
+    exe: C:\dev\tools\monitoring\loki\loki-windows-amd64.exe
+    process: loki-windows-amd64.exe
+    hide_console: true
+    args: ["-config.file=C:\\dev\\leepa_rattner_exhibit_2026\\monitoring\\loki.yaml"]
+    ready: { type: http, url: http://127.0.0.1:3100/ready, timeout: 60 }
+  grafana:
+    type: generic
+    exe: C:\dev\tools\monitoring\grafana\bin\grafana.exe
+    process: grafana.exe
+    hide_console: true
+    cwd: C:\dev\tools\monitoring\grafana
+    args: ["server", "--homepath", "C:\\dev\\tools\\monitoring\\grafana", "--config", "C:\\dev\\leepa_rattner_exhibit_2026\\monitoring\\grafana\\grafana.ini"]
+    ready: { type: http, url: http://127.0.0.1:3000/api/health, timeout: 60 }
+
+  # Spout receiver: measures each Spout sender's real output FPS and serves preview frames to the
+  # panel (http://127.0.0.1:9877). Python 3.12 (per-user) + SpoutGL. Frame counting must be on in
+  # Spout (HKCU\Software\Leading Edge\Spout\Framecount=1); senders pick that up when they start.
+  spout_preview:
+    type: generic
+    exe: C:\Users\<kiosk-user>\AppData\Local\Programs\Python\Python312\python.exe
+    process: python.exe
+    match_cmdline: spout_preview.py    # several python.exe services run; tell them apart by command line
+    hide_console: true
+    cwd: C:\dev\leepa_rattner_exhibit_2026
+    args: ["C:\\dev\\leepa_rattner_exhibit_2026\\src\\spout_preview.py", "--port", "9877", "--senders", "auto", "--fps", "20", "--width", "800"]
+    ready: { type: http, url: http://127.0.0.1:9877/health, timeout: 30 }
+    # Arena's Advanced Output has a Spout screen "Output Preview" (presets SPC Final + SPC Final Flip)
+    # → sender "Arena - Output Preview". That is what the panel shows; Synesthesia stays available.
+    default_sender: Arena - Output Preview
+
+  # USB controller bridge (Xbox controller + SpaceMouse → OSC /input/...). Runs even when no device
+  # is plugged in and picks them up when they appear.
+  inputs:
+    type: generic
+    exe: C:\Users\<kiosk-user>\AppData\Local\Programs\Python\Python312\python.exe
+    process: python.exe
+    match_cmdline: inputs.py
+    hide_console: true
+    cwd: C:\dev\leepa_rattner_exhibit_2026
+    args: ["C:\\dev\\leepa_rattner_exhibit_2026\\src\\inputs.py", "--host", "127.0.0.1", "--port", "9004", "--rate", "120", "--deadzone", "0.04"]
+    ready: { type: process }
+
+  # Pause-mode overlay: black fullscreen window on every display, the message and a hidden
+  # button (bottom-right corner) on the primary monitor. The button runs the `wake` macro.
+  screens:
+    type: screens
+    title: Exhibit Paused
+    message: This is an exhibit computer. Please do not touch.
+    sub_message: The exhibit resumes automatically at 7:00 am.
+    message_screen: primary            # primary | \\.\DISPLAY1 | 0-based index
+    button_size: 80                    # hidden button size in px, bottom-right of the message screen
+    hide_macro: wake                   # the hidden button runs this macro after closing the screens
+
+  # Daytime cover for the operator monitor only: keeps the desktop/UIs out of sight while the
+  # exhibit runs. The hidden bottom-right button just closes it; bring it back with
+  # "Show Running Screen.bat" (or it returns at the next wake / boot).
+  running_screen:
+    type: screens
+    title: Exhibit Running
+    only_message_screen: true
+    message: Exhibit is running
+    sub_message: This computer drives the exhibit. Please do not touch.
+    message_screen: primary
+    button_size: 80
+
+  resolume:
+    type: resolume
+    exe: C:\Program Files\Resolume Arena\Arena.exe
+    process: Arena.exe
+    # prefs_dir defaults to %USERPROFILE%\Documents\Resolume Arena
+    composition: C:\Users\<kiosk-user>\Documents\Resolume Arena\Compositions\SPC Test.avc
+    advanced_output: SPC Final        # preset name in Presets\Advanced Output (without .xml)
+    ensure_osc_input: true            # enable OSC input in Arena prefs at launch, port = osc.resolume.port
+    rest: { port: 8080 }              # Arena Preferences > Webserver must be enabled for the REST ready check
+    # "simple" scene mode (visitor engaged): in this layer group keep only the named layer's clip and turn the
+    # layers' autopilot off; "full" restores what was playing. See macros engaged / idle.
+    simple_mode: { group: Main Scene, keep: { layer: Synesthesia, clip: 1 } }
+    # "Reset to defaults" on the Scene page and the 10-minute idle reset (see engagement.on_reset).
+    defaults: { mode: full, master: 1, speed: 1, column: 1 }
+    ready: { type: http, timeout: 90 }   # or: { type: process } if the webserver is off
+
+  synesthesia:
+    type: synesthesia
+    exe: C:\Program Files (x86)\Synesthesia\Synesthesia.exe
+    process: Synesthesia.exe
+    playlist: SPC
+    ready: { type: osc_heartbeat, timeout: 60 }   # first OSC packet on osc.synesthesia.listen
+    prefs:                             # pinned in %LOCALAPPDATA%\Synesthesia\Data\preferences.json before launch
+      AUTO_TRANSITIONS: true           # "Auto Transitions" between scenes
+      AUTO_PLAYLIST: true              # advance through the playlist automatically
+      OSC_OUTPUT_CONTROLS: 1           # broadcast scene control values/labels so the panel can build widgets
+
+  touchdesigner:
+    type: touchdesigner
+    exe: C:\Program Files\Derivative\TouchDesigner\bin\TouchPlayer.exe
+    process: TouchPlayer.exe
+    project: D:\exhibit\exhibit.toe
+    enabled: false                    # flip on once the project exists
+    ready: { type: osc_heartbeat, address: /td/alive, timeout: 60 }
+
+  # Background music: YouTube Music Desktop App (ytmdesktop) controlled through its
+  # Companion Server API. Synesthesia listens to "Desktop Audio", so this drives the visuals.
+  # One-time: sign in to Google inside the app, then `exhibit music pair` and click Allow.
+  music:
+    type: ytmdesktop
+    exe: C:\Users\<kiosk-user>\AppData\Local\youtube_music_desktop_app\youtube-music-desktop-app.exe
+    process: youtube-music-desktop-app.exe
+    port: 9863
+    # "Baba Yetu" radio: the RDAMVM<videoId> playlist is YouTube Music's radio seeded from that track
+    playlist: https://music.youtube.com/watch?v=d4iOF4yoNQw&list=RDAMVMd4iOF4yoNQw
+    # playlist: https://music.youtube.com/playlist?list=LM   # previous: "Liked Music" of the signed-in account
+    shuffle: true                      # shuffle the queue after starting the playlist
+    volume: 0.6
+    verify_audio:                      # the app's play-state API is unreliable; trust the mixer meter instead
+      app: voicemeeter
+      strip: 2                         # 0-based: Strip 3 "PC / Music"
+      threshold: 0.01
+      timeout: 30                      # seconds to wait for audio before escalating (play → change video → relaunch)
+    ready: { type: http, timeout: 45, settle: 3 }
+
+  # Alternative: YouTube Music in a dedicated Chrome instance driven over DevTools.
+  # Switch by renaming this to `music` and the block above to something else.
+  music_chrome:
+    type: youtube_music
+    enabled: false
+    exe: C:\Program Files\Google\Chrome\Application\chrome.exe
+    user_data_dir: C:\dev\exhibit-chrome-profile
+    url: https://music.youtube.com/watch?v=dQw4w9WgXcQ
+    debug_port: 9222
+    window: { x: 0, y: 0, width: 1100, height: 700 }
+    volume: 0.6
+    ready: { type: http, timeout: 45 }
+
+macros:
+  boot:
+    - action: keepalive start         # never sleep, never blank, never lock
+    - action: control start           # control-panel server (GUI + API + /metrics + input OSC port)
+    - { launch: inputs, on_fail: continue }      # Xbox / SpaceMouse bridge
+    - { macro: monitoring, on_fail: continue }   # analytics stack; the exhibit does not depend on it
+    - launch: voicemeeter
+    - wait: voicemeeter
+    - action: voicemeeter apply       # mixer routing + Windows default devices, before anything makes sound
+    - launch: resolume
+    - launch: synesthesia
+    - launch: music
+    - wait: [resolume, synesthesia]
+    - osc: { to: synesthesia, address: /playlist/select,  args: ["{{apps.synesthesia.playlist}}"] }
+    - sleep: 1                        # let the playlist load before changing its modes
+    - macro: idle                     # auto-advance + shuffle on (same steps used when visitors go idle)
+    - osc: { to: synesthesia, address: /render/enabled,  args: [1] }
+    - sleep: 2
+    - osc: { to: resolume, address: /composition/columns/1/connect, args: [1] }
+    # Music must never block the visuals: every music step continues on failure.
+    - { wait: music, on_fail: continue }
+    - { music: start, on_fail: continue }                    # plays apps.music.playlist (or video), else resumes; relaunches the app if its API is down
+    - { music: { action: volume, value: "{{apps.music.volume}}" }, on_fail: continue }   # app-side volume stays at its config value; the room level is the A1 bus below
+    - { action: { app: voicemeeter, name: volume, value: "{{apps.voicemeeter.output.boot_volume}}" }, on_fail: continue }   # room level on the A1 bus
+    - launch: touchdesigner
+    - wait: touchdesigner
+    - log: boot complete
+    - launch: panel                   # operator GUI on display 1
+    - macro: { name: pause, between: ["{{schedule.pause}}", "{{schedule.wake}}"] }   # booted after hours → straight into pause mode
+
+  # ── Idle / engaged (see `engagement:`) ───────────────────────────────────────────────────
+  # `engaged` runs when any input is detected (controllers, panel control changes, POST /api/input);
+  # `idle` runs after engagement.idle_seconds without input, and at boot. Grow these as needed.
+  engaged:
+    - osc: { to: synesthesia, address: /playlist/auto,    args: [0] }   # stop auto-advancing so visitors can explore the scene
+    - { action: resolume simple, on_fail: continue }                     # Main Scene → just the Synesthesia spout clip, autopilots off
+
+  idle:
+    - osc: { to: synesthesia, address: /playlist/play,    args: [1] }
+    - osc: { to: synesthesia, address: /playlist/shuffle, args: [1] }
+    - osc: { to: synesthesia, address: /playlist/auto,    args: [1] }
+    - { action: resolume full, on_fail: continue }                       # restore the layers / autopilots that were playing
+    # - osc: { to: synesthesia, address: /controls/banks/scene/default }   # optional: reset visitor tweaks when they leave
+
+  # Put the visuals back to a known-good look: Synesthesia's scene + global banks to their
+  # defaults, Arena out of simple mode with master/speed/column back to normal. Run by the
+  # panel's "Reset to defaults" buttons and automatically after engagement.reset_seconds.
+  reset_defaults:
+    - osc: { to: synesthesia, address: /controls/banks/scene/default }
+    - osc: { to: synesthesia, address: /controls/banks/meta/default }
+    - { action: resolume defaults, on_fail: continue }
+    - macro: idle                      # auto-advance + shuffle back on
+    - log: controls reset to defaults
+
+  # Overnight pause: music off, black projectors, do-not-touch screen on the monitor.
+  pause:
+    - music: pause
+    - kill: panel
+    - action: running_screen hide
+    - action: screens show
+
+  wake:
+    - action: screens hide
+    - { action: { app: voicemeeter, name: volume, value: "{{apps.voicemeeter.output.boot_volume}}" }, on_fail: continue }   # back to the house level, whatever yesterday's visitors left
+    - { action: { app: voicemeeter, name: mute, value: false }, on_fail: continue }
+    - { launch: music, on_fail: continue }                   # in case the app died overnight
+    - { wait: music, on_fail: continue }
+    - { music: start, on_fail: continue }                    # start the playlist fresh; verifies audio, relaunches if needed
+    - launch: panel
+
+  # Prometheus + Loki + Grafana. Each step continues on failure so a missing install never blocks boot.
+  monitoring:
+    - { launch: windows_exporter, on_fail: continue }
+    - { launch: loki, on_fail: continue }
+    - { launch: prometheus, on_fail: continue }
+    - { launch: grafana, on_fail: continue }
+    - { launch: spout_preview, on_fail: continue }
+
+  monitoring_stop:
+    - kill: [grafana, prometheus, loki, windows_exporter, spout_preview]
+
+  show_panel:
+    - action: control start
+    - launch: panel
+
+  hide_panel:
+    - kill: panel
+
+  show_running:
+    - action: running_screen show
+
+  hide_running:
+    - action: running_screen hide
+
+  shutdown:
+    - kill: [music, touchdesigner, synesthesia, resolume, inputs]   # voicemeeter stays up: it is the audio device
+
+  restart:
+    - macro: shutdown
+    - sleep: 5
+    - macro: boot
+
+  # Swap projector mapping: Arena must restart for a different Advanced Output preset.
+  flip_output:
+    - kill: resolume
+    - launch: { app: resolume, advanced_output: SPC Final Flip }
+    - wait: resolume
+
+  syn_next:
+    - osc: { to: synesthesia, address: /playlist/next, args: [1] }
+
+  music_next:
+    - music: next
+
+  music_pause:
+    - music: pause
+
+  music_play:
+    - music: play

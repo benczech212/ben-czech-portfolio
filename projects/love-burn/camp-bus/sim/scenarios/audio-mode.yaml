@@ -1,0 +1,23 @@
+# Camp mode vs the audio source. Needs a live audio publisher (tools/fake_beat.py or the real
+# analysis service) on the broker, so it is NOT part of the pytest suite:
+#   docker compose run --rm input run sim/scenarios/audio-mode.yaml
+name: camp mode - idle silences the audio source, show resumes it
+steps:
+  - do: { campmode: show }
+    expect:
+      - { topic: audio/beat, within_ms: 2000 }
+      - { topic: audio/energy, within_ms: 2000 }
+
+  - do: { campmode: idle }
+    expect:
+      - { topic: audio/bpm, payload: { bpm: 0 }, within_ms: 2500 }
+  - wait_ms: 300
+  - do: { campmode: idle }
+    expect_not:
+      - { topic: audio/beat, within_ms: 1500 }
+      - { topic: audio/energy, within_ms: 1500 }
+
+  - do: { campmode: show }
+    expect:
+      - { topic: audio/beat, within_ms: 2000 }
+      - { topic: audio/bpm, payload: { bpm: 124.0 }, within_ms: 2500 }

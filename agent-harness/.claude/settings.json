@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "additionalDirectories": ["../vault", "../engine"],
+    "allow": [
+      "Read(../vault/**)",
+      "Read(../engine/scripts/**)",
+      "Bash(npm run pull-finances)",
+      "Bash(npm run search-emails:*)",
+      "Bash(npm run calendar -- today)",
+      "Bash(npm run calendar -- week)",
+      "Bash(node tools/chat-post.mjs:*)"
+    ],
+    "deny": [
+      "Read(../engine/.env)",
+      "Read(../engine/**/*token*.json)",
+      "Read(../engine/secrets/**)",
+      "Read(~/.claude.json)",
+      "Read(./.mcp.json)",
+      "Bash(npm run reduce-spam -- --trash:*)",
+      "Bash(git push --force:*)",
+      "Bash(rm -rf:*)"
+    ]
+  }
+}

@@ -1,0 +1,827 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Touch Instruments</title>
+<!-- Touch instruments simulator. The Sonic Mycelium Cluster: whackable mushroom sculptures with a piezo
+     under each cap and a UV COB LED bed beneath. A whack publishes instrument/<id> (see docs/SCHEMA.md);
+     the beds are also a responder (cmd/mycelium/* and cmd/all/*), so the camp can light the mushrooms back. -->
+<script src="vendor/mqtt.min.js"></script>
+<script src="shared.js"></script>
+<link rel="stylesheet" href="ui.css">
+<style>
+  :root { --bg:#0b0f12; --panel:#131a1f; --ink:#e6edf1; --dim:#7d8f9a; --ok:#4dffa6; --bad:#ff5252; --acc:#4de0ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font: 14px/1.4 system-ui, sans-serif; }
+  header { display:flex; gap:12px; align-items:center; padding:8px 16px; background:var(--panel); border-bottom:1px solid #222; flex-wrap:wrap; }
+  header h1 { font-size:15px; margin:0 8px 0 0; }
+  header a { color:var(--dim); font-size:12px; text-decoration:none; }
+  header input[type=text] { background:#000; color:var(--ink); border:1px solid #333; padding:4px 8px; border-radius:4px; width:170px; }
+  #conn { min-width:0; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .btn { background:#26262e; color:var(--ink); border:1px solid #363640; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:13px; }
+  .btn.on { background:#3a3a55; border-color:var(--acc); }
+  #conn { font-size:12px; color:var(--dim); } #conn.ok { color:var(--ok); } #conn.bad { color:var(--bad); }
+  main { display:grid; grid-template-columns: 1fr 1fr; gap:12px; padding:12px 16px; }
+  section.wide { grid-column: 1 / -1; }
+  .btn.sm { padding:3px 8px; font-size:12px; }
+  .midigrid { display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:12px; }
+  .midigrid h3 { font-size:12px; margin:0 0 6px; color:var(--ink); } .midigrid h3 small { color:var(--dim); font-weight:400; }
+  .midigrid table td input { width:56px; background:#000; color:var(--ink); border:1px solid #333; border-radius:4px; padding:2px 4px; font: 12px ui-monospace, Consolas, monospace; }
+  .midigrid td.name b { font-size:12px; }
+  .soundpill { font-size:11px; color:var(--dim); border:1px solid #30303a; border-radius:10px; padding:1px 8px; } .soundpill.on { color:var(--ok); border-color:#2a5a3a; }
+  select.btn { padding:4px 8px; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+  section { background:var(--panel); border:1px solid #222; border-radius:10px; padding:10px 12px; min-width:0; }
+ h2 { font-size:13px; letter-spacing:-.005em; color:var(--dim); margin:0 0 8px; display:flex; justify-content:space-between; }
+  h2 small { text-transform:none; letter-spacing:0; font-weight:400; }
+  canvas { width:100%; display:block; background:#000; border-radius:8px; touch-action:none; cursor:pointer; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:8px; font-variant-numeric: tabular-nums; }
+  .row input[type=range] { width:150px; }
+  .row .val { display:inline-block; min-width:3.2em; text-align:left; font-variant-numeric: tabular-nums; }
+  .row .val.wide { min-width:5.2em; }
+  .row select.pat { width:230px; }
+  .row select.who { width:230px; }
+  .row .play { min-width:64px; text-align:center; }
+  .live { display:block; min-height:1.3em; color:var(--dim); font-size:12px; margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric: tabular-nums; }
+  .g { color:var(--dim); font-size:12px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  td { padding:4px 6px; border-bottom:1px solid #222; }
+  td.sw { width:18px; } td.sw span { display:inline-block; width:14px; height:14px; border-radius:50%; box-shadow:0 0 8px currentColor; }
+  td.k { color:var(--dim); font: 12px ui-monospace, Consolas, monospace; }
+  #log { font: 12px/1.5 ui-monospace, Consolas, monospace; color:#aab; height:220px; overflow:auto; white-space:pre; }   /* fixed height: a growing log must not push the MIDI section around */
+  #log .in { color:#8fd3ff; } #log .cmd { color:#ffb454; }
+  .stat { color:var(--dim); font-size:12px; margin-top:6px; }
+</style>
+</head>
+<body>
+<header>
+  <nav id="campnav"></nav>
+  <span style="flex:1"></span>
+  <span class="soundpill" id="soundpill" title="test sounds are synthesised in the browser; turn them off on the Settings page">sound</span>
+  <input id="url" type="text" value="" spellcheck="false">
+  <button class="btn" id="connect">Connect</button>
+  <span id="conn">disconnected</span>
+</header>
+<main>
+  <section class="inst">
+    <h2>1 &middot; Sonic Mycelium Cluster <small>instrument/mycelium_01 &middot; tap a mushroom (keys 1-6) to whack it at the slider velocity, or pull it and let go: the further you pull, the harder it hits</small></h2>
+    <canvas id="cluster" width="960" height="420"></canvas>
+    <div class="row">
+      <span class="g">Velocity</span><input type="range" id="vel" min="0.1" max="1" step="0.05" value="0.8"><span id="velv" class="val">0.80</span>
+      <span class="g" title="hold Shift while tapping for a full-strength whack; pulling ignores the slider">(taps; Shift = 1.00)</span>
+    </div>
+    <div class="row"><span style="flex:1"></span><span class="g">Pattern</span><select id="pat-mycelium" class="btn pat"></select><button class="btn play" id="play-mycelium">Play</button></div>
+    <div class="stat" id="where-mycelium_01">position: waiting for map/mycelium_01</div>
+    <div class="stat">Piezo drum pads cast in fluorescent silicone over UV COB beds (two camp builders; an e-drum brain into Ableton). The bridge republishes every hit with the pad's colour, note and the cluster's calibrated position. The beds also answer <code>cmd/mycelium/*</code> and <code>cmd/all/*</code> like a crystal would.</div>
+  </section>
+  <section class="inst">
+    <h2>2 &middot; Crystal Geode Synth <small>instrument/geode_01 &middot; capacitive: press and hold a geode (keys Q W E R for chords); how strongly you couple to the brass frame is the velocity, the live reading rides along while you hold</small></h2>
+    <canvas id="geodes" width="960" height="260"></canvas>
+    <div class="row">
+      <span class="g">Who is touching</span><select id="person" class="btn who"></select>
+      <span class="g">Mode</span><select id="geodemode" class="btn"><option value="note">single note</option><option value="chord">chord</option></select>
+      <select id="chordpreset" class="btn pat" title="which chord each geode plays in chord mode"></select>
+      <span style="flex:1"></span>
+      <span class="g">Pattern</span><select id="pat-geode" class="btn pat"></select><button class="btn play" id="play-geode">Play</button>
+    </div>
+    <span class="live" id="geodestat">nothing touched</span>
+    <div class="stat" id="where-geode_01">position: waiting for map/geode_01</div>
+    <div class="stat">Brass wireframe geodes with holographic facets and a COB RGBW inside; the frame is the antenna of a one-wire capacitive circuit. Different people read differently (body size, footwear and grounding, damp skin, hand area), so the bridge normalises against each pad's untouched baseline and publishes <code>touch</code> (strength as <code>velocity</code>), <code>hold</code> at ~8 Hz with the live <code>value</code>, then <code>release</code>.</div>
+  </section>
+  <section class="inst">
+    <h2>3 &middot; Monstera Piezo Plant <small>instrument/plant_01 &middot; piezo tape in the leaves: grab a leaf and pull it (or hold A S D F G); a slow bend is a gentle reading, letting go snaps it back and the spike is the velocity</small></h2>
+    <canvas id="plant" width="960" height="320"></canvas>
+    <div class="row"><span style="flex:1"></span><span class="g">Pattern</span><select id="pat-plant" class="btn pat"></select><button class="btn play" id="play-plant">Play</button></div>
+    <span class="live" id="plantstat">nothing touched</span>
+    <div class="stat" id="where-plant_01">position: waiting for map/plant_01</div>
+    <div class="stat">A camp member's Monstera MIDI Plant: silicone leaves with LED filament and piezo sensor tape cast in, each stem ending in a TRRS jack into the trunk, mapped to bass synth patches. Piezo tape reads strain <em>rate</em>, so the bridge publishes <code>bend</code> at ~8 Hz with the flex as <code>value</code> while a leaf is being worked, and <code>release</code> when it springs back with the spike as <code>velocity</code>; a light tap is a small <code>hit</code>. Test sound is a leafy wind and a soft bass drone that opens with the bend.</div>
+  </section>
+  <section class="inst">
+    <h2>4 &middot; Water Chord Tubes <small>instrument/tubes_01 &middot; three tubes tuned as one chord: dip into the water (keys Z X C) - the water is the electrode, so contact reads like a geode but bigger and steadier</small></h2>
+    <canvas id="tubes" width="960" height="300"></canvas>
+    <div class="row">
+      <span class="g">Who is touching</span><select id="tubeperson" class="btn who"></select>
+      <span style="flex:1"></span>
+      <span class="g">Pattern</span><select id="pat-tubes" class="btn pat"></select><button class="btn play" id="play-tubes">Play</button>
+    </div>
+    <span class="live" id="tubestat">nothing touched</span>
+    <div class="stat" id="where-tubes_01">position: waiting for map/tubes_01</div>
+    <div class="stat">A camp member's water-cylinder chord tubes (2026-09-14), three of them (Ben, 2026-09-21): sealed acrylic cylinders of water tuned as one chord, an RGB puck under each base lighting the column, and a wire in the water making it the capacitive electrode. Hand-to-water is a far larger contact area than the geodes' brass frame, so the reading is bigger and steadier, and the water level differs per tube (more water, higher note). Same events as the geodes - <code>touch</code> / <code>hold</code> (~8 Hz, live <code>value</code>) / <code>release</code> - on MIDI channel 4.</div>
+  </section>
+  <section class="wide">
+    <h2>Activity <small>every instrument, newest first &middot; blue = published to the bus, orange = effects the camp sent back to the instruments</small><span class="g" id="actcount"></span></h2>
+    <div class="row" style="margin:0 0 8px">
+      <span class="g">Tempo (all patterns)</span><input type="range" id="bpm" min="60" max="180" step="1" value="120"><span id="bpmv" class="val wide">120 bpm</span>
+      <button class="btn" id="playall" title="start the selected pattern on every instrument, on the same clock">Play all</button>
+      <button class="btn" id="stopall">Stop all</button>
+    </div>
+    <span class="live" id="seqstat" style="margin:0 0 8px"></span>
+    <div id="log"></div>
+  </section>
+  <section class="wide">
+    <h2>MIDI mapping <small>what the bridge stamps on every event: note and channel per pad &middot; saved in this browser and published retained on config/midi/&lt;instrument_id&gt; so the real bridges pick it up</small><span><button class="btn sm" id="midireset">Reset to defaults</button></span></h2>
+    <div class="row" style="margin:0 0 10px">
+      <span class="g">MIDI out from this page</span><select id="midiout" class="btn"><option value="">(off)</option></select>
+      <button class="btn sm" id="miditest" title="send a C3 on channel 1 to the selected port">Test note</button>
+      <span class="g" id="midioutstat" style="display:inline-block;min-width:16em"></span>
+    </div>
+    <div class="stat" style="margin:0 0 10px">Two ways to reach Ableton. <b>Bridge</b> (the real one): <code>python tools/midi_bridge.py --host localhost</code> subscribes to every instrument on the bus and plays it into a loopMIDI port; works for real hardware and this page alike. <b>Direct</b> (dev shortcut): pick a port above and this page sends the same notes and CCs itself via Web MIDI (Chrome, localhost only). Don't run both into the same port or every note doubles. Hits and touches are notes with velocity on the pad's channel; hold and bend readings are CC 74; a plant release is the note with the snap as velocity.</div>
+    <div class="row" style="margin:0 0 10px"><span class="g">Note preset for all instruments</span><select id="preset-all" class="btn"></select><span class="g">or per instrument below; editing a note makes it "custom"</span></div>
+    <span class="live" id="midiconf" style="color:var(--ok)"></span>
+    <div id="midi" class="midigrid"></div>
+    <span class="live" id="midistat"></span>
+  </section>
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const now = () => performance.now() / 1000;
+  const hex = (h) => { const n = parseInt(String(h || '#ffffff').replace('#', ''), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+  const mix = (a, b, w) => a.map((v, i) => v + (b[i] - v) * w);
+  const scale = (c, k) => c.map((v) => v * k);
+  const css = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+  const snd = (fn, ...a) => { try { if (Camp.Sound[fn]) Camp.Sound[fn](...a); } catch (e) {} };   // test sounds are garnish: never let one break a frame
+
+  // ---- the cluster. Keep in sync with MYCELIUM_PADS in sim/inputs.py and the catalogue in routes.html.
+  const ID = 'mycelium_01';
+  const PADS = [
+    { pad: 'amanita',      species: 'Amanita (fly agaric)',   drum: 'kick',       note: 36, color: '#ff3b3b', x: 0.18, y: 0.78, cap: 78, h: 120, spots: true },
+    { pad: 'chanterelle',  species: 'Chanterelle',            drum: 'snare',      note: 38, color: '#ffb300', x: 0.34, y: 0.86, cap: 60, h: 80,  flare: true },
+    { pad: 'indigo_milk',  species: 'Indigo milk cap',        drum: 'closed hat', note: 42, color: '#3d7bff', x: 0.47, y: 0.70, cap: 46, h: 95 },
+    { pad: 'ghost',        species: 'Ghost fungus (glows)',   drum: 'tom',        note: 45, color: '#4dffa6', x: 0.61, y: 0.84, cap: 66, h: 70,  flare: true },
+    { pad: 'violet_coral', species: 'Violet coral',           drum: 'clap',       note: 39, color: '#b04dff', x: 0.75, y: 0.74, cap: 40, h: 110, coral: true },
+    { pad: 'pink_oyster',  species: 'Pink oyster',            drum: 'ride',       note: 51, color: '#ff4da6', x: 0.88, y: 0.82, cap: 58, h: 60,  shelf: true },
+  ];
+  for (const p of PADS) { p.hitAt = -10; p.hitVel = 0; p.bed = { color: hex(p.color), w: 0 }; p.fx = []; p.bend = { x: 0, y: 0, vx: 0, vy: 0 }; }
+
+  // ---- positions: the Virtual Camp map publishes map/<instrument_id> (retained) when an instrument node is dragged
+  const ORIGIN = { lat: 25.7367, lon: -80.1548 };
+  const M_PER_DEG_LAT = 111320, M_PER_DEG_LON = 111320 * Math.cos(ORIGIN.lat * Math.PI / 180);
+  const POSN = { mycelium_01: null, geode_01: null, plant_01: null, tubes_01: null };   // id -> {lat, lon}
+  const midiFreq = (n) => 440 * Math.pow(2, (n - 69) / 12);
+  const counts = { mycelium_01: 0, geode_01: 0, plant_01: 0, tubes_01: 0 };
+  const stamp = (id) => { const p = POSN[id]; return { lat: p ? p.lat : null, lon: p ? p.lon : null, acc_m: p ? 2 : null, via: 'browser' }; };
+  const distM = (a, b) => Math.hypot((b.lon - a.lon) * M_PER_DEG_LON, (b.lat - a.lat) * M_PER_DEG_LAT);
+  const bearingDeg = (a, b) => (Math.atan2((b.lon - a.lon) * M_PER_DEG_LON, (b.lat - a.lat) * M_PER_DEG_LAT) * 180 / Math.PI + 360) % 360;
+
+  // ---- responder geometry: same rules as a crystal (SCHEMA: propagation, falloff, shapes, cutoff)
+  function arrive(m, POS) {                                     // -> { delay s, intensity } or null when out of the cast
+    const inten = m.intensity == null ? 1 : clamp(+m.intensity, 0, 1);
+    const o = m.origin && m.origin.lat != null ? m.origin : null;
+    if (!o || !POS) return { delay: 0, intensity: inten };
+    const d = distM(o, POS), speed = +m.speed_mps || 6, range = +m.range_m || 60;
+    if (m.cutoff_m != null && d > +m.cutoff_m) return null;
+    let k = inten >= 1 || m.falloff === 'none' ? 1 : 1 - 0.6 * Math.min(1, d / range), delay = d / speed;
+    const shape = m.shape || 'circle';
+    if ((shape === 'cone' || shape === 'spiral') && m.heading != null) {
+      let a = ((bearingDeg(o, POS) - +m.heading) % 360 + 540) % 360 - 180;
+      if (shape === 'cone') { const half = (+m.cone_deg || 70) / 2; if (Math.abs(a) > half) return null; k *= 0.3 + 0.7 * Math.cos(Math.PI / 2 * a / half); }
+      else { const dir = +m.spin_dir || 1, turn = +m.turn_s || 2; delay = (((dir * a) % 360) + 360) % 360 / 360 * turn; }
+    }
+    return { delay: m.instant ? 0 : delay, intensity: inten * k };
+  }
+  function bedCmd(inst, effect, m, inten) {                     // light every LED of one instrument: colour mixed in by intensity, timed envelope
+    const col = hex(m.color || '#ffffff'), t = now();
+    const dur = effect === 'flash' ? (+m.ms || 1200) / 1000 : effect === 'pulse' || effect === 'color' || effect === 'charge' ? (+m.seconds || 3) : 1.5;
+    if (!['flash', 'pulse', 'color', 'charge'].includes(effect)) return;
+    for (const p of inst.pads) p.fx.push({ effect, color: col, w: inten, t0: t, dur });
+    log('cmd', `${inst.id} ${effect} ${m.color || ''} ${(inten * 100).toFixed(0)}%${m.from ? ' from ' + m.from : ''}`);
+  }
+  function bedLevel(p, t) {                                      // -> [colour, brightness 0..1] of the UV bed right now
+    let col = p.bed.color, v = 0.08;
+    for (let i = p.fx.length - 1; i >= 0; i--) {
+      const f = p.fx[i], age = t - f.t0; if (age > f.dur) { p.fx.splice(i, 1); continue; }
+      const env = f.effect === 'pulse' ? 0.5 - 0.5 * Math.cos(2 * Math.PI * age / Math.max(0.5, f.dur / 2)) : f.effect === 'flash' ? Math.pow(1 - age / f.dur, 1.6) : 1 - age / f.dur;
+      col = mix(col, f.color, f.w * env); v = Math.max(v, f.w * env);
+    }
+    const hit = Math.exp(-(t - p.hitAt) * 4) * p.hitVel;        // own whack: bright flare in the mushroom's colour
+    if (hit > 0.01) { col = mix(col, hex(p.color), Math.min(1, hit * 1.5)); v = Math.max(v, hit); }
+    return [col, clamp(v, 0, 1)];
+  }
+
+  // ---- drawing
+  const cv = $('cluster'), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  const PULL_MAX = 130;                                        // px of pull for a full-strength whack
+  const pullVel = (d) => clamp(0.25 + 0.75 * Math.min(1, d / PULL_MAX), 0.25, 1);
+  function drawMushroom(p, t) {
+    const x = p.x * W, base = p.y * H, [bcol, v] = bedLevel(p, t), col = hex(p.color);
+    const hit = Math.exp(-(t - p.hitAt) * 6) * p.hitVel, squash = 1 - 0.18 * hit;
+    const bx = p.bend.x, by = p.bend.y * 0.6;                     // pulled / springing back: the cap is displaced, the stem bends after it
+    // UV bed glow on the ground
+    const g = ctx.createRadialGradient(x, base, 4, x, base, p.cap * 1.7);
+    g.addColorStop(0, css(bcol, 0.15 + 0.75 * v)); g.addColorStop(0.5, css(bcol, 0.1 + 0.4 * v)); g.addColorStop(1, css(bcol, 0));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, base, p.cap * 1.7, p.cap * 0.6, 0, 0, 6.283); ctx.fill();
+    // stem (translucent silicone lit from below: brighter near the bed), bending toward the cap
+    const sh = p.h * squash, sw = p.cap * 0.32, litStem = mix(scale(col, 0.25 + 0.5 * v), [230, 230, 240], 0.35 * v);
+    const cx = x + bx, cy = base - sh + by;
+    const sg = ctx.createLinearGradient(x, base, cx, cy); sg.addColorStop(0, css(mix(litStem, bcol, 0.5 * v))); sg.addColorStop(1, css(scale(litStem, 0.7)));
+    ctx.fillStyle = sg; ctx.beginPath(); ctx.moveTo(x - sw, base); ctx.quadraticCurveTo(x - sw * 0.7 + bx * 0.3, base - sh * 0.6 + by * 0.3, cx - sw * 0.55, cy); ctx.lineTo(cx + sw * 0.55, cy); ctx.quadraticCurveTo(x + sw * 0.7 + bx * 0.3, base - sh * 0.6 + by * 0.3, x + sw, base); ctx.closePath(); ctx.fill();
+    if (p.coral) {                                              // violet coral: a bunch of fingers instead of a cap
+      for (let i = -2; i <= 2; i++) { const fx = cx + i * sw * 0.6, top = cy - 26 + Math.abs(i) * 10; ctx.strokeStyle = css(mix(scale(col, 0.45 + 0.55 * v), [255, 255, 255], 0.25 * v)); ctx.lineWidth = 9; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(cx + i * 5, cy + sh * 0.45); ctx.quadraticCurveTo(fx, cy + sh * 0.1, fx + i * 3, top); ctx.stroke(); }
+    } else {
+      // cap
+      const capCol = mix(scale(col, 0.55 + 0.45 * v), [255, 255, 255], 0.2 * v);
+      const cg = ctx.createRadialGradient(cx - p.cap * 0.25, cy - p.cap * 0.35, 4, cx, cy - p.cap * 0.1, p.cap * 1.1);
+      cg.addColorStop(0, css(mix(capCol, [255, 255, 255], 0.35))); cg.addColorStop(1, css(scale(capCol, 0.75)));
+      ctx.fillStyle = cg; ctx.beginPath();
+      if (p.shelf) ctx.ellipse(cx + p.cap * 0.25, cy + 4, p.cap, p.cap * 0.32, -0.25, 0, 6.283);
+      else if (p.flare) { ctx.moveTo(cx - p.cap, cy + 8); ctx.quadraticCurveTo(cx - p.cap * 0.5, cy - p.cap * 0.55, cx, cy - p.cap * 0.5); ctx.quadraticCurveTo(cx + p.cap * 0.5, cy - p.cap * 0.55, cx + p.cap, cy + 8); ctx.quadraticCurveTo(cx, cy + p.cap * 0.25, cx - p.cap, cy + 8); }
+      else ctx.ellipse(cx, cy, p.cap, p.cap * 0.62 * (2 - squash), 0, Math.PI, 0);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = css(scale(col, 0.35 + 0.4 * v), 0.9); ctx.beginPath(); ctx.ellipse(cx, cy + 2, p.cap * (p.shelf ? 0.5 : 1), p.cap * 0.16, 0, 0, Math.PI); ctx.fill();   // gills
+      if (p.spots) { ctx.fillStyle = 'rgba(255,255,255,0.85)'; [[-0.5, -0.25, 6], [0.1, -0.45, 7], [0.55, -0.2, 5], [-0.15, -0.05, 4], [0.35, 0.05, 4]].forEach(([sx, sy, r]) => { ctx.beginPath(); ctx.ellipse(cx + sx * p.cap, cy + sy * p.cap, r, r * 0.7, 0, 0, 6.283); ctx.fill(); }); }
+    }
+    // outer glow when lit
+    if (v > 0.12) { ctx.fillStyle = css(bcol, (v - 0.12) * 0.25); ctx.beginPath(); ctx.ellipse(cx, base - sh * 0.7 + by, p.cap * 1.5, sh * 0.9, 0, 0, 6.283); ctx.fill(); }
+    ctx.fillStyle = '#9aa'; ctx.font = '11px system-ui'; ctx.textAlign = 'center'; ctx.fillText(`${PADS.indexOf(p) + 1}  ${p.pad}`, x, base + 18);
+    if (pull && pull.p === p) {                                  // pulling: show how hard the release will hit
+      const d = Math.hypot(pull.dx, pull.dy), vel = pullVel(d);
+      ctx.strokeStyle = css(col, 0.5); ctx.lineWidth = 2; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(x, base - sh); ctx.lineTo(cx, cy); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 13px system-ui'; ctx.fillText(`${(vel * 100).toFixed(0)}%`, cx, cy - p.cap * 0.7 - 8);
+    }
+  }
+  // pull-and-release: the cap follows the pointer; letting go snaps it back (spring) and whacks by pull distance
+  let pull = null, lastT = 0;
+  function springStep(t) {
+    const dt = Math.min(0.05, t - lastT || 0.016); lastT = t;
+    for (const p of PADS) {
+      if (pull && pull.p === p) continue;
+      const b = p.bend; if (Math.abs(b.x) < 0.05 && Math.abs(b.y) < 0.05 && Math.abs(b.vx) < 0.5 && Math.abs(b.vy) < 0.5) { b.x = b.y = b.vx = b.vy = 0; continue; }
+      b.vx += (-220 * b.x - 7 * b.vx) * dt; b.vy += (-220 * b.y - 7 * b.vy) * dt; b.x += b.vx * dt; b.y += b.vy * dt;
+    }
+  }
+  function draw() {
+    const t = now();
+    ctx.fillStyle = '#05050a'; ctx.fillRect(0, 0, W, H);
+    // ground + mycelium threads
+    ctx.fillStyle = '#0c0a12'; ctx.beginPath(); ctx.moveTo(0, H * 0.62); ctx.quadraticCurveTo(W * 0.5, H * 0.5, W, H * 0.64); ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.fill();
+    ctx.strokeStyle = 'rgba(120,100,160,0.12)'; ctx.lineWidth = 1;
+    for (let i = 0; i < PADS.length - 1; i++) { const a = PADS[i], b = PADS[i + 1]; ctx.beginPath(); ctx.moveTo(a.x * W, a.y * H); ctx.quadraticCurveTo((a.x + b.x) / 2 * W, Math.max(a.y, b.y) * H + 30, b.x * W, b.y * H); ctx.stroke(); }
+    springStep(t);
+    [...PADS].sort((a, b) => a.y - b.y).forEach((p) => drawMushroom(p, t));
+    drawGeodes(t);
+    drawPlant(t);
+    drawTubes(t);
+    $('actcount').textContent = INSTRUMENTS.map((i) => `${i.kind} ${counts[i.id]}`).join(' \u00b7 ');
+  }
+  function frame() {                                            // never let one bad frame kill the loop: a dead rAF loop
+    try { draw(); } catch (e) {                                 // freezes every canvas, which looks like "dragging stopped working"
+      if (!frame.warned) { frame.warned = true; console.error('[instruments] draw failed, still animating:', e); }
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // ---- whacking
+  function whack(p, vel, how = 'tap') {
+    const t = now(); p.hitAt = t; p.hitVel = vel;
+    Camp.Sound.drum(p.drum, vel);
+    const m = { instrument: 'mycelium', instrument_id: ID, pad: p.pad, pad_i: PADS.indexOf(p), event: 'hit', velocity: +vel.toFixed(2), note: p.note, ch: p.ch, color: p.color, ...stamp(ID) };
+    pub(`instrument/${ID}`, m); counts[ID]++;
+    log('in', `hit ${p.pad} (${p.drum}) vel ${vel.toFixed(2)}${how === 'pull' ? ' (pulled and released)' : ''}`);
+  }
+  const padAt = (x, y) => { let best = null, bd = 1e9; for (const p of PADS) { const cx = p.x * W, cy = p.y * H - p.h * 0.6; const d = Math.hypot((x - cx) / (p.cap * 1.2), (y - cy) / (p.h * 0.75)); if (d < 1 && d < bd) { best = p; bd = d; } } return best; };
+  const canvasXY = (ev) => { const r = cv.getBoundingClientRect(); return [(ev.clientX - r.left) * W / r.width, (ev.clientY - r.top) * H / r.height]; };
+  cv.addEventListener('pointerdown', (ev) => { Camp.Sound.unlock(); const [x, y] = canvasXY(ev); const p = padAt(x, y); if (!p) return; pull = { p, x0: x, y0: y, dx: 0, dy: 0, shift: ev.shiftKey }; try { cv.setPointerCapture(ev.pointerId); } catch (e) {} });
+  cv.addEventListener('pointermove', (ev) => {
+    if (!pull) { const [x, y] = canvasXY(ev); cv.style.cursor = padAt(x, y) ? 'grab' : 'default'; return; }
+    const [x, y] = canvasXY(ev); let dx = x - pull.x0, dy = y - pull.y0; const d = Math.hypot(dx, dy);
+    if (d > PULL_MAX) { dx *= PULL_MAX / d; dy *= PULL_MAX / d; }
+    pull.dx = dx; pull.dy = dy; pull.p.bend.x = dx; pull.p.bend.y = dy; cv.style.cursor = 'grabbing';
+  });
+  const release = () => {
+    if (!pull) return;
+    const { p, dx, dy, shift } = pull, d = Math.hypot(dx, dy); pull = null;
+    p.bend.vx = -dx * 14; p.bend.vy = -dy * 14;              // snap back through the rest position: that is the whack
+    if (d < 6) whack(p, shift ? 1 : +$('vel').value);         // a plain tap uses the velocity slider
+    else whack(p, pullVel(d), 'pull');
+    cv.style.cursor = 'grab';
+  };
+  cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release);
+  window.addEventListener('pointerup', release); window.addEventListener('pointercancel', release);   // let go off-canvas: still a release
+  document.addEventListener('keydown', (e) => { if (e.target.tagName === 'INPUT') return; const i = +e.key - 1; if (i >= 0 && i < PADS.length) whack(PADS[i], e.shiftKey ? 1 : +$('vel').value); });
+  $('vel').addEventListener('input', (e) => { $('velv').textContent = (+e.target.value).toFixed(2); });
+
+
+  // ---- Crystal Geode Synth: capacitive touch pads. Keep in sync with GEODE_PADS in sim/inputs.py and routes.html.
+  const GID = 'geode_01';
+  const GEODES = [
+    { pad: 'amethyst',    color: '#b04dff', note: 60, freq: 261.6, x: 0.14, r: 78, key: 'q', shape: [[-1, -0.2], [-0.6, -0.9], [0.3, -1], [1, -0.4], [0.9, 0.5], [0.2, 1], [-0.7, 0.7]] },
+    { pad: 'citrine',     color: '#ffc83d', note: 64, freq: 329.6, x: 0.38, r: 66, key: 'w', shape: [[-1, 0], [-0.5, -0.8], [0.4, -0.9], [1, -0.1], [0.7, 0.8], [-0.3, 1], [-0.9, 0.6]] },
+    { pad: 'aquamarine',  color: '#4de0ff', note: 67, freq: 392.0, x: 0.62, r: 84, key: 'e', shape: [[-1, -0.4], [-0.3, -1], [0.6, -0.8], [1, 0.1], [0.6, 0.9], [-0.4, 1], [-0.9, 0.4]] },
+    { pad: 'rose_quartz', color: '#ff7ab8', note: 71, freq: 493.9, x: 0.86, r: 62, key: 'r', shape: [[-0.9, -0.5], [0, -1], [0.9, -0.6], [1, 0.3], [0.4, 1], [-0.6, 0.9], [-1, 0.2]] },
+  ];
+  // coupling by who is touching: the bridge would see this as the normalised delta from the pad's untouched baseline
+  const PEOPLE = { adult_barefoot: [0.9, 'adult, barefoot on sand'], adult_shoes: [0.62, 'adult in shoes'], kid: [0.42, 'kid'], pair: [1.0, 'two people holding hands'], gloved: [0.2, 'gloved / brushing fingertip'] };
+  const BASELINE = 1240, SPAN = 900;                            // raw counts, for verisimilitude in the payload
+  // chord mode: one touch plays a whole chord (Ben, 2026-09-21). A preset is one chord per geode.
+  const CHORD_PRESETS = {
+    'C major: I vi IV V':        [[60, 64, 67, 71], [57, 60, 64, 67], [53, 57, 60, 64], [55, 59, 62, 65]],
+    'A minor: i VI III VII':     [[57, 60, 64, 67], [53, 57, 60, 64], [48, 52, 55, 59], [55, 59, 62, 65]],
+    'Dreamy sus chords':         [[60, 65, 67, 74], [62, 67, 69, 76], [65, 70, 72, 79], [67, 72, 74, 81]],
+    'Open fifths and octaves':   [[48, 55, 60, 67], [52, 59, 64, 71], [53, 60, 65, 72], [55, 62, 67, 74]],
+    'Lydian shimmer':            [[60, 64, 66, 71], [62, 66, 69, 73], [64, 68, 71, 75], [65, 69, 71, 76]],
+  };
+  let geodeMode = Camp.Settings.get('geodeMode') || 'note', chordPreset = Camp.Settings.get('chordPreset') || Object.keys(CHORD_PRESETS)[0];
+  const chordOf = (g) => (CHORD_PRESETS[chordPreset] || CHORD_PRESETS[Object.keys(CHORD_PRESETS)[0]])[GEODES.indexOf(g)];
+  const notesOf = (g) => (geodeMode === 'chord' ? chordOf(g) : [g.note]);
+  const NN = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const chordName = (ns) => { const r = ns[0], iv = ns.slice(1).map((n) => (n - r) % 12).sort((a, b) => a - b).join(','); const q = { '4,7,11': 'maj7', '3,7,10': 'm7', '4,7,10': '7', '5,7,2': 'sus', '7,0,7': '5', '4,6,11': 'maj7#11', '3,7,11': 'mMaj7', '4,7': '', '3,7': 'm' }[iv]; return `${NN[r % 12]}${q != null ? q : ' (' + ns.map((n) => NN[n % 12]).join(' ') + ')'}`; };
+  for (const k of Object.keys(CHORD_PRESETS)) { const o = document.createElement('option'); o.value = k; o.textContent = k; $('chordpreset').appendChild(o); }
+  $('geodemode').value = geodeMode; $('chordpreset').value = chordPreset; $('chordpreset').style.display = geodeMode === 'chord' ? '' : 'none';
+  $('geodemode').addEventListener('change', (e) => { GEODES.forEach((g) => touchOff(g)); geodeMode = e.target.value; Camp.Settings.set({ geodeMode }); $('chordpreset').style.display = geodeMode === 'chord' ? '' : 'none'; if (typeof saveMidi === 'function') saveMidi(INSTRUMENTS[1]); if (typeof renderMidi === 'function') renderMidi(); });
+  $('chordpreset').addEventListener('change', (e) => { GEODES.forEach((g) => touchOff(g)); chordPreset = e.target.value; Camp.Settings.set({ chordPreset }); if (typeof saveMidi === 'function') saveMidi(INSTRUMENTS[1]); if (typeof renderMidi === 'function') renderMidi(); });
+  for (const g of GEODES) { g.touch = null; g.lit = 0; g.fx = []; }
+  for (const sel of ['person', 'tubeperson']) {
+    for (const [k, [, label]] of Object.entries(PEOPLE)) { const o = document.createElement('option'); o.value = k; o.textContent = label; $(sel).appendChild(o); }
+    $(sel).value = Camp.Settings.get('person'); $(sel).addEventListener('change', (e) => Camp.Settings.set({ person: e.target.value }));
+  }
+  Camp.Settings.onChange((s) => { $('person').value = s.person; $('tubeperson').value = s.person; $('soundpill').textContent = s.sound ? 'sound on' : 'sound off'; $('soundpill').className = 'soundpill ' + (s.sound ? 'on' : ''); });
+  $('soundpill').textContent = Camp.Settings.get('sound') ? 'sound on' : 'sound off'; $('soundpill').className = 'soundpill ' + (Camp.Settings.get('sound') ? 'on' : '');
+  const geodeMsg = (g, extra) => { counts[GID]++; const ns = notesOf(g); return { instrument: 'geode', instrument_id: GID, pad: g.pad, pad_i: GEODES.indexOf(g), note: ns[0], ...(ns.length > 1 ? { notes: ns } : {}), ch: g.ch, color: g.color, ...stamp(GID), ...extra }; };
+  function touchOn(g, force) {
+    if (g.touch) return;
+    const [coupling] = PEOPLE[Camp.Settings.get('person')] || PEOPLE.adult_shoes;
+    const strength = force != null ? force : clamp(coupling * (0.85 + 0.3 * Math.random()), 0.05, 1);   // this person, this touch
+    g.touch = { t0: now(), strength, value: strength * 0.6, lastHold: 0 };
+    g.touch.notes = notesOf(g); g.touch.notes.forEach((n, i) => Camp.Sound.voiceOn(`${g.pad}:${n}`, midiFreq(n), strength / Math.sqrt(g.touch.notes.length), g.touch.value));
+    pub(`instrument/${GID}`, geodeMsg(g, { event: 'touch', velocity: +strength.toFixed(2), value: +g.touch.value.toFixed(2), raw: Math.round(BASELINE + g.touch.value * SPAN), baseline: BASELINE }));
+    log('in', `touch ${g.pad} velocity ${strength.toFixed(2)} (${(PEOPLE[Camp.Settings.get('person')] || PEOPLE.adult_shoes)[1]})`);
+  }
+  function touchStep(t) {                                       // the hand settles onto the frame: reading rises to the coupling, then wanders a little
+    for (const g of GEODES) {
+      const tc = g.touch; if (!tc) { g.lit += (0 - g.lit) * 0.08; continue; }
+      const age = t - tc.t0, target = tc.strength * (1 - 0.4 * Math.exp(-age / 0.4)) + 0.04 * Math.sin(age * 1.7) + 0.02 * Math.sin(age * 5.3);
+      tc.value += (clamp(target, 0, 1) - tc.value) * 0.2; g.lit += (tc.value - g.lit) * 0.25;
+      tc.notes.forEach((n) => Camp.Sound.voiceSet(`${g.pad}:${n}`, tc.value));
+      if (t - tc.lastHold >= 0.125) { tc.lastHold = t; pub(`instrument/${GID}`, geodeMsg(g, { event: 'hold', velocity: +tc.strength.toFixed(2), value: +tc.value.toFixed(2), raw: Math.round(BASELINE + tc.value * SPAN), baseline: BASELINE, held_ms: Math.round(age * 1000) })); }
+    }
+    const held = GEODES.filter((g) => g.touch);
+    $('geodestat').textContent = held.length ? `holding ${held.map((g) => `${g.pad} ${(g.touch.value * 100).toFixed(0)}%`).join(', ')}${held.length > 1 ? ' - chord' : ''}` : 'nothing touched';
+  }
+  function touchOff(g) {
+    if (!g.touch) return;
+    const held = Math.round((now() - g.touch.t0) * 1000), ns = g.touch.notes || [g.note]; g.touch = null;
+    ns.forEach((n) => Camp.Sound.voiceOff(`${g.pad}:${n}`));
+    pub(`instrument/${GID}`, geodeMsg(g, { event: 'release', velocity: 0, value: 0, raw: BASELINE, baseline: BASELINE, held_ms: held }));
+    log('in', `release ${g.pad} after ${held} ms`);
+  }
+  const gcv = $('geodes'), gctx = gcv.getContext('2d'), GW = gcv.width, GH = gcv.height;
+  function drawGeodes(t) {
+    touchStep(t);
+    gctx.fillStyle = '#05050a'; gctx.fillRect(0, 0, GW, GH);
+    gctx.fillStyle = '#0d0b10'; gctx.fillRect(0, GH * 0.72, GW, GH);                     // pedestal shelf
+    for (const g of GEODES) {
+      const cx = g.x * GW, cy = GH * 0.5, col = hex(g.color);
+      let bedCol = col, extra = 0;                                                        // bus effects on the geode's COB
+      for (let i = g.fx.length - 1; i >= 0; i--) { const f = g.fx[i], age = t - f.t0; if (age > f.dur) { g.fx.splice(i, 1); continue; } const e = f.w * (1 - age / f.dur); bedCol = mix(bedCol, f.color, e); extra = Math.max(extra, e); }
+      const v = clamp(Math.max(g.lit, extra), 0, 1);
+      const pts = g.shape.map(([px, py]) => [cx + px * g.r, cy + py * g.r * 0.8]);
+      // glow through the facets
+      const rg = gctx.createRadialGradient(cx, cy, 2, cx, cy, g.r * 1.6); rg.addColorStop(0, css(bedCol, 0.1 + 0.8 * v)); rg.addColorStop(0.55, css(bedCol, 0.05 + 0.3 * v)); rg.addColorStop(1, css(bedCol, 0));
+      gctx.fillStyle = rg; gctx.beginPath(); gctx.arc(cx, cy, g.r * 1.6, 0, 6.283); gctx.fill();
+      // holographic facets: translucent fill, brighter with the light inside
+      gctx.fillStyle = css(mix([30, 30, 40], bedCol, 0.25 + 0.7 * v), 0.85); gctx.beginPath(); pts.forEach((p, i) => i ? gctx.lineTo(...p) : gctx.moveTo(...p)); gctx.closePath(); gctx.fill();
+      gctx.strokeStyle = css(mix([200, 160, 70], [255, 240, 200], v), 0.9); gctx.lineWidth = 2; gctx.stroke();  // brass frame (the antenna)
+      gctx.strokeStyle = css(mix([200, 160, 70], bedCol, 0.5), 0.55); gctx.lineWidth = 1;
+      pts.forEach((p) => { gctx.beginPath(); gctx.moveTo(cx, cy - g.r * 0.15); gctx.lineTo(...p); gctx.stroke(); });                   // spokes to the apex
+      // capacitive reading bar
+      const tc = g.touch; gctx.fillStyle = '#222'; gctx.fillRect(cx - 40, cy + g.r * 0.8 + 14, 80, 5);
+      if (tc) { gctx.fillStyle = css(col); gctx.fillRect(cx - 40, cy + g.r * 0.8 + 14, 80 * tc.value, 5); }
+      gctx.fillStyle = '#9aa'; gctx.font = '11px system-ui'; gctx.textAlign = 'center';
+      gctx.fillText(`${g.key.toUpperCase()}  ${g.pad}  ${geodeMode === 'chord' ? chordName(chordOf(g)) : 'note ' + g.note}${tc ? `  ${Math.round(BASELINE + tc.value * SPAN)} raw` : ''}`, cx, cy + g.r * 0.8 + 32);
+    }
+  }
+  const geodeAt = (x, y) => GEODES.find((g) => Math.hypot((x - g.x * GW) / g.r, (y - GH * 0.5) / (g.r * 0.8)) < 1.05);
+  const gXY = (ev) => { const r = gcv.getBoundingClientRect(); return [(ev.clientX - r.left) * GW / r.width, (ev.clientY - r.top) * GH / r.height]; };
+  let gPointer = null;
+  gcv.addEventListener('pointerdown', (ev) => { Camp.Sound.unlock(); const g = geodeAt(...gXY(ev)); if (!g) return; gPointer = g; touchOn(g); try { gcv.setPointerCapture(ev.pointerId); } catch (e) {} });
+  const gUp = () => { if (gPointer) { touchOff(gPointer); gPointer = null; } };
+  gcv.addEventListener('pointerup', gUp); gcv.addEventListener('pointercancel', gUp);
+  window.addEventListener('pointerup', gUp); window.addEventListener('pointercancel', gUp);
+  gcv.addEventListener('pointermove', (ev) => { if (!gPointer) gcv.style.cursor = geodeAt(...gXY(ev)) ? 'pointer' : 'default'; });
+  document.addEventListener('keydown', (e) => { if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.repeat) return; const g = GEODES.find((x) => x.key === e.key.toLowerCase()); if (g) { Camp.Sound.unlock(); touchOn(g); } });
+  document.addEventListener('keyup', (e) => { const g = GEODES.find((x) => x.key === e.key.toLowerCase()); if (g) touchOff(g); });
+  window.addEventListener('blur', () => GEODES.forEach(touchOff));
+
+  // ---- Monstera Piezo Plant: piezo tape leaves. Keep in sync with PLANT_PADS in sim/inputs.py and routes.html.
+  const PID = 'plant_01';
+  const LEAVES = [
+    { pad: 'leaf_1', color: '#3ddc84', note: 36, key: 'a', x: 0.16, y: 0.46, len: 145, ang: -160, size: 70 },
+    { pad: 'leaf_2', color: '#8fff5a', note: 40, key: 's', x: 0.33, y: 0.24, len: 168, ang: -120, size: 80 },
+    { pad: 'leaf_3', color: '#1fb6a6', note: 43, key: 'd', x: 0.50, y: 0.17, len: 175, ang: -90,  size: 84 },
+    { pad: 'leaf_4', color: '#b8ff8a', note: 47, key: 'f', x: 0.67, y: 0.25, len: 165, ang: -60,  size: 78 },
+    { pad: 'leaf_5', color: '#d8ff3d', note: 50, key: 'g', x: 0.84, y: 0.48, len: 140, ang: -20,  size: 68 },   // the youngest leaf, still unfurling and pale
+  ];
+  for (const l of LEAVES) { l.bend = { x: 0, y: 0, vx: 0, vy: 0 }; l.work = null; l.lit = 0; l.fx = []; l.snapAt = -10; l.snapVel = 0; }
+  const leafMsg = (l, extra) => { counts[PID]++; return { instrument: 'plant', instrument_id: PID, pad: l.pad, pad_i: LEAVES.indexOf(l), note: l.note, ch: l.ch, color: l.color, ...stamp(PID), ...extra }; };
+  const PLANT_PULL = 120;                                        // px of pull for a full bend
+  const strainOf = (l) => clamp(Math.hypot(l.bend.x, l.bend.y) / PLANT_PULL, 0, 1);
+  function leafGrab(l, x, y) {
+    if (l.work) return;
+    l.work = { x0: x, y0: y, t0: now(), lastBend: 0, dx: 0, dy: 0 };
+    Camp.Sound.natureOn(l.pad, midiFreq(l.note), 0);
+  }
+  function leafMove(l, x, y) {
+    const w = l.work; if (!w) return; let dx = x - w.x0, dy = y - w.y0; const d = Math.hypot(dx, dy);
+    if (d > PLANT_PULL) { dx *= PLANT_PULL / d; dy *= PLANT_PULL / d; }
+    w.dx = dx; w.dy = dy; l.bend.x = dx; l.bend.y = dy;
+  }
+  function leafStep(t) {
+    for (const l of LEAVES) {
+      const w = l.work;
+      if (w) { const v = strainOf(l); l.lit += (0.3 + 0.7 * v - l.lit) * 0.2; Camp.Sound.natureSet(l.pad, v);
+        if (t - w.lastBend >= 0.125) { w.lastBend = t; pub(`instrument/${PID}`, leafMsg(l, { event: 'bend', velocity: +v.toFixed(2), value: +v.toFixed(2), held_ms: Math.round((t - w.t0) * 1000) })); } }
+      else { l.lit += (0 - l.lit) * 0.06; const b = l.bend; if (Math.abs(b.x) + Math.abs(b.y) + Math.abs(b.vx) + Math.abs(b.vy) < 0.4) { b.x = b.y = b.vx = b.vy = 0; continue; }
+        const dt = 1 / 60; b.vx += (-160 * b.x - 5 * b.vx) * dt; b.vy += (-160 * b.y - 5 * b.vy) * dt; b.x += b.vx * dt; b.y += b.vy * dt; }
+    }
+    const working = LEAVES.filter((l) => l.work);
+    $('plantstat').textContent = working.length ? `bending ${working.map((l) => `${l.pad} ${(strainOf(l) * 100).toFixed(0)}%`).join(', ')}` : 'nothing touched';
+  }
+  function leafRelease(l, keyboard) {
+    const w = l.work; if (!w) return; l.work = null;
+    const d = Math.hypot(w.dx, w.dy), v = keyboard ? 0.6 : d < 6 ? 0 : clamp(0.25 + 0.75 * d / PLANT_PULL, 0.25, 1);
+    l.bend.vx = -w.dx * 12; l.bend.vy = -w.dy * 12;             // springs back: the snap is what the piezo tape spikes on
+    Camp.Sound.natureOff(l.pad, v || 0.15);
+    if (v === 0) { pub(`instrument/${PID}`, leafMsg(l, { event: 'hit', velocity: 0.3, value: 0.3 })); log('in', `hit ${l.pad} (light tap) vel 0.30`); return; }
+    l.snapAt = now(); l.snapVel = v;
+    pub(`instrument/${PID}`, leafMsg(l, { event: 'release', velocity: +v.toFixed(2), value: 0, held_ms: Math.round((now() - w.t0) * 1000) }));
+    log('in', `release ${l.pad} velocity ${v.toFixed(2)} (snapped back)`);
+  }
+  const pcv = $('plant'), pctx = pcv.getContext('2d'), PW = pcv.width, PH = pcv.height;
+  const leafTip = (l) => [l.x * PW + l.bend.x, l.y * PH + l.bend.y * 0.8];
+  function drawPlant(t) {
+    leafStep(t);
+    pctx.fillStyle = '#05080a'; pctx.fillRect(0, 0, PW, PH);
+    pctx.fillStyle = '#0b0e0a'; pctx.fillRect(0, PH * 0.82, PW, PH);
+    const tx = PW * 0.5, ty = PH * 0.95;                            // trunk foot
+    pctx.strokeStyle = '#3a4a2a'; pctx.lineWidth = 16; pctx.lineCap = 'round'; pctx.beginPath(); pctx.moveTo(tx, ty); pctx.quadraticCurveTo(tx + 10, PH * 0.6, tx - 6, PH * 0.3); pctx.stroke();
+    for (const l of LEAVES) {
+      const col = hex(l.color), [x, y] = leafTip(l), root = [tx + (l.x - 0.5) * 40, PH * (0.35 + Math.abs(l.x - 0.5) * 0.9)];
+      let ledCol = col, extra = 0;
+      for (let i = l.fx.length - 1; i >= 0; i--) { const f = l.fx[i], age = t - f.t0; if (age > f.dur) { l.fx.splice(i, 1); continue; } const e = f.w * (1 - age / f.dur); ledCol = mix(ledCol, f.color, e); extra = Math.max(extra, e); }
+      const snap = Math.exp(-(t - l.snapAt) * 5) * l.snapVel, v = clamp(Math.max(l.lit, extra, snap), 0, 1);
+      // stem bends toward the tip
+      pctx.strokeStyle = '#4f6a37'; pctx.lineWidth = 5; pctx.beginPath(); pctx.moveTo(...root); pctx.quadraticCurveTo((root[0] + x) / 2 + l.bend.x * 0.2, (root[1] + y) / 2 + 30, x, y); pctx.stroke();
+      // the leaf: a fenestrated ellipse pointing away from the stem
+      const ang = Math.atan2(y - root[1], x - root[0]), cx = x + Math.cos(ang) * l.size * 0.55, cy = y + Math.sin(ang) * l.size * 0.55;
+      pctx.save(); pctx.translate(cx, cy); pctx.rotate(ang);
+      const g = pctx.createRadialGradient(0, 0, 4, 0, 0, l.size); g.addColorStop(0, css(mix([20, 60, 30], ledCol, 0.35 + 0.6 * v))); g.addColorStop(1, css(mix([12, 40, 22], ledCol, 0.15 + 0.3 * v)));
+      pctx.fillStyle = g; pctx.beginPath(); pctx.ellipse(0, 0, l.size, l.size * 0.62, 0, 0, 6.283); pctx.fill();
+      pctx.fillStyle = '#05080a'; [[-0.35, -0.3, 0.16], [0.1, 0.32, 0.14], [0.4, -0.2, 0.12], [-0.05, -0.02, 0.09]].forEach(([hx, hy, hr]) => { pctx.beginPath(); pctx.ellipse(hx * l.size, hy * l.size * 0.62, hr * l.size, hr * l.size * 0.55, 0.4, 0, 6.283); pctx.fill(); });   // fenestrations
+      pctx.strokeStyle = css(ledCol, 0.35 + 0.65 * v); pctx.lineWidth = 2 + 2 * v; pctx.shadowColor = css(ledCol, v); pctx.shadowBlur = 18 * v;                                                          // LED filament along the midrib + edge
+      pctx.beginPath(); pctx.moveTo(-l.size * 0.9, 0); pctx.lineTo(l.size * 0.9, 0); pctx.stroke();
+      pctx.beginPath(); pctx.ellipse(0, 0, l.size, l.size * 0.62, 0, 0, 6.283); pctx.stroke(); pctx.shadowBlur = 0;
+      pctx.restore();
+      if (l.work) { const sv = strainOf(l); pctx.fillStyle = '#fff'; pctx.font = 'bold 12px system-ui'; pctx.textAlign = 'center'; pctx.fillText(`${(sv * 100).toFixed(0)}% flex - let go for a ${(clamp(0.25 + 0.75 * Math.hypot(l.work.dx, l.work.dy) / PLANT_PULL, 0.25, 1) * 100).toFixed(0)}% snap`, cx, cy - l.size * 0.75); }
+      pctx.fillStyle = '#9aa'; pctx.font = '11px system-ui'; pctx.textAlign = 'center'; pctx.fillText(`${l.key.toUpperCase()}  ${l.pad}  note ${l.note}`, l.x * PW, l.y * PH + l.size * 0.95);
+    }
+  }
+  const leafAt = (x, y) => { let best = null, bd = 1e9; for (const l of LEAVES) { const [lx, ly] = leafTip(l); const d = Math.hypot(x - lx, y - ly); if (d < l.size * 1.1 && d < bd) { best = l; bd = d; } } return best; };
+  const pXY = (ev) => { const r = pcv.getBoundingClientRect(); return [(ev.clientX - r.left) * PW / r.width, (ev.clientY - r.top) * PH / r.height]; };
+  let pGrab = null;
+  pcv.addEventListener('pointerdown', (ev) => { Camp.Sound.unlock(); const [x, y] = pXY(ev); const l = leafAt(x, y); if (!l) return; pGrab = l; leafGrab(l, x, y); try { pcv.setPointerCapture(ev.pointerId); } catch (e) {} });
+  pcv.addEventListener('pointermove', (ev) => { const [x, y] = pXY(ev); if (pGrab) { leafMove(pGrab, x, y); pcv.style.cursor = 'grabbing'; } else pcv.style.cursor = leafAt(x, y) ? 'grab' : 'default'; });
+  const pUp = () => { if (pGrab) { leafRelease(pGrab, false); pGrab = null; pcv.style.cursor = 'grab'; } };
+  pcv.addEventListener('pointerup', pUp); pcv.addEventListener('pointercancel', pUp);
+  window.addEventListener('pointerup', pUp); window.addEventListener('pointercancel', pUp);
+  document.addEventListener('keydown', (e) => { if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.repeat) return; const l = LEAVES.find((x) => x.key === e.key.toLowerCase()); if (l && !l.work) { Camp.Sound.unlock(); leafGrab(l, 0, 0); l.work.dx = PLANT_PULL * 0.6; l.bend.x = PLANT_PULL * 0.5; l.bend.y = -PLANT_PULL * 0.3; l.work.dy = -PLANT_PULL * 0.35; } });
+  document.addEventListener('keyup', (e) => { const l = LEAVES.find((x) => x.key === e.key.toLowerCase()); if (l) leafRelease(l, true); });
+  window.addEventListener('blur', () => LEAVES.forEach((l) => leafRelease(l, true)));
+
+  // ---- Water Chord Tubes: capacitive through the water. Keep in sync with TUBE_PADS in sim/inputs.py and routes.html.
+  const TID = 'tubes_01';
+  const TUBES = [
+    { pad: 'tube_1', color: '#4de0ff', note: 48, key: 'z', x: 0.20, fill: 0.80 },
+    { pad: 'tube_2', color: '#3d9bff', note: 52, key: 'x', x: 0.50, fill: 0.62 },
+    { pad: 'tube_3', color: '#7cffd4', note: 55, key: 'c', x: 0.80, fill: 0.44 },
+  ];
+  const T_BASELINE = 980, T_SPAN = 1500;                        // the water is a far bigger electrode than the brass frame: lower baseline, wider span
+  for (const u of TUBES) { u.touch = null; u.lit = 0; u.fx = []; u.ripples = []; }
+  const tubeMsg = (u, extra) => { counts[TID]++; return { instrument: 'tubes', instrument_id: TID, pad: u.pad, pad_i: TUBES.indexOf(u), note: u.note, ch: u.ch, color: u.color, ...stamp(TID), ...extra }; };
+  function dipOn(u, force) {
+    if (u.touch) return;
+    const [coupling] = PEOPLE[Camp.Settings.get('person')] || PEOPLE.adult_shoes;
+    const strength = force != null ? force : clamp(coupling * (0.9 + 0.2 * Math.random()) + 0.1, 0.05, 1);   // hand-in-water couples better than a fingertip on a frame
+    u.touch = { t0: now(), strength, value: strength * 0.75, lastHold: 0 };
+    u.ripples.push({ t0: now(), v: strength });
+    snd('waterOn', u.pad, midiFreq(u.note), strength, u.touch.value);
+    pub(`instrument/${TID}`, tubeMsg(u, { event: 'touch', velocity: +strength.toFixed(2), value: +u.touch.value.toFixed(2), raw: Math.round(T_BASELINE + u.touch.value * T_SPAN), baseline: T_BASELINE }));
+    log('in', `touch ${u.pad} velocity ${strength.toFixed(2)} (water, ${(PEOPLE[Camp.Settings.get('person')] || PEOPLE.adult_shoes)[1]})`);
+  }
+  function tubeStep(t) {                                        // water settles onto the hand faster than a frame does, and wanders less
+    for (const u of TUBES) {
+      const tc = u.touch; if (!tc) { u.lit += (0 - u.lit) * 0.06; continue; }
+      const age = t - tc.t0, target = tc.strength * (1 - 0.25 * Math.exp(-age / 0.25)) + 0.02 * Math.sin(age * 1.1);
+      tc.value += (clamp(target, 0, 1) - tc.value) * 0.2; u.lit += (tc.value - u.lit) * 0.25;
+      snd('waterSet', u.pad, tc.value);
+      if (t - tc.lastHold >= 0.125) { tc.lastHold = t; pub(`instrument/${TID}`, tubeMsg(u, { event: 'hold', velocity: +tc.strength.toFixed(2), value: +tc.value.toFixed(2), raw: Math.round(T_BASELINE + tc.value * T_SPAN), baseline: T_BASELINE, held_ms: Math.round(age * 1000) })); }
+    }
+    const held = TUBES.filter((u) => u.touch);
+    $('tubestat').textContent = held.length ? `in the water: ${held.map((u) => `${u.pad} ${(u.touch.value * 100).toFixed(0)}%`).join(', ')}${held.length > 1 ? ' - chord' : ''}` : 'nothing touched';
+  }
+  function dipOff(u) {
+    if (!u.touch) return;
+    const held = Math.round((now() - u.touch.t0) * 1000), v = u.touch.value; u.touch = null;
+    u.ripples.push({ t0: now(), v });
+    snd('waterOff', u.pad);
+    pub(`instrument/${TID}`, tubeMsg(u, { event: 'release', velocity: 0, value: 0, raw: T_BASELINE, baseline: T_BASELINE, held_ms: held }));
+    log('in', `release ${u.pad} after ${held} ms`);
+  }
+  const tcv = $('tubes'), tctx = tcv.getContext('2d'), TW = tcv.width, TH = tcv.height;
+  const TUBE_W = 108, TUBE_TOP = 26, TUBE_BOT = TH - 44, TUBE_H = TUBE_BOT - TUBE_TOP;
+  const waterY = (u) => TUBE_BOT - TUBE_H * u.fill;
+  function drawTubes(t) {
+    tubeStep(t);
+    tctx.fillStyle = '#05080c'; tctx.fillRect(0, 0, TW, TH);
+    tctx.fillStyle = '#0a0d12'; tctx.fillRect(0, TUBE_BOT + 8, TW, TH);                  // the shelf the tubes stand on
+    for (const u of TUBES) {
+      const cx = u.x * TW, half = TUBE_W / 2, col = hex(u.color), wy = waterY(u);
+      let ledCol = col, extra = 0;                                                       // bus effects on the puck under the tube
+      for (let i = u.fx.length - 1; i >= 0; i--) { const f = u.fx[i], age = t - f.t0; if (age > f.dur) { u.fx.splice(i, 1); continue; } const e = f.w * (1 - age / f.dur); ledCol = mix(ledCol, f.color, e); extra = Math.max(extra, e); }
+      const v = clamp(Math.max(u.lit, extra), 0, 1), lit = 0.12 + 0.88 * v;
+      // the puck under the base, spilling onto the shelf
+      const pg = tctx.createRadialGradient(cx, TUBE_BOT, 4, cx, TUBE_BOT, half * 2.4);
+      pg.addColorStop(0, css(ledCol, 0.2 + 0.7 * v)); pg.addColorStop(1, css(ledCol, 0));
+      tctx.fillStyle = pg; tctx.beginPath(); tctx.ellipse(cx, TUBE_BOT + 6, half * 2.4, 26, 0, 0, 6.283); tctx.fill();
+      // the water column, lit from the puck below so it is brightest at the base
+      const wg = tctx.createLinearGradient(0, TUBE_BOT, 0, wy);
+      wg.addColorStop(0, css(mix([14, 26, 38], ledCol, 0.35 + 0.65 * lit), 0.95));
+      wg.addColorStop(1, css(mix([10, 20, 30], ledCol, 0.12 + 0.5 * lit), 0.8));
+      tctx.fillStyle = wg; tctx.fillRect(cx - half, wy, TUBE_W, TUBE_BOT - wy);
+      // the surface: wobbles while a hand is in it, and rings out on every touch and release
+      const tc = u.touch, wob = tc ? Math.sin(t * 9) * 2.5 * tc.value : 0;
+      tctx.fillStyle = css(mix([180, 230, 255], ledCol, 0.5), 0.5 + 0.4 * lit);
+      tctx.beginPath(); tctx.ellipse(cx, wy + wob, half, 9, 0, 0, 6.283); tctx.fill();
+      for (let i = u.ripples.length - 1; i >= 0; i--) {
+        const r = u.ripples[i], age = t - r.t0; if (age > 1.2) { u.ripples.splice(i, 1); continue; }
+        const k = age / 1.2; tctx.strokeStyle = css(mix([200, 240, 255], ledCol, 0.4), (1 - k) * 0.6 * r.v); tctx.lineWidth = 2;
+        tctx.beginPath(); tctx.ellipse(cx, wy + wob, half * (0.15 + 0.85 * k), 9 * (0.15 + 0.85 * k), 0, 0, 6.283); tctx.stroke();
+      }
+      if (tc) {                                                                          // the finger, in as deep as the reading is strong
+        const fy = wy + wob + 8 + 16 * tc.value;
+        tctx.fillStyle = 'rgba(232,232,240,0.9)'; tctx.fillRect(cx - 7, TUBE_TOP - 16, 14, fy - TUBE_TOP + 16);
+        tctx.beginPath(); tctx.ellipse(cx, fy, 7, 6, 0, 0, 6.283); tctx.fill();
+      }
+      // the glass
+      tctx.strokeStyle = css(mix([150, 170, 190], ledCol, 0.4 * lit), 0.85); tctx.lineWidth = 2;
+      tctx.beginPath(); tctx.ellipse(cx, TUBE_TOP, half, 9, 0, 0, 6.283); tctx.stroke();
+      tctx.beginPath(); tctx.moveTo(cx - half, TUBE_TOP); tctx.lineTo(cx - half, TUBE_BOT); tctx.moveTo(cx + half, TUBE_TOP); tctx.lineTo(cx + half, TUBE_BOT); tctx.stroke();
+      tctx.beginPath(); tctx.ellipse(cx, TUBE_BOT, half, 10, 0, 0, 6.283); tctx.stroke();
+      tctx.strokeStyle = 'rgba(255,255,255,0.10)'; tctx.lineWidth = 6;
+      tctx.beginPath(); tctx.moveTo(cx - half * 0.55, TUBE_TOP + 14); tctx.lineTo(cx - half * 0.55, TUBE_BOT - 10); tctx.stroke();
+      // the live capacitive reading + label
+      tctx.fillStyle = '#222'; tctx.fillRect(cx - 40, TUBE_BOT + 16, 80, 5);
+      if (tc) { tctx.fillStyle = css(col); tctx.fillRect(cx - 40, TUBE_BOT + 16, 80 * tc.value, 5); }
+      tctx.fillStyle = '#9aa'; tctx.font = '11px system-ui'; tctx.textAlign = 'center';
+      tctx.fillText(`${u.key.toUpperCase()}  ${u.pad}  note ${u.note}${tc ? `  ${Math.round(T_BASELINE + tc.value * T_SPAN)} raw` : ''}`, cx, TUBE_BOT + 34);
+    }
+  }
+  const tubeAt = (x, y) => TUBES.find((u) => Math.abs(x - u.x * TW) < TUBE_W / 2 && y > TUBE_TOP - 16 && y < TUBE_BOT);
+  const tXY = (ev) => { const r = tcv.getBoundingClientRect(); return [(ev.clientX - r.left) * TW / r.width, (ev.clientY - r.top) * TH / r.height]; };
+  let tPointer = null;
+  tcv.addEventListener('pointerdown', (ev) => { Camp.Sound.unlock(); const u = tubeAt(...tXY(ev)); if (!u) return; tPointer = u; dipOn(u); try { tcv.setPointerCapture(ev.pointerId); } catch (e) {} });
+  const tUp = () => { if (tPointer) { dipOff(tPointer); tPointer = null; } };
+  tcv.addEventListener('pointerup', tUp); tcv.addEventListener('pointercancel', tUp);
+  window.addEventListener('pointerup', tUp); window.addEventListener('pointercancel', tUp);
+  tcv.addEventListener('pointermove', (ev) => { if (!tPointer) tcv.style.cursor = tubeAt(...tXY(ev)) ? 'pointer' : 'default'; });
+  document.addEventListener('keydown', (e) => { if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.repeat) return; const u = TUBES.find((x) => x.key === e.key.toLowerCase()); if (u) { Camp.Sound.unlock(); dipOn(u); } });
+  document.addEventListener('keyup', (e) => { const u = TUBES.find((x) => x.key === e.key.toLowerCase()); if (u) dipOff(u); });
+  window.addEventListener('blur', () => TUBES.forEach(dipOff));
+
+  // ---- everything the responder + MIDI table know about
+  const INSTRUMENTS = [
+    { kind: 'mycelium', id: ID, label: 'Sonic Mycelium Cluster', pads: PADS, ch: 1, role: (p) => p.drum },   // channels are sequential: 1 mushrooms, 2 geodes, 3 plant, 4 tubes (Ben, 2026-09-21)
+    { kind: 'geode', id: GID, label: 'Crystal Geode Synth', pads: GEODES, ch: 2, role: (p) => 'synth voice' },
+    { kind: 'plant', id: PID, label: 'Monstera Piezo Plant', pads: LEAVES, ch: 3, role: (p) => 'bass patch' },
+    { kind: 'tubes', id: TID, label: 'Water Chord Tubes', pads: TUBES, ch: 4, role: (p) => 'chord voice' },
+  ];
+  for (const inst of INSTRUMENTS) for (const p of inst.pads) { p.defaultNote = p.note; p.ch = inst.ch; }
+
+  // ---- test patterns: a step sequencer per instrument on one clock. An entry = [pads, velocity, holdSteps]
+  // (pads = index, array of indexes, or null for a rest; hold only matters to held instruments: geodes hold the
+  // touch, leaves stay bent, for that many steps). `step` = notes per bar (8 = 8ths). `gen` = random entry maker.
+  const PATTERNS = {
+    mycelium: [
+      { name: 'rolling 8ths (rhythm lock)', step: 8, seq: [[0, 1], [2, .45], [1, .8], [2, .45], [0, .9], [3, .6], [1, .8], [5, .5], [0, 1], [2, .45], [1, .8], [4, .7], [0, .9], [2, .45], [1, .85], [3, .55]] },
+      { name: 'four on the floor', step: 8, seq: [[0, 1], [2, .4], [1, .85], [2, .4], [0, 1], [2, .4], [1, .85], [5, .5]] },
+      { name: 'breakbeat', step: 16, seq: [[0, 1], [null], [2, .4], [1, .8], [null], [2, .4], [0, .9], [null], [2, .4], [1, .85], [0, .8], [2, .4], [1, .7], [null], [3, .6], [3, .8]] },
+      { name: 'tom and clap groove', step: 8, seq: [[3, .8], [3, .6], [4, .9], [null], [3, .8], [3, .6], [4, .9], [5, .5]] },
+      { name: 'one pad, quarter notes (locks crystals)', step: 4, seq: [[0, .9]] },
+      { name: 'round robin', step: 8, seq: [[0, .8], [1, .8], [2, .8], [3, .8], [4, .8], [5, .8]] },
+      { name: 'random', step: 8, gen: () => [Math.floor(Math.random() * 6), 0.3 + Math.random() * 0.7] },
+    ],
+    geode: [
+      { name: 'arpeggio up', step: 8, seq: [[0, .7, 1], [1, .7, 1], [2, .7, 1], [3, .7, 1]] },
+      { name: 'arpeggio up and down', step: 8, seq: [[0, .7, 1], [1, .7, 1], [2, .7, 1], [3, .7, 1], [2, .7, 1], [1, .7, 1]] },
+      { name: 'chord swell', step: 4, seq: [[[0, 1, 2, 3], .6, 3], [null]] },
+      { name: 'alternating pairs', step: 4, seq: [[[0, 2], .7, 1], [[1, 3], .7, 1]] },
+      { name: 'slow hand-over drone', step: 2, seq: [[0, .8, 2], [2, .8, 2], [1, .8, 2], [3, .8, 2]] },
+      { name: 'random', step: 8, gen: () => [Math.floor(Math.random() * 4), 0.4 + Math.random() * 0.6, 1 + Math.floor(Math.random() * 3)] },
+    ],
+    plant: [
+      { name: 'slow bend and snap', step: 4, seq: [[0, .9, 3], [null], [1, .9, 3], [null], [2, .9, 3], [null], [3, .9, 3], [null], [4, .9, 3], [null]] },
+      { name: 'quick flicks', step: 8, seq: [[0, .5, 1], [1, .5, 1], [2, .5, 1], [3, .5, 1], [4, .5, 1], [3, .5, 1], [2, .5, 1], [1, .5, 1]] },
+      { name: 'two leaves swaying', step: 2, seq: [[[0, 2], .6, 2], [[1, 3], .6, 2], [[2, 4], .6, 2], [[0, 3], .6, 2]] },
+      { name: 'walking bass (all five)', step: 4, seq: [[0, .85, 1], [2, .6, 1], [4, .7, 1], [2, .6, 1], [1, .85, 1], [3, .6, 1], [4, .7, 1], [3, .6, 1]] },
+      { name: 'breeze (random)', step: 8, gen: () => (Math.random() < 0.5 ? [null] : [Math.floor(Math.random() * 5), 0.2 + Math.random() * 0.8, 1 + Math.floor(Math.random() * 4)]) },
+    ],
+    tubes: [
+      { name: 'the whole chord, swelling', step: 2, seq: [[[0, 1, 2], .7, 3], [null]] },
+      { name: 'arpeggio up', step: 8, seq: [[0, .7, 1], [1, .7, 1], [2, .7, 1]] },
+      { name: 'arpeggio up and down', step: 8, seq: [[0, .7, 1], [1, .7, 1], [2, .7, 1], [1, .7, 1]] },
+      { name: 'one tube at a time, held', step: 1, seq: [[0, .8, 1], [1, .8, 1], [2, .8, 1]] },
+      { name: 'random dips', step: 8, gen: () => (Math.random() < 0.4 ? [null] : [Math.floor(Math.random() * 3), 0.3 + Math.random() * 0.7, 1 + Math.floor(Math.random() * 3)]) },
+    ],
+  };
+  // how each instrument plays a step: on(pad, velocity) and off(pad) for held ones
+  const PLAYERS = {
+    mycelium: { pads: PADS, on: (i, v) => whack(PADS[i], clamp(v, 0.1, 1), 'pattern') },
+    geode:    { pads: GEODES, on: (i, v) => touchOn(GEODES[i], clamp(v, 0.05, 1)), off: (i) => touchOff(GEODES[i]) },
+    plant:    { pads: LEAVES, on: (i, v) => { const l = LEAVES[i]; if (l.work) return; leafGrab(l, 0, 0); const d = clamp(v, 0.1, 1) * PLANT_PULL; l.work.dx = d * 0.8; l.work.dy = -d * 0.6; l.bend.x = l.work.dx; l.bend.y = l.work.dy; }, off: (i) => leafRelease(LEAVES[i], false) },
+    tubes:    { pads: TUBES, on: (i, v) => dipOn(TUBES[i], clamp(v, 0.05, 1)), off: (i) => dipOff(TUBES[i]) },
+  };
+  const seqs = { mycelium: null, geode: null, plant: null, tubes: null };
+  const stepMs = (pat) => 60000 / +$('bpm').value * 4 / pat.step;
+  // one transport for every pattern: the first one to start sets the bar clock, later ones wait for the next bar line,
+  // so whatever you start lands in time with what is already playing (Ben, 2026-09-21)
+  const clock = { t0: null };
+  const barMs = () => 60000 / +$('bpm').value * 4;
+  const anyPlaying = () => Object.values(seqs).some(Boolean);
+  function nextBar() {
+    const t = performance.now();
+    if (clock.t0 == null || !anyPlaying()) { clock.t0 = t; return t; }
+    const bar = barMs(); return clock.t0 + Math.ceil((t - clock.t0 + 5) / bar) * bar;
+  }
+  function seqTick(kind) {
+    const sq = seqs[kind]; if (!sq) return;
+    const pat = sq.pat, entry = pat.gen ? pat.gen() : pat.seq[sq.i % pat.seq.length], ms = stepMs(pat), pl = PLAYERS[kind];
+    if (entry && entry[0] != null) {
+      const pads = Array.isArray(entry[0]) ? entry[0] : [entry[0]], v = entry[1] == null ? 0.8 : entry[1], hold = entry[2] || 1;
+      for (const i of pads) { pl.on(i, v); if (pl.off) setTimeout(() => pl.off(i), Math.max(40, hold * ms * 0.9)); }
+    }
+    if (sq.waiting) { sq.waiting = false; $('play-' + kind).textContent = 'Stop'; seqStat(); }
+    sq.i++; sq.next += ms; sq.timer = setTimeout(() => seqTick(kind), Math.max(0, sq.next - performance.now()));
+  }
+  function seqStart(kind, at) {                                  // at = a bar line from nextBar(); Play all passes one for every instrument
+    seqStop(kind); Camp.Sound.unlock();
+    const start = at != null ? at : nextBar(), pat = PATTERNS[kind][+$('pat-' + kind).value || 0];
+    seqs[kind] = { pat, i: 0, next: start, waiting: start - performance.now() > 30 };
+    $('play-' + kind).textContent = seqs[kind].waiting ? 'Wait…' : 'Stop'; $('play-' + kind).classList.add('on');
+    seqs[kind].timer = setTimeout(() => seqTick(kind), Math.max(0, start - performance.now())); seqStat();
+  }
+  function seqStop(kind) {
+    const sq = seqs[kind]; if (!sq) return; clearTimeout(sq.timer); seqs[kind] = null;
+    if (PLAYERS[kind].off) PLAYERS[kind].pads.forEach((_, i) => PLAYERS[kind].off(i));
+    $('play-' + kind).textContent = 'Play'; $('play-' + kind).classList.remove('on'); seqStat();
+  }
+  const seqStat = () => { const on = Object.keys(seqs).filter((k) => seqs[k]); $('seqstat').textContent = on.length ? `${on.map((k) => `${seqs[k].waiting ? 'next bar: ' : ''}${k} - ${seqs[k].pat.name}`).join(' / ')}` : ''; };
+  for (const kind of Object.keys(PATTERNS)) {
+    const sel = $('pat-' + kind); PATTERNS[kind].forEach((p, i) => { const o = document.createElement('option'); o.value = i; o.textContent = p.name; sel.appendChild(o); });
+    sel.addEventListener('change', () => { if (seqs[kind]) seqStart(kind); });
+    $('play-' + kind).addEventListener('click', () => (seqs[kind] ? seqStop(kind) : seqStart(kind)));
+  }
+  $('bpm').addEventListener('input', (e) => { $('bpmv').textContent = `${e.target.value} bpm`; });
+  $('playall').addEventListener('click', () => { const at = nextBar(); Object.keys(PATTERNS).forEach((k) => seqStart(k, at)); });
+  $('stopall').addEventListener('click', () => Object.keys(PATTERNS).forEach(seqStop));
+
+  // ---- MIDI mapping: note + channel per pad. Saved in this browser (settings.midi) and published retained on config/midi/<id>.
+  const MIDI_SAVED = Camp.Settings.get('midi2') || {};             // 'midi2': the old 'midi' key held channels 10/1/2
+  function applyMidi(id, pads) { const inst = INSTRUMENTS.find((i) => i.id === id); if (!inst || !pads) return; for (const p of inst.pads) { const m = pads[p.pad]; if (!m) continue; if (Number.isFinite(+m.note)) p.note = clamp(Math.round(+m.note), 0, 127); if (Number.isFinite(+m.ch)) p.ch = clamp(Math.round(+m.ch), 1, 16); } }
+  for (const inst of INSTRUMENTS) applyMidi(inst.id, MIDI_SAVED[inst.id]);
+  const midiDoc = (inst) => ({ instrument: inst.kind, instrument_id: inst.id, preset: presetOf(inst) || 'custom', ...(inst.kind === 'geode' ? { mode: geodeMode, chord_preset: chordPreset } : {}),
+    pads: Object.fromEntries(inst.pads.map((p) => [p.pad, { note: inst.kind === 'geode' && geodeMode === 'chord' ? chordOf(p)[0] : p.note, ch: p.ch, ...(inst.kind === 'geode' && geodeMode === 'chord' ? { notes: chordOf(p) } : {}) }])) });
+  function saveMidi(inst, publish = true) {
+    const all = Camp.Settings.get('midi2') || {}; all[inst.id] = midiDoc(inst).pads; Camp.Settings.set({ midi2: all });
+    if (publish) { pub(`config/midi/${inst.id}`, midiDoc(inst), true); $('midistat').textContent = `published config/midi/${inst.id} (retained) at ${new Date().toLocaleTimeString()}`; }
+  }
+  // named note presets per instrument, and bundles that switch every instrument at once
+  const NOTE_PRESETS = {
+    mycelium_01: { 'GM drums (default)': [36, 38, 42, 45, 39, 51], 'Drum Rack C1 up (36-41)': [36, 37, 38, 39, 40, 41], '808 kit': [36, 40, 42, 43, 37, 49], 'Percussion (GM 60+)': [60, 61, 62, 63, 64, 65] },
+    geode_01:    { 'C major 7 (default)': [60, 64, 67, 71], 'A minor 7': [57, 60, 64, 67], 'C pentatonic': [60, 62, 64, 67], 'D sus2 wide': [50, 57, 62, 69], 'Octaves of C': [36, 48, 60, 72] },
+    plant_01:    { 'Bass C (default)': [36, 40, 43, 47, 50], 'Bass A minor': [33, 36, 40, 43, 45], 'Bass D fifths': [38, 45, 50, 57, 62], 'Sub octaves': [24, 31, 36, 43, 48] },
+    tubes_01:    { 'C major (default)': [48, 52, 55], 'A minor': [45, 48, 52], 'D sus2': [50, 52, 57], 'Open fifths': [48, 55, 62], 'C pentatonic top': [60, 64, 67] },
+  };
+  const BUNDLES = {
+    'Default': { mycelium_01: 'GM drums (default)', geode_01: 'C major 7 (default)', plant_01: 'Bass C (default)', tubes_01: 'C major (default)' },
+    'Key of A minor': { mycelium_01: 'GM drums (default)', geode_01: 'A minor 7', plant_01: 'Bass A minor', tubes_01: 'A minor' },
+    'Key of D': { mycelium_01: '808 kit', geode_01: 'D sus2 wide', plant_01: 'Bass D fifths', tubes_01: 'D sus2' },
+    'Drum Rack + pentatonic': { mycelium_01: 'Drum Rack C1 up (36-41)', geode_01: 'C pentatonic', plant_01: 'Sub octaves', tubes_01: 'C pentatonic top' },
+    'Wide test (percussion, octaves, sub)': { mycelium_01: 'Percussion (GM 60+)', geode_01: 'Octaves of C', plant_01: 'Sub octaves', tubes_01: 'Open fifths' },
+  };
+  const presetOf = (inst) => Object.keys(NOTE_PRESETS[inst.id] || {}).find((n) => NOTE_PRESETS[inst.id][n].every((v, i) => inst.pads[i] && inst.pads[i].note === v)) || null;
+  const bundleOf = () => Object.keys(BUNDLES).find((b) => INSTRUMENTS.every((inst) => !BUNDLES[b][inst.id] || presetOf(inst) === BUNDLES[b][inst.id])) || null;
+  function applyPreset(inst, name, publish = true) {
+    const notes = (NOTE_PRESETS[inst.id] || {})[name]; if (!notes) return;
+    inst.pads.forEach((p, i) => { if (notes[i] != null) p.note = notes[i]; });
+    if (publish) saveMidi(inst);
+  }
+  function renderPresetAll() {
+    const sel = $('preset-all'), cur = bundleOf();
+    sel.innerHTML = Object.keys(BUNDLES).map((b) => `<option value="${b}" ${b === cur ? 'selected' : ''}>${b}</option>`).join('') + `<option value="" ${cur ? '' : 'selected'}>custom mix</option>`;
+  }
+  $('preset-all').addEventListener('change', (e) => { const b = BUNDLES[e.target.value]; if (!b) return; for (const inst of INSTRUMENTS) if (b[inst.id]) applyPreset(inst, b[inst.id]); renderMidi(); });
+  const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const noteName = (n) => `${NOTE_NAMES[n % 12]}${Math.floor(n / 12) - 1}`;
+  // conflicts: Live separates the instruments by MIDI channel on one port, so two instruments on one channel would
+  // play each other's sounds; two pads on one note inside an instrument would be indistinguishable.
+  function midiConflicts() {
+    const out = [];
+    for (let i = 0; i < INSTRUMENTS.length; i++) for (let j = i + 1; j < INSTRUMENTS.length; j++) {
+      const a = new Set(INSTRUMENTS[i].pads.map((p) => p.ch)), b = new Set(INSTRUMENTS[j].pads.map((p) => p.ch)), shared = [...a].filter((c) => b.has(c));
+      if (shared.length) out.push(`${INSTRUMENTS[i].label} and ${INSTRUMENTS[j].label} both use channel ${shared.join(', ')}`);
+    }
+    for (const inst of INSTRUMENTS) { const seen = new Map(); for (const p of inst.pads) { const k = `${p.ch}:${p.note}`; if (seen.has(k)) out.push(`${inst.label}: ${seen.get(k)} and ${p.pad} share note ${p.note} on channel ${p.ch}`); else seen.set(k, p.pad); } }
+    return out;
+  }
+  function renderMidi() {
+    renderPresetAll();
+    { const c = midiConflicts(); const el = $('midiconf'); el.textContent = c.length ? 'CONFLICT: ' + c.join(' / ') : 'no conflicts: every instrument on its own channel, every pad on its own note'; el.style.color = c.length ? 'var(--bad)' : 'var(--ok)'; }
+    $('midi').innerHTML = INSTRUMENTS.map((inst) => { const cur = presetOf(inst); return `<div><h3>${inst.label} <small>${inst.id} &middot; default channel ${inst.ch}</small></h3>
+      <div class="row" style="margin:0 0 6px"><span class="g">${inst.kind === 'geode' && geodeMode === 'chord' ? 'Chord mode: ' + chordPreset + ' &middot; single-note preset' : 'Preset'}</span><select class="btn sm" data-preset="${inst.id}">${Object.keys(NOTE_PRESETS[inst.id] || {}).map((n) => `<option value="${n}" ${n === cur ? 'selected' : ''}>${n}</option>`).join('')}<option value="" ${cur ? '' : 'selected'}>custom</option></select></div><table>
+      <tr><th style="text-align:left;color:var(--dim);font-weight:500">pad</th><th style="color:var(--dim);font-weight:500">role</th><th style="color:var(--dim);font-weight:500">note</th><th style="color:var(--dim);font-weight:500">ch</th><th style="color:var(--dim);font-weight:500">key</th></tr>
+      ${inst.pads.map((p, i) => `<tr><td class="name"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${p.color};margin-right:6px"></span><b>${p.pad}</b></td><td class="k">${inst.role(p)}</td>
+        <td>${inst.kind === 'geode' && geodeMode === 'chord' ? `<span class="k" title="${chordOf(p).join(' ')}">${chordName(chordOf(p))}: ${chordOf(p).map(noteName).join(' ')}</span>` : `<input type="number" min="0" max="127" value="${p.note}" data-m="${inst.id}:${p.pad}:note"> <span class="k">${noteName(p.note)}</span>`}</td>
+        <td><input type="number" min="1" max="16" value="${p.ch}" data-m="${inst.id}:${p.pad}:ch"></td><td class="k">${p.key ? p.key.toUpperCase() : i + 1}</td></tr>`).join('')}</table></div>`; }).join('');
+    $('midi').querySelectorAll('select[data-preset]').forEach((el) => el.addEventListener('change', () => { const inst = INSTRUMENTS.find((i) => i.id === el.dataset.preset); if (el.value) { applyPreset(inst, el.value); renderMidi(); } }));
+    $('midi').querySelectorAll('input[data-m]').forEach((el) => el.addEventListener('change', () => { const [id, pad, field] = el.dataset.m.split(':'); const inst = INSTRUMENTS.find((i) => i.id === id); applyMidi(id, { [pad]: { [field]: el.value } }); saveMidi(inst); renderMidi(); }));
+  }
+  renderMidi();
+  $('midireset').addEventListener('click', () => { for (const inst of INSTRUMENTS) { for (const p of inst.pads) { p.note = p.defaultNote; p.ch = inst.ch; } saveMidi(inst); } renderMidi(); });
+
+  // ---- bus
+  let client = null;
+  const nodeId = 'sim_instruments_' + Math.random().toString(36).slice(2, 8);
+  $('url').value = Camp.Settings.brokerUrl();
+  function setConn(text, cls) { const c = $('conn'); c.textContent = text; c.className = cls || ''; }
+  function pub(topic, payload, retain = false) { if (topic.startsWith('instrument/')) midiSend(payload); if (!client || !client.connected) return; if (!('ts' in payload)) payload.ts = Date.now(); client.publish(topic, JSON.stringify(payload), { retain, qos: 0 }); }
+
+  // ---- Web MIDI output (dev shortcut; the same table as tools/midi_bridge.py translate())
+  const MIDI_CC = 74, MIDI_VEL_CC = 11, MIDI_GATE_MS = 120, MIDI_CC_MIN_MS = 33;   // CC 11 = velocity before every note on: map it to a gain in Live so loudness follows velocity on any patch
+  let midiOut = null, midiAccess = null; const midiLastCC = new Map();
+  const v127 = (x) => clamp(Math.round((+x || 0) * 127), 0, 127);
+  function midiTranslate(m) {                                    // -> [[status, d1, d2, delayMs]]
+    const kind = m.instrument, ev = m.event, ch = clamp((+m.ch || { mycelium: 1, geode: 2, plant: 3, tubes: 4 }[kind] || 1) - 1, 0, 15), note = clamp(+m.note || 0, 0, 127);
+    const vel = v127(m.velocity), val = v127(m.value != null ? m.value : m.velocity), out = [];
+    const notes = Array.isArray(m.notes) && m.notes.length ? m.notes.map((n) => clamp(+n || 0, 0, 127)) : [note];   // chord mode: every note of the chord
+    const expr = [0xB0 | ch, MIDI_VEL_CC, Math.max(1, vel), 0];
+    if (ev === 'hit') { out.push(expr); for (const n of notes) out.push([0x90 | ch, n, Math.max(1, vel), 0], [0x80 | ch, n, 0, MIDI_GATE_MS]); }
+    else if (ev === 'touch') { out.push([0xB0 | ch, MIDI_CC, val, 0], expr); for (const n of notes) out.push([0x90 | ch, n, Math.max(1, vel), 0]); }
+    else if (ev === 'hold' || ev === 'bend') { out.push([0xB0 | ch, MIDI_CC, val, 0]); }
+    else if (ev === 'release') { out.push([0xB0 | ch, MIDI_CC, 0, 0]); if (kind === 'plant' && vel > 0) { out.push(expr); for (const n of notes) out.push([0x90 | ch, n, vel, 0], [0x80 | ch, n, 0, MIDI_GATE_MS + 280]); } else for (const n of notes) out.push([0x80 | ch, n, 0, 0]); }
+    return out;
+  }
+  function midiSend(m) {
+    if (!midiOut) return;
+    for (const [st, d1, d2, delay] of midiTranslate(m)) {
+      if ((st & 0xF0) === 0xB0 && d1 !== MIDI_VEL_CC && d2 !== 0) { const k = `${m.instrument_id}:${m.pad}`, t = performance.now(), last = midiLastCC.get(k); if (last && t - last < MIDI_CC_MIN_MS) continue; midiLastCC.set(k, t); }
+      try { midiOut.send([st, d1, d2], delay ? window.performance.now() + delay : undefined); } catch (e) { $('midioutstat').textContent = 'send failed: ' + e.message; }
+    }
+  }
+  function midiPick(name) {
+    midiOut = null; if (!midiAccess) return;
+    for (const o of midiAccess.outputs.values()) if (o.name === name) midiOut = o;
+    $('midioutstat').textContent = midiOut ? `sending to ${midiOut.name}` : name ? `port "${name}" not found` : 'off';
+    Camp.Settings.set({ midiOut: midiOut ? midiOut.name : '' });
+  }
+  function midiInit() {
+    if (!navigator.requestMIDIAccess) { $('midioutstat').textContent = 'Web MIDI needs Chrome on localhost (use the bridge instead)'; return; }
+    $('midioutstat').textContent = 'asking Chrome for MIDI access - allow the prompt by the address bar';
+    navigator.requestMIDIAccess().then((acc) => {
+      midiAccess = acc;
+      const fill = () => { const sel = $('midiout'), cur = Camp.Settings.get('midiOut') || ''; sel.innerHTML = '<option value="">(off)</option>' + [...acc.outputs.values()].map((o) => `<option value="${o.name.replace(/"/g, '&quot;')}" ${o.name === cur ? 'selected' : ''}>${o.name}</option>`).join(''); if (cur) midiPick(cur); else $('midioutstat').textContent = acc.outputs.size ? 'off - pick a port' : 'no MIDI output ports (create one in loopMIDI)'; };
+      fill(); acc.onstatechange = fill;
+    }, (e) => { $('midioutstat').textContent = 'MIDI access refused: ' + e.message; });
+  }
+  $('midiout').addEventListener('change', (e) => midiPick(e.target.value));
+  $('miditest').addEventListener('click', () => { if (!midiOut) { $('midioutstat').textContent = 'pick a port first'; return; } midiOut.send([0x90, 60, 100]); midiOut.send([0x80, 60, 0], window.performance.now() + 300); $('midioutstat').textContent = `test note C3 sent to ${midiOut.name}`; });
+  midiInit();
+  function log(kind, text) { if (!Camp.Settings.get('logs')) return; const el = $('log'); const line = document.createElement('div'); line.className = kind; line.textContent = `${new Date().toLocaleTimeString()}  ${kind === 'in' ? '>' : '<'} ${text}`; el.prepend(line); while (el.childNodes.length > 80) el.removeChild(el.lastChild); }
+  function connect() {
+    if (client) { try { client.end(true); } catch (e) {} }
+    const url = $('url').value.trim(); setConn('connecting ' + url + ' ...');
+    client = mqtt.connect(url, { clientId: nodeId, clean: true, keepalive: 20, reconnectPeriod: 2000,
+      will: { topic: `node/${nodeId}/status`, payload: JSON.stringify({ online: false, ts: 0 }), retain: true } });
+    client.on('connect', () => { setConn('connected ' + url, 'ok'); pub(`node/${nodeId}/status`, { online: true, ip: 'browser', fw: 'sim-instruments-0.1', uptime: 0 }, true); client.subscribe(['cmd/all/#', 'map/+', 'config/midi/+', ...INSTRUMENTS.flatMap((i) => [`cmd/${i.kind}/#`, `cmd/${i.id}/#`])]); for (const inst of INSTRUMENTS) saveMidi(inst); });   // this page is the source of truth for config/midi/* (retained)
+    client.on('close', () => setConn('disconnected', 'bad'));
+    client.on('error', (e) => setConn('error: ' + e.message, 'bad'));
+    client.on('message', (topic, buf) => {
+      let m; try { m = JSON.parse(buf.toString()); } catch (e) { return; }
+      if (topic.startsWith('map/')) { const id = topic.slice(4); if (!(id in POSN)) return; const P = m.lat != null ? { lat: m.lat, lon: m.lon } : null; POSN[id] = P; const el = $('where-' + id); if (el) el.textContent = P ? `position: ${((P.lon - ORIGIN.lon) * M_PER_DEG_LON).toFixed(0)} E, ${((P.lat - ORIGIN.lat) * M_PER_DEG_LAT).toFixed(0)} N (from map/${id}, set on the Virtual Camp map)` : `position: unknown - drag ${id} on the Virtual Camp map`; return; }
+      if (topic.startsWith('config/midi/')) { const id = topic.slice(12); if (m.pads) { applyMidi(id, m.pads); renderMidi(); } return; }
+      const c = /^cmd\/([^/]+)\/([^/]+)$/.exec(topic); if (!c) return;
+      const [, target, effect] = c;
+      for (const inst of INSTRUMENTS) { if (target !== 'all' && target !== inst.kind && target !== inst.id) continue; const a = arrive(m, POSN[inst.id]); if (a) setTimeout(() => bedCmd(inst, effect, m, a.intensity), a.delay * 1000); }
+    });
+  }
+  $('connect').addEventListener('click', connect);
+  connect();
+  window.__inst = { PADS, GEODES, LEAVES, INSTRUMENTS, POSN, counts, touchOn: (i) => touchOn(GEODES[i]), touchOff: (i) => touchOff(GEODES[i]), whack: (i, v = 0.8) => whack(PADS[i], v), pullVel,
+    leafGrab: (i, x = 0, y = 0) => leafGrab(LEAVES[i], x, y), leafMove: (i, x, y) => leafMove(LEAVES[i], x, y), leafRelease: (i) => leafRelease(LEAVES[i], false), strainOf,
+    TUBES, dipOn: (i, v) => dipOn(TUBES[i], v), dipOff: (i) => dipOff(TUBES[i]), applyMidi, midiDoc, midiTranslate, CHORD_PRESETS, chordOf, notesOf, chordName, get geodeMode() { return geodeMode; }, PATTERNS, NOTE_PRESETS, BUNDLES, seqStart, seqStop, nextBar, get clock() { return clock; }, applyPreset, presetOf, bundleOf, get seqs() { return seqs; }, get midiOut() { return midiOut; }, get pull() { return pull; }, arrive, bedLevel, now };
+})();
+</script>
+</body>
+</html>

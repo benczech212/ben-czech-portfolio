@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Devices</title>
+<!-- The fleet, from the bus itself: every node's retained node/<id>/status and node/<id>/count,
+     plus everything else on the wire to work out when each one was last heard from.
+
+     Two things this page does that a list of what is connected would not:
+       * it shows devices that are EXPECTED and absent (the catalogue below). At camp the useful
+         question is never "what is on?" but "what is missing?", and a device that never booted
+         cannot tell you it exists.
+       * it links to each device's own console, which the node advertises itself as `ui` in its
+         status (docs/SCHEMA.md). Nothing here is hardcoded to a port. -->
+<link rel="stylesheet" href="ui.css">
+<script src="vendor/mqtt.min.js"></script>
+<script src="shared.js"></script>
+<style>
+  .verdict { margin:0 0 6px; font-size:19px; letter-spacing:-.015em; max-width:none; }
+  .verdict b { font-weight:650; }
+  .missing { color:var(--mute); margin:0 0 22px; max-width:72ch; }
+  .missing .who { color:var(--ink); font-family:var(--mono); font-size:13.5px; }
+  .tools { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:0 0 20px; }
+  .tools .field { width:230px; }
+
+  .layer { margin:0 0 6px; }
+  .layer h2 { display:flex; align-items:baseline; gap:10px; padding:18px 0 8px; margin:0;
+              border-bottom:1px solid var(--rule-lit); }
+  .layer h2 .what { font-weight:400; font-size:13px; color:var(--mute); }
+  .layer h2 .tally { margin-left:auto; font:12.5px var(--mono); color:var(--mute); }
+
+  .row, .legend { display:grid; grid-template-columns:14px minmax(150px,1.3fr) 92px 96px 104px 84px 108px;
+         gap:14px; align-items:baseline; }
+  .row { padding:11px 2px; border-bottom:1px solid var(--rule); }
+  .legend { padding:0 2px 6px; font-size:12px; color:var(--mute); }
+  .row:hover { background:var(--panel); }
+  .row .id { font-family:var(--mono); font-size:14px; color:var(--ink); word-break:break-all; }
+  .row .id small { display:block; font-family:var(--sans); font-size:12.5px; color:var(--mute); margin-top:2px; }
+  .row .k { font-size:13px; color:var(--mute); }
+  .row .n { font-family:var(--mono); font-size:13px; font-variant-numeric:tabular-nums; color:var(--ink); }
+  .row .n.faint { color:var(--mute); }
+  .row.absent .id, .row.absent .n { color:var(--mute); }
+  .row .heard b { color:var(--ink); font-weight:400; }
+  .row a.console { font-size:13px; text-decoration:none; border:1px solid var(--rule-lit);
+                   border-radius:var(--r-sm); padding:4px 10px; color:var(--act); white-space:nowrap; }
+  .row a.console:hover { background:var(--act); color:var(--ground); border-color:var(--act); }
+  .row span.noconsole { font-size:13px; color:var(--mute); }
+  .empty { color:var(--mute); padding:14px 2px; font-size:13.5px; }
+  .cruft { max-width:none; margin:-8px 0 22px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .cruft span { max-width:64ch; }
+  .cruft b { color:var(--ink); font-weight:600; }
+
+  @media (max-width: 860px) {
+    .row { grid-template-columns:14px 1fr auto; gap:6px 12px; }
+    .row .role, .row .up { display:none; }
+    .row .heard, .row .count { grid-column:2; font-size:12.5px; }
+    /* a bare number means nothing without its column header, and the header is gone down here */
+    .row .count::after { content:' uses'; color:var(--mute); font-family:var(--sans); }
+    .row .count.faint { display:none; }
+    .row a.console, .row span.noconsole { grid-row:1; grid-column:3; }
+  }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <nav id="campnav"></nav>
+  <span class="spacer"></span>
+  <input id="url" class="field" type="text" spellcheck="false" style="width:200px">
+  <button class="btn" id="connect">Connect</button>
+  <span class="conn" id="conn">disconnected</span>
+</div>
+
+<main class="page">
+  <p class="verdict" id="verdict">Asking the bus who is out there&hellip;</p>
+  <p class="missing" id="missing"></p>
+
+  <div class="tools">
+    <input id="q" class="field" type="search" placeholder="Filter by name" autocomplete="off">
+    <button class="btn quiet" id="only">Only what needs attention</button>
+    <span class="small mute" id="counts"></span>
+  </div>
+
+  <p class="small mute cruft" id="cruft" hidden></p>
+
+  <div class="legend" aria-hidden="true">
+    <span></span><span>Device</span><span>Layer</span><span>Up</span><span>Last status</span>
+    <span>Uses</span><span></span>
+  </div>
+  <div id="layers"></div>
+
+  <p class="small mute" style="margin-top:28px">
+    Every device is expected to serve its own console — health, what it is hearing, and whatever controls
+    help someone standing in front of it — and to advertise the address as <code>ui</code> in its status.
+    Pi-class nodes get one from <code>campbus.console</code> in two lines; the ESP32 template serves a
+    cut-down version. A device with no link below is not serving one yet.
+  </p>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+
+  // What this camp is supposed to consist of. A node in here but not on the bus is the most
+  // useful row on the page, so the catalogue is deliberately the full cast, not the living.
+  const EXPECTED = [
+    ['staff_01',          'input',      'Magic staff (Pi mule today)'],
+    ['toy_big_red_button', 'input',      'The big red button'],
+    ['mycelium_01',        'instrument', 'Sonic Mycelium Cluster'],
+    ['geode_01',           'instrument', 'Crystal Geode Synth'],
+    ['plant_01',           'instrument', 'Monstera Piezo Plant'],
+    ['tubes_01',           'instrument', 'Water Chord Tubes'],
+    ['crystal_01',         'responder',  'Magic crystal'],
+    ['crystal_02',         'responder',  'Magic crystal'],
+    ['hallway',            'responder',  'Space hallway'],
+    ['display_entrance',   'responder',  'Entrance screen'],
+    ['kitchen_bell',       'responder',  'Kitchen bell'],
+    ['matrix_01',          'responder',  'Matrix portal'],
+    ['resolume',           'bridge',     'Resolume adapter'],
+    ['midi_bridge',        'bridge',     'Bus to MIDI, into Ableton'],
+    ['mapping_engine',     'booth',      'The only thing that writes to cmd/'],
+    ['fake_beat',          'booth',      'Stand-in audio analysis'],
+  ];
+  const LAYERS = [
+    ['input',      'Inputs',      'things people touch; they publish what happened to them'],
+    ['instrument', 'Instruments', 'the touch sculptures, and the LED beds inside them'],
+    ['responder',  'Responders',  'lights, screens and the bell; they answer cmd/'],
+    ['bridge',     'Bridges',     'they translate the bus into something that is not MQTT'],
+    ['booth',      'Booth',       'the broker-side services'],
+    ['unknown',    'Unexpected',  'on the bus, and nothing in the catalogue expects them'],
+    ['tool',       'Also on the bus', 'browser pages and command-line tools, here while someone is using them'],
+  ];
+  const CATALOGUE = new Map(EXPECTED.map(([id, role, what]) => [id, { role, what }]));
+
+  // Browser pages and CLI one-shots join with a random client id, which means months of them are
+  // still sitting on the broker as retained last-wills. They are not devices: a live one is listed
+  // separately, and a dead one is cruft you can clear.
+  const isTool = (id) => !CATALOGUE.has(id) && Camp.isEphemeralNode(id);
+
+  // ---- state ---------------------------------------------------------------
+  // lastStatus is the heartbeat and the only thing health is judged on. lastLive is the newest
+  // message actually sent while we were watching - retained messages replay the past on connect,
+  // so counting those as "heard" would make every node look alive the moment you opened the page.
+  const nodes = new Map();     // id -> { status, count, lastStatus (ms), lastLive (ms), lastTopic }
+  const get = (id) => {
+    let n = nodes.get(id);
+    if (!n) { n = { id, status: null, count: null, lastStatus: 0, lastLive: 0, lastTopic: null }; nodes.set(id, n); }
+    return n;
+  };
+  for (const [id] of EXPECTED) get(id);
+
+  let onlyTrouble = false, filter = '', confirming = false;
+
+  // ---- how fresh is a node? -------------------------------------------------
+  // SCHEMA says status goes out on connect and every 30 s, so anything past 45 s is late and
+  // past 90 s has stopped talking, whatever its last retained message claimed.
+  const LATE_MS = 45000, GONE_MS = 90000;
+  function health(n) {
+    if (!n.status) return { state: 'never', fresh: 0, since: null };
+    const since = Date.now() - n.lastStatus;
+    if (n.status.online === false) return { state: 'gone', fresh: 0, since };
+    if (since > GONE_MS) return { state: 'gone', fresh: 0, since };
+    if (since > LATE_MS) return { state: 'late', fresh: Math.max(0, 1 - (since - LATE_MS) / (GONE_MS - LATE_MS)) * .6, since };
+    return { state: 'live', fresh: Math.max(.45, 1 - since / LATE_MS), since };
+  }
+
+  const ago = (ms) => ms == null ? 'never' : ms < 2000 ? 'just now' : ms < 60000 ? Math.round(ms / 1000) + 's ago'
+    : ms < 3600000 ? Math.round(ms / 60000) + 'm ago' : Math.round(ms / 3600000) + 'h ago';
+  const dur = (s) => { s = Math.round(s || 0); const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+    return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : m ? `${m}m` : `${s}s`; };
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  // A node says where its console is; a bare number means "my own address, this port".
+  function consoleUrl(n) {
+    const ui = n.status && n.status.ui;
+    if (ui == null || ui === '') return null;
+    const ip = (n.status && n.status.ip) || location.hostname;
+    if (typeof ui === 'number') return `http://${ip}:${ui}/`;
+    if (/^https?:\/\//i.test(ui)) return ui;
+    if (ui.startsWith('/')) return `http://${ip}${ui}`;
+    return `http://${ui}`;
+  }
+
+  const roleOf = (n) => isTool(n.id) ? 'tool'
+    : (n.status && n.status.role) || (CATALOGUE.get(n.id) || {}).role || 'unknown';
+  // The fleet is what the camp is made of. Dead tool registrations are not part of it.
+  const isFleet = (n) => CATALOGUE.has(n.id) || !isTool(n.id);
+  const isCruft = (n) => isTool(n.id) && health(n).state !== 'live';
+
+  // ---- render ---------------------------------------------------------------
+  function render() {
+    const all = [...nodes.values()].filter(isFleet);
+    const cruft = [...nodes.values()].filter(isCruft);
+    const live = all.filter((n) => health(n).state === 'live');
+    const quiet = all.filter((n) => ['late', 'gone'].includes(health(n).state));
+    const never = all.filter((n) => health(n).state === 'never');
+
+    const N = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+      'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen'];
+    const word = (k) => String(N[k] != null ? N[k] : k);
+    const cap = (t) => String(t).charAt(0).toUpperCase() + String(t).slice(1);
+    $('verdict').innerHTML = all.length
+      ? `<b>${cap(word(live.length))} of ${word(all.length)}</b> answering.`
+      : 'Nothing on the bus yet.';
+    const bits = [];
+    if (quiet.length) bits.push(`${quiet.length === 1 ? 'One has' : cap(word(quiet.length)) + ' have'} gone quiet: ` +
+      quiet.map((n) => `<span class="who">${esc(n.id)}</span>`).join(', ') + '.');
+    if (never.length) bits.push(`${never.length === 1 ? 'One has' : word(never.length) + ' have'} never been seen: ` +
+      never.map((n) => `<span class="who">${esc(n.id)}</span>`).join(', ') + '.');
+    $('missing').innerHTML = bits.join(' ') || 'Everything the camp expects is on the bus.';
+    $('counts').textContent = filter || onlyTrouble ? `${all.length} in the fleet` : '';
+
+    // Cruft: old browser tabs and CLI runs whose retained last-will never went away.
+    const c = $('cruft');
+    if (!cruft.length) { c.hidden = true; } else {
+      c.hidden = false;
+      const many = cruft.length === 1 ? '' : 's';
+      c.innerHTML = confirming
+        ? `<span>Clear the retained status of <b>${cruft.length}</b> finished page${many} and tool run${many}?
+           Anything still alive republishes within 30 seconds.</span>
+           <button class="btn" id="cruft-yes">Clear them</button><button class="btn quiet" id="cruft-no">Keep them</button>`
+        : `<span><b>${cruft.length}</b> finished browser page${many} and tool run${many} still hold a retained
+           registration on the broker.</span><button class="btn quiet" id="cruft-go">Clear them</button>`;
+      const go = $('cruft-go'), yes = $('cruft-yes'), no = $('cruft-no');
+      if (go) go.onclick = () => { confirming = true; render(); };
+      if (no) no.onclick = () => { confirming = false; render(); };
+      if (yes) yes.onclick = () => {
+        let n = 0;
+        for (const k of cruft) {
+          if (!client || !client.connected) break;
+          client.publish(`node/${k.id}/status`, '', { retain: true, qos: 0 });
+          client.publish(`node/${k.id}/count`, '', { retain: true, qos: 0 });
+          nodes.delete(k.id); n++;
+        }
+        confirming = false;
+        $('counts').textContent = `cleared ${n}`;
+        render();
+      };
+    }
+
+    const shown = all.filter((n) => {
+      if (filter && !n.id.toLowerCase().includes(filter) && !((CATALOGUE.get(n.id) || {}).what || '').toLowerCase().includes(filter)) return false;
+      if (onlyTrouble && health(n).state === 'live') return false;
+      return true;
+    });
+
+    $('layers').innerHTML = LAYERS.map(([role, title, what]) => {
+      const rows = shown.filter((n) => roleOf(n) === role)
+        .sort((a, b) => a.id.localeCompare(b.id));
+      if (!rows.length) return '';
+      const alive = rows.filter((n) => health(n).state === 'live').length;
+      return `<div class="layer"><h2>${title} <span class="what">${what}</span>
+        <span class="tally">${alive}/${rows.length}</span></h2>${rows.map(rowHtml).join('')}</div>`;
+    }).join('') || `<p class="empty">Nothing matches "${esc(filter)}".</p>`;
+  }
+
+  function rowHtml(n) {
+    const h = health(n), cat = CATALOGUE.get(n.id) || {}, url = consoleUrl(n);
+    const st = n.status || {};
+    const heard = h.state === 'never' ? 'never seen' : h.state === 'gone' && !n.lastStatus ? 'said goodbye' : ago(h.since);
+    const tip = n.lastTopic ? `Last message while this page was watching: ${n.lastTopic}` : 'Nothing sent while this page was watching';
+    return `<div class="row ${h.state === 'never' ? 'absent' : ''}" title="${esc(tip)}">
+      <span class="lamp ${h.state}" style="--fresh:${h.fresh.toFixed(2)}"></span>
+      <span class="id">${esc(n.id)}${cat.what ? `<small>${esc(cat.what)}</small>` : ''}</span>
+      <span class="k role">${esc(roleOf(n))}</span>
+      <span class="n up ${h.state === 'live' ? '' : 'faint'}">${h.state === 'live' ? dur(st.uptime) : '—'}</span>
+      <span class="n heard ${h.state === 'live' ? '' : 'faint'}">${heard}</span>
+      <span class="n count ${n.count ? '' : 'faint'}">${n.count == null ? '—' : n.count.toLocaleString()}</span>
+      ${url ? `<a class="console" href="${esc(url)}" target="_blank" rel="noopener">Console</a>`
+            : `<span class="noconsole" title="This device does not publish a ui address in its status yet">no console</span>`}
+    </div>`;
+  }
+
+  // ---- bus ------------------------------------------------------------------
+  let client = null;
+  const nodeId = 'sim_nodes_' + Math.random().toString(36).slice(2, 8);
+  $('url').value = Camp.Settings.brokerUrl();
+  const setConn = (t, c) => { const e = $('conn'); e.textContent = t; e.className = 'conn ' + (c || ''); };
+
+  function connect() {
+    if (client) { try { client.end(true); } catch (e) {} }
+    const url = $('url').value.trim();
+    setConn('connecting');
+    client = mqtt.connect(url, { clientId: nodeId, clean: true, keepalive: 20, reconnectPeriod: 2000 });
+    client.on('connect', () => { setConn('connected', 'ok'); client.subscribe('#'); });
+    client.on('close', () => setConn('disconnected', 'bad'));
+    client.on('error', (e) => setConn(e.message, 'bad'));
+    client.on('message', (topic, buf, packet) => {
+      let m = null; try { m = JSON.parse(buf.toString()); } catch (e) {}
+      const status = /^node\/([^/]+)\/status$/.exec(topic);
+      if (status) {
+        const n = get(status[1]);
+        n.status = m || {};
+        // A retained status is the broker replaying the past. Age it from its own clock when the
+        // node stamped one, so a node that died an hour ago does not look like it just checked in.
+        n.lastStatus = (packet && packet.retain && m && m.ts) ? Math.min(Date.now(), m.ts) : Date.now();
+        if (packet && packet.retain && m && !m.ts) n.lastStatus = m.online === false ? 0 : Date.now();
+        return;
+      }
+      const count = /^node\/([^/]+)\/count$/.exec(topic);
+      if (count) { const n = get(count[1]); if (m && typeof m.interactions === 'number') n.count = m.interactions; return; }
+      // anything else: attribute it to a node when the topic or payload names one
+      if (packet && packet.retain) return;      // replayed history, not a sign of life
+      const named = (m && (m.instrument_id || m.prop_id || m.from)) || topic.split('/')[1];
+      if (named && nodes.has(named)) { const n = nodes.get(named); n.lastLive = Date.now(); n.lastTopic = topic; }
+    });
+  }
+
+  $('connect').addEventListener('click', connect);
+  $('q').addEventListener('input', (e) => { filter = e.target.value.trim().toLowerCase(); render(); });
+  $('only').addEventListener('click', () => { onlyTrouble = !onlyTrouble; $('only').classList.toggle('on', onlyTrouble); render(); });
+  connect();
+  render();
+  setInterval(render, 1000);                      // freshness is a clock, not an event
+  window.__nodes = { nodes, health, consoleUrl, render };
+})();
+</script>
+</body>
+</html>
